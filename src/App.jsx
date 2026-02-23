@@ -1,5 +1,91 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 
+/* ── SUPABASE CONFIG ── */
+const SUPA_URL = "https://dfnvmwoacprkhxfbpybv.supabase.co";
+const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRmbnZtd29hY3Bya2h4ZmJweWJ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE4MTkwNTksImV4cCI6MjA4NzM5NTA1OX0.40VqzdfZ9zoJitgCTShNiMTOYheDRYgn84mZXX5ZECs";
+const supa = (table) => `${SUPA_URL}/rest/v1/${table}`;
+const hdr = {
+  "Content-Type": "application/json",
+  "apikey": SUPA_KEY,
+  "Authorization": `Bearer ${SUPA_KEY}`,
+  "Prefer": "return=representation"
+};
+
+/* ── SUPABASE DB HELPERS ── */
+const db = {
+  // Fetch all rows from a table
+  async get(table) {
+    try {
+      const res = await fetch(`${supa(table)}?order=created_at`, { headers: hdr });
+      return res.ok ? await res.json() : [];
+    } catch { return []; }
+  },
+  // Insert a row (upsert by id)
+  async upsert(table, row) {
+    try {
+      await fetch(supa(table), {
+        method: "POST",
+        headers: { ...hdr, "Prefer": "resolution=merge-duplicates,return=minimal" },
+        body: JSON.stringify(row)
+      });
+    } catch {}
+  },
+  // Delete a row by id
+  async delete(table, id) {
+    try {
+      await fetch(`${supa(table)}?id=eq.${id}`, { method: "DELETE", headers: hdr });
+    } catch {}
+  },
+  // Update profile (single row id=1)
+  async saveProfile(profile) {
+    try {
+      await fetch(`${supa("profile")}?id=eq.1`, {
+        method: "PATCH",
+        headers: hdr,
+        body: JSON.stringify({ name: profile.name, description: profile.description, avatar: profile.avatar })
+      });
+    } catch {}
+  },
+  // Load profile
+  async getProfile() {
+    try {
+      const res = await fetch(`${supa("profile")}?id=eq.1`, { headers: hdr });
+      const rows = res.ok ? await res.json() : [];
+      return rows[0] || null;
+    } catch { return null; }
+  }
+};
+
+/* ── MAP DB ROW → APP OBJECT ── */
+const fromDb = {
+  wine: (r) => ({
+    id: r.id, name: r.name, origin: r.origin, grape: r.grape,
+    alcohol: r.alcohol, vintage: r.vintage, bottles: r.bottles,
+    rating: r.rating, notes: r.notes, review: r.review,
+    tastingNotes: r.tasting_notes, datePurchased: r.date_purchased,
+    wishlist: r.wishlist, color: r.color, photo: r.photo,
+    location: r.location, locationSlot: r.location_slot
+  }),
+  note: (r) => ({
+    id: r.id, wineId: r.wine_id, title: r.title, content: r.content, date: r.date
+  })
+};
+
+/* ── MAP APP OBJECT → DB ROW ── */
+const toDb = {
+  wine: (w) => ({
+    id: w.id, name: w.name, origin: w.origin, grape: w.grape,
+    alcohol: w.alcohol, vintage: w.vintage, bottles: w.bottles,
+    rating: w.rating, notes: w.notes, review: w.review,
+    tasting_notes: w.tastingNotes, date_purchased: w.datePurchased,
+    wishlist: w.wishlist || false, color: w.color, photo: w.photo,
+    location: w.location, location_slot: w.locationSlot
+  }),
+  note: (n) => ({
+    id: n.id, wine_id: n.wineId, title: n.title, content: n.content, date: n.date
+  })
+};
+
 const FONT = "https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap";
 
 /* ── SVG ICON SYSTEM (no emojis) ─────────────────────────────── */
@@ -1024,16 +1110,49 @@ const TABS = [
   { id: "profile",    label: "Winery",  ic: "user" },
 ];
 
+/* ── localStorage for theme only ── */
+function loadTheme() {
+  try { return localStorage.getItem("vino_theme") || "system"; } catch { return "system"; }
+}
+function saveTheme(v) {
+  try { localStorage.setItem("vino_theme", v); } catch {}
+}
+
 export default function App() {
-  const [themeMode, setThemeMode] = useState("system");
+  const [themeMode, setThemeMode] = useState(loadTheme);
   const [sysDark, setSysDark] = useState(() => window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false);
   const [tab, setTab] = useState("collection");
-  const [wines, setWines] = useState(SEED_WINES);
-  const [wishlist, setWishlist] = useState(SEED_WISHLIST);
-  const [notes, setNotes] = useState(SEED_NOTES);
-  const [profile, setProfile] = useState(DEFAULT_PROFILE);
+  const [wines, setWines]       = useState([]);
+  const [wishlist, setWishlist] = useState([]);
+  const [notes, setNotes]       = useState([]);
+  const [profile, setProfile]   = useState(DEFAULT_PROFILE);
   const [splashDone, setSplashDone] = useState(false);
+  const [syncing, setSyncing]   = useState(true);
   const [greeting] = useState(getGreeting);
+
+  // Save theme locally (no need to sync this to DB)
+  useEffect(() => { saveTheme(themeMode); }, [themeMode]);
+
+  // Load all data from Supabase on mount
+  useEffect(() => {
+    async function fetchAll() {
+      setSyncing(true);
+      try {
+        const [wineRows, noteRows, prof] = await Promise.all([
+          db.get("wines"),
+          db.get("tasting_notes"),
+          db.getProfile()
+        ]);
+        const allWines = wineRows.map(fromDb.wine);
+        setWines(allWines.filter(w => !w.wishlist));
+        setWishlist(allWines.filter(w => w.wishlist));
+        setNotes(noteRows.map(fromDb.note));
+        if (prof) setProfile({ name: prof.name, description: prof.description, avatar: prof.avatar });
+      } catch {}
+      setSyncing(false);
+    }
+    fetchAll();
+  }, []);
 
   useEffect(() => {
     const mq = window.matchMedia?.("(prefers-color-scheme: dark)");
@@ -1063,6 +1182,7 @@ export default function App() {
     @keyframes sheetUp  { from { transform:translateY(48px); opacity:0 } to { transform:none; opacity:1 } }
     @keyframes blink    { 0%,80%,100% { transform:scale(0); opacity:.4 } 40% { transform:scale(1); opacity:1 } }
     @keyframes glow     { 0%,100% { opacity:.7 } 50% { opacity:1 } }
+    @keyframes shimmer { 0% { background-position:200% 0 } 100% { background-position:-200% 0 } }
     * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
     ::-webkit-scrollbar { width:0; }
     select, option { background: var(--card2); color: var(--text); }
@@ -1087,16 +1207,66 @@ export default function App() {
     </div>
   );
 
+  /* ── Supabase-wired handlers ── */
+  const handleAddWine = async (w) => {
+    setWines(p => [...p, w]);
+    await db.upsert("wines", toDb.wine(w));
+  };
+  const handleUpdateWine = async (w) => {
+    setWines(p => p.map(x => x.id === w.id ? w : x));
+    await db.upsert("wines", toDb.wine(w));
+  };
+  const handleDeleteWine = async (id) => {
+    setWines(p => p.filter(x => x.id !== id));
+    await db.delete("wines", id);
+  };
+  const handleAddWishlist = async (w) => {
+    setWishlist(p => [...p, w]);
+    await db.upsert("wines", toDb.wine(w));
+  };
+  const handleUpdateWishlist = async (w) => {
+    setWishlist(p => p.map(x => x.id === w.id ? w : x));
+    await db.upsert("wines", toDb.wine(w));
+  };
+  const handleDeleteWishlist = async (id) => {
+    setWishlist(p => p.filter(x => x.id !== id));
+    await db.delete("wines", id);
+  };
+  const handleMoveToCollection = async (id) => {
+    const w = wishlist.find(x => x.id === id);
+    if (!w) return;
+    const moved = { ...w, wishlist: false, bottles: 1, rating: 0 };
+    setWishlist(p => p.filter(x => x.id !== id));
+    setWines(p => [...p, moved]);
+    await db.upsert("wines", toDb.wine(moved));
+  };
+  const handleAddNote = async (n) => {
+    setNotes(p => [...p, n]);
+    await db.upsert("tasting_notes", toDb.note(n));
+  };
+  const handleDeleteNote = async (id) => {
+    setNotes(p => p.filter(x => x.id !== id));
+    await db.delete("tasting_notes", id);
+  };
+  const handleSetProfile = async (p) => {
+    setProfile(p);
+    await db.saveProfile(p);
+  };
+
   /* ── Main ── */
   return (
     <div style={{ ...theme, background: "var(--bg)", minHeight: "100vh", fontFamily: "'DM Sans', sans-serif", color: "var(--text)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" }}>
       <style>{CSS}</style>
+      {/* Sync indicator */}
+      {syncing && (
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, height: 2, zIndex: 999, background: "linear-gradient(90deg, #C8432A, #E07060, #C8432A)", backgroundSize: "200% 100%", animation: "shimmer 1.2s linear infinite" }} />
+      )}
       <div style={{ flex: 1, overflowY: "auto", padding: "28px 18px 96px", animation: "fadeUp .3s ease" }}>
-        {tab === "collection" && <CollectionScreen wines={wines} onAdd={w => setWines(p => [...p, w])} onUpdate={w => setWines(p => p.map(x => x.id === w.id ? w : x))} onDelete={id => setWines(p => p.filter(x => x.id !== id))} />}
-        {tab === "wishlist"   && <WishlistScreen wishlist={wishlist} onAdd={w => setWishlist(p => [...p, w])} onUpdate={w => setWishlist(p => p.map(x => x.id === w.id ? w : x))} onDelete={id => setWishlist(p => p.filter(x => x.id !== id))} onMoveToCollection={id => { const w = wishlist.find(x => x.id === id); if (w) { setWishlist(p => p.filter(x => x.id !== id)); setWines(p => [...p, { ...w, wishlist: false, bottles: 1, rating: 0 }]); }}} />}
+        {tab === "collection" && <CollectionScreen wines={wines} onAdd={handleAddWine} onUpdate={handleUpdateWine} onDelete={handleDeleteWine} />}
+        {tab === "wishlist"   && <WishlistScreen wishlist={wishlist} onAdd={handleAddWishlist} onUpdate={handleUpdateWishlist} onDelete={handleDeleteWishlist} onMoveToCollection={handleMoveToCollection} />}
         {tab === "ai"         && <AIScreen wines={wines} wishlist={wishlist} />}
-        {tab === "notes"      && <NotesScreen wines={wines} notes={notes} onAdd={n => setNotes(p => [...p, n])} onDelete={id => setNotes(p => p.filter(x => x.id !== id))} />}
-        {tab === "profile"    && <ProfileScreen wines={wines} wishlist={wishlist} notes={notes} theme={themeMode} setTheme={setThemeMode} profile={profile} setProfile={setProfile} />}
+        {tab === "notes"      && <NotesScreen wines={wines} notes={notes} onAdd={handleAddNote} onDelete={handleDeleteNote} />}
+        {tab === "profile"    && <ProfileScreen wines={wines} wishlist={wishlist} notes={notes} theme={themeMode} setTheme={setThemeMode} profile={profile} setProfile={handleSetProfile} />}
       </div>
 
       {/* Bottom Nav */}
