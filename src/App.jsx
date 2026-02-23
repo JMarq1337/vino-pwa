@@ -12,44 +12,58 @@ const hdr = {
 };
 
 /* ── SUPABASE DB HELPERS ── */
+const upsertHdr = {
+  "Content-Type": "application/json",
+  "apikey": SUPA_KEY,
+  "Authorization": `Bearer ${SUPA_KEY}`,
+  "Prefer": "resolution=merge-duplicates,return=minimal"
+};
+const baseHdr = {
+  "Content-Type": "application/json",
+  "apikey": SUPA_KEY,
+  "Authorization": `Bearer ${SUPA_KEY}`
+};
+
 const db = {
-  // Fetch all rows from a table
   async get(table) {
     try {
-      const res = await fetch(`${supa(table)}?order=created_at`, { headers: hdr });
-      return res.ok ? await res.json() : [];
-    } catch { return []; }
+      const res = await fetch(`${supa(table)}?order=created_at`, { headers: baseHdr });
+      if (!res.ok) { console.error("GET failed", table, await res.text()); return []; }
+      return await res.json();
+    } catch(e) { console.error("GET error", e); return []; }
   },
-  // Insert a row (upsert by id)
   async upsert(table, row) {
     try {
-      await fetch(supa(table), {
+      const res = await fetch(supa(table), {
         method: "POST",
-        headers: { ...hdr, "Prefer": "resolution=merge-duplicates,return=minimal" },
+        headers: upsertHdr,
         body: JSON.stringify(row)
       });
-    } catch {}
+      if (!res.ok) console.error("UPSERT failed", table, await res.text());
+    } catch(e) { console.error("UPSERT error", e); }
   },
-  // Delete a row by id
   async delete(table, id) {
     try {
-      await fetch(`${supa(table)}?id=eq.${id}`, { method: "DELETE", headers: hdr });
-    } catch {}
-  },
-  // Update profile (single row id=1)
-  async saveProfile(profile) {
-    try {
-      await fetch(`${supa("profile")}?id=eq.1`, {
-        method: "PATCH",
-        headers: hdr,
-        body: JSON.stringify({ name: profile.name, description: profile.description, avatar: profile.avatar })
+      const res = await fetch(`${supa(table)}?id=eq.${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        headers: baseHdr
       });
-    } catch {}
+      if (!res.ok) console.error("DELETE failed", table, id, await res.text());
+    } catch(e) { console.error("DELETE error", e); }
   },
-  // Load profile
+  async saveProfile(p) {
+    try {
+      const res = await fetch(`${supa("profile")}?id=eq.1`, {
+        method: "PATCH",
+        headers: upsertHdr,
+        body: JSON.stringify({ name: p.name, description: p.description, avatar: p.avatar })
+      });
+      if (!res.ok) console.error("PROFILE save failed", await res.text());
+    } catch(e) { console.error("PROFILE error", e); }
+  },
   async getProfile() {
     try {
-      const res = await fetch(`${supa("profile")}?id=eq.1`, { headers: hdr });
+      const res = await fetch(`${supa("profile")}?id=eq.1`, { headers: baseHdr });
       const rows = res.ok ? await res.json() : [];
       return rows[0] || null;
     } catch { return null; }
@@ -968,7 +982,7 @@ const NotesScreen = ({ wines, notes, onAdd, onDelete }) => {
 /* ── PROFILE SCREEN ───────────────────────────────────────────── */
 const ProfileScreen = ({ wines, wishlist, notes, theme, setTheme, profile, setProfile }) => {
   const [editingProfile, setEditingProfile] = useState(false);
-  const [pForm, setPForm] = useState({ name: profile.name, description: profile.description, avatar: profile.avatar });
+  const [pForm, setPForm] = useState(() => ({ name: profile.name, description: profile.description, avatar: profile.avatar || null }));
 
   const col = wines.filter(w => !w.wishlist);
   const bottles = col.reduce((s, w) => s + (w.bottles || 0), 0);
@@ -977,11 +991,13 @@ const ProfileScreen = ({ wines, wishlist, notes, theme, setTheme, profile, setPr
   const topGrape = Object.entries(grapes).sort((a, b) => b[1] - a[1])[0];
 
   const openEdit = () => {
-    setPForm({ name: profile.name, description: profile.description, avatar: profile.avatar });
+    // Always sync from latest profile prop when opening
+    setPForm({ name: profile.name, description: profile.description, avatar: profile.avatar || null });
     setEditingProfile(true);
   };
-  const saveProfile = () => {
-    setProfile({ ...pForm });
+  const saveProfile = async () => {
+    const updated = { name: pForm.name || profile.name, description: pForm.description || profile.description, avatar: pForm.avatar || null };
+    await setProfile(updated);  // this triggers handleSetProfile which saves to Supabase
     setEditingProfile(false);
   };
 
