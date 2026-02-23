@@ -16,12 +16,14 @@ const upsertHdr = {
   "Content-Type": "application/json",
   "apikey": SUPA_KEY,
   "Authorization": `Bearer ${SUPA_KEY}`,
-  "Prefer": "resolution=merge-duplicates,return=minimal"
+  "Prefer": "resolution=merge-duplicates,return=minimal",
+  "x-client-info": "vino-pwa"
 };
 const baseHdr = {
   "Content-Type": "application/json",
   "apikey": SUPA_KEY,
-  "Authorization": `Bearer ${SUPA_KEY}`
+  "Authorization": `Bearer ${SUPA_KEY}`,
+  "x-client-info": "vino-pwa"
 };
 
 const db = {
@@ -34,21 +36,27 @@ const db = {
   },
   async upsert(table, row) {
     try {
+      console.log("VINO: Upserting to", table, row.id || row.name);
       const res = await fetch(supa(table), {
         method: "POST",
         headers: upsertHdr,
         body: JSON.stringify(row)
       });
-      if (!res.ok) console.error("UPSERT failed", table, await res.text());
+      const txt = await res.text();
+      if (!res.ok) console.error("UPSERT failed", table, res.status, txt);
+      else console.log("VINO: Upsert OK", table, res.status);
     } catch(e) { console.error("UPSERT error", e); }
   },
   async delete(table, id) {
     try {
+      console.log("VINO: Deleting from", table, id);
       const res = await fetch(`${supa(table)}?id=eq.${encodeURIComponent(id)}`, {
         method: "DELETE",
         headers: baseHdr
       });
-      if (!res.ok) console.error("DELETE failed", table, id, await res.text());
+      const txt = await res.text();
+      if (!res.ok) console.error("DELETE failed", table, id, res.status, txt);
+      else console.log("VINO: Delete OK", table, res.status);
     } catch(e) { console.error("DELETE error", e); }
   },
   async saveProfile(p) {
@@ -1153,31 +1161,35 @@ export default function App() {
   useEffect(() => {
     async function fetchAll() {
       setSyncing(true);
+      console.log("VINO: Starting Supabase fetch...");
       try {
         const [wineRows, noteRows, prof] = await Promise.all([
           db.get("wines"),
           db.get("tasting_notes"),
           db.getProfile()
         ]);
+        console.log("VINO: Got wines:", wineRows.length, "notes:", noteRows.length, "profile:", prof);
 
-        // If DB is empty on first ever load, seed it with example data
         if (wineRows.length === 0) {
+          console.log("VINO: DB empty - seeding...");
           const allSeed = [...SEED_WINES, ...SEED_WISHLIST];
           await Promise.all(allSeed.map(w => db.upsert("wines", toDb.wine(w))));
           await Promise.all(SEED_NOTES.map(n => db.upsert("tasting_notes", toDb.note(n))));
+          console.log("VINO: Seeding done");
           setWines(SEED_WINES);
           setWishlist(SEED_WISHLIST);
           setNotes(SEED_NOTES);
         } else {
+          console.log("VINO: Loading from DB...");
           const allWines = wineRows.map(fromDb.wine);
           setWines(allWines.filter(w => !w.wishlist));
           setWishlist(allWines.filter(w => w.wishlist));
           setNotes(noteRows.map(fromDb.note));
+          console.log("VINO: Loaded", allWines.length, "wines,", noteRows.length, "notes");
         }
         if (prof) setProfile({ name: prof.name, description: prof.description, avatar: prof.avatar || null });
       } catch(e) {
-        console.error("Supabase fetch failed:", e);
-        // Fall back to seed data so app is usable offline
+        console.error("VINO: Supabase fetch failed:", e);
         setWines(SEED_WINES);
         setWishlist(SEED_WISHLIST);
         setNotes(SEED_NOTES);
