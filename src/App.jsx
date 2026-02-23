@@ -1159,12 +1159,29 @@ export default function App() {
           db.get("tasting_notes"),
           db.getProfile()
         ]);
-        const allWines = wineRows.map(fromDb.wine);
-        setWines(allWines.filter(w => !w.wishlist));
-        setWishlist(allWines.filter(w => w.wishlist));
-        setNotes(noteRows.map(fromDb.note));
-        if (prof) setProfile({ name: prof.name, description: prof.description, avatar: prof.avatar });
-      } catch {}
+
+        // If DB is empty on first ever load, seed it with example data
+        if (wineRows.length === 0) {
+          const allSeed = [...SEED_WINES, ...SEED_WISHLIST];
+          await Promise.all(allSeed.map(w => db.upsert("wines", toDb.wine(w))));
+          await Promise.all(SEED_NOTES.map(n => db.upsert("tasting_notes", toDb.note(n))));
+          setWines(SEED_WINES);
+          setWishlist(SEED_WISHLIST);
+          setNotes(SEED_NOTES);
+        } else {
+          const allWines = wineRows.map(fromDb.wine);
+          setWines(allWines.filter(w => !w.wishlist));
+          setWishlist(allWines.filter(w => w.wishlist));
+          setNotes(noteRows.map(fromDb.note));
+        }
+        if (prof) setProfile({ name: prof.name, description: prof.description, avatar: prof.avatar || null });
+      } catch(e) {
+        console.error("Supabase fetch failed:", e);
+        // Fall back to seed data so app is usable offline
+        setWines(SEED_WINES);
+        setWishlist(SEED_WISHLIST);
+        setNotes(SEED_NOTES);
+      }
       setSyncing(false);
     }
     fetchAll();
