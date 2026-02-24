@@ -643,6 +643,7 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
   const openEdit=()=>{
     setPForm({name:profile.name||"",description:profile.description||"",avatar:profile.avatar||null});
     setEditing(true);
+    setTimeout(()=>{ document.querySelector('[data-scroll="main"]')?.scrollTo({top:0,behavior:'smooth'}); },30);
   };
 
   /* ── EDIT VIEW ── */
@@ -731,7 +732,7 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export Collection</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vino v4.5 · {profile.name}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vino v4.6 · {profile.name}</div>
     </div>
   );
 };
@@ -809,7 +810,7 @@ export default function App() {
   return(
     <div style={{...cssVars,background:"var(--bg)",height:"100vh",fontFamily:"'Plus Jakarta Sans',sans-serif",color:"var(--text)",maxWidth:480,margin:"0 auto",display:"flex",flexDirection:"column",overflow:"hidden",position:"fixed",left:"50%",transform:"translateX(-50%)",width:"100%"}}>
       <style>{CSS}</style>
-      <div style={{flex:1,overflowY:"auto",overflowX:"hidden",padding:"52px 20px 96px",animation:"fadeUp 0.3s ease",WebkitOverflowScrolling:"touch"}}>
+      <div data-scroll="main" style={{flex:1,overflowY:"auto",overflowX:"hidden",padding:"52px 20px 96px",animation:"fadeUp 0.3s ease",WebkitOverflowScrolling:"touch"}}>
         {tab==="collection"&&<CollectionScreen wines={wines} onAdd={addWine} onUpdate={updWine} onDelete={delWine}/>}
         {tab==="wishlist"&&<WishlistScreen wishlist={wishlist} onAdd={addWish} onUpdate={updWish} onDelete={delWish} onMove={moveToCol}/>}
         {tab==="ai"&&<AIScreen wines={wines}/>}
