@@ -138,7 +138,7 @@ const IC={
   send:"M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z",
   edit:"M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z",
   trash:"M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6",
-  filter:"M22 3H2l8 9.46V19l4 2v-8.54L22 3",
+  filter:"M4 21v-7m0-4V3m8 18v-9m0-4V3m8 18v-5m0-4V3M1 14h6m2-6h6m2 7h6",
   x:"M18 6L6 18M6 6l12 12",
   chevR:"M9 18l6-6-6-6",
   sun:"M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42M12 17a5 5 0 100-10 5 5 0 000 10z",
@@ -170,7 +170,7 @@ const T=dark=>({
   border:dark?"rgba(255,255,255,0.07)":"rgba(0,0,0,0.08)",
   text:dark?"#EDE6E0":"#1A1210",
   sub:dark?"#7A6A62":"#9A8880",
-  inputBg:dark?"#201A1A":"#F0EDED",
+  inputBg:dark?"#201A1A":"#F5F2F0",
   shadow:dark?"rgba(0,0,0,0.6)":"rgba(0,0,0,0.08)",
 });
 
@@ -183,7 +183,7 @@ const makeCSS=dark=>`
   @keyframes fadeIn{from{opacity:0}to{opacity:1}}
   @keyframes modalIn{from{opacity:0;transform:scale(0.94)}to{opacity:1;transform:scale(1)}}
   @keyframes blink{0%,80%,100%{opacity:.2;transform:scale(.7)}40%{opacity:1;transform:scale(1)}}
-  input,textarea,select{font-family:'Plus Jakarta Sans',sans-serif;font-size:15px;color:${dark?"#EDE6E0":"#1A1210"};background:${dark?"#201A1A":"#F0EDED"};border:1.5px solid ${dark?"rgba(255,255,255,0.1)":"rgba(0,0,0,0.1)"};border-radius:12px;padding:12px 14px;width:100%;outline:none;transition:border-color 0.2s;-webkit-appearance:none;}
+  input,textarea,select{font-family:'Plus Jakarta Sans',sans-serif;font-size:15px;color:${dark?"#EDE6E0":"#1A1210"};background:${dark?"#201A1A":"#FFFFFF"};border:1.5px solid ${dark?"rgba(255,255,255,0.08)":"rgba(0,0,0,0.12)"};border-radius:12px;padding:12px 14px;width:100%;outline:none;transition:border-color 0.2s,box-shadow 0.2s;-webkit-appearance:none;box-shadow:${dark?"none":"0 1px 4px rgba(0,0,0,0.06)"};}
   input:focus,textarea:focus,select:focus{border-color:#9B2335;}
   select option{background:${dark?"#201A1A":"#fff"};}
   button{cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;}
@@ -632,7 +632,7 @@ const NotesScreen=({wines,notes,onAdd,onDelete})=>{
 const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>{
   const [editOpen,setEditOpen]=useState(false);
   const [pForm,setPForm]=useState({name:profile.name,description:profile.description,avatar:profile.avatar});
-  useEffect(()=>{ setPForm({name:profile.name,description:profile.description,avatar:profile.avatar}); },[profile.name,profile.description,profile.avatar]);
+  useEffect(()=>{ if(editOpen) setPForm({name:profile.name,description:profile.description,avatar:profile.avatar||null}); },[editOpen]);
   const col=wines.filter(w=>!w.wishlist);
   const bottles=col.reduce((s,w)=>s+(w.bottles||0),0);
   const topWine=[...col].sort((a,b)=>(b.rating||0)-(a.rating||0))[0];
@@ -696,7 +696,7 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
         <Field label="Description" value={pForm.description} onChange={v=>setPForm(p=>({...p,description:v}))} placeholder="Winemaker & Collector" optional/>
         <div style={{display:"flex",gap:8}}>
           <Btn variant="secondary" onClick={()=>setEditOpen(false)} full>Cancel</Btn>
-          <Btn onClick={()=>{setProfile({...pForm});setEditOpen(false);}} full disabled={!pForm.name}>Save</Btn>
+          <Btn onClick={async()=>{await setProfile({...pForm});setEditOpen(false);}} full disabled={!pForm.name}>Save</Btn>
         </div>
       </Modal>
     </div>
@@ -774,9 +774,9 @@ export default function App() {
   );
 
   return(
-    <div style={{...cssVars,background:"var(--bg)",minHeight:"100vh",fontFamily:"'Plus Jakarta Sans',sans-serif",color:"var(--text)",maxWidth:480,margin:"0 auto",display:"flex",flexDirection:"column"}}>
+    <div style={{...cssVars,background:"var(--bg)",height:"100vh",fontFamily:"'Plus Jakarta Sans',sans-serif",color:"var(--text)",maxWidth:480,margin:"0 auto",display:"flex",flexDirection:"column",overflow:"hidden",position:"fixed",left:"50%",transform:"translateX(-50%)",width:"100%"}}>
       <style>{CSS}</style>
-      <div style={{flex:1,overflowY:"auto",padding:"52px 20px 96px",animation:"fadeUp 0.3s ease"}}>
+      <div style={{flex:1,overflowY:"auto",overflowX:"hidden",padding:"52px 20px 96px",animation:"fadeUp 0.3s ease",WebkitOverflowScrolling:"touch"}}>
         {tab==="collection"&&<CollectionScreen wines={wines} onAdd={addWine} onUpdate={updWine} onDelete={delWine}/>}
         {tab==="wishlist"&&<WishlistScreen wishlist={wishlist} onAdd={addWish} onUpdate={updWish} onDelete={delWish} onMove={moveToCol}/>}
         {tab==="ai"&&<AIScreen wines={wines}/>}
