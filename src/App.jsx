@@ -40,7 +40,7 @@ const toDb = {
 };
 
 /* ── FONTS ────────────────────────────────────────────────────── */
-const FONT = "https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap";
+const FONT = "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap";
 
 /* ── WINE DB ──────────────────────────────────────────────────── */
 const WINE_DB = [
@@ -183,10 +183,10 @@ const makeCSS=dark=>`
   @keyframes fadeIn{from{opacity:0}to{opacity:1}}
   @keyframes modalIn{from{opacity:0;transform:scale(0.94)}to{opacity:1;transform:scale(1)}}
   @keyframes blink{0%,80%,100%{opacity:.2;transform:scale(.7)}40%{opacity:1;transform:scale(1)}}
-  input,textarea,select{font-family:'DM Sans',sans-serif;font-size:15px;color:${dark?"#EDE6E0":"#1A1210"};background:${dark?"#201A1A":"#F0EDED"};border:1.5px solid ${dark?"rgba(255,255,255,0.1)":"rgba(0,0,0,0.1)"};border-radius:12px;padding:12px 14px;width:100%;outline:none;transition:border-color 0.2s;-webkit-appearance:none;}
+  input,textarea,select{font-family:'Plus Jakarta Sans',sans-serif;font-size:15px;color:${dark?"#EDE6E0":"#1A1210"};background:${dark?"#201A1A":"#F0EDED"};border:1.5px solid ${dark?"rgba(255,255,255,0.1)":"rgba(0,0,0,0.1)"};border-radius:12px;padding:12px 14px;width:100%;outline:none;transition:border-color 0.2s;-webkit-appearance:none;}
   input:focus,textarea:focus,select:focus{border-color:#9B2335;}
   select option{background:${dark?"#201A1A":"#fff"};}
-  button{cursor:pointer;font-family:'DM Sans',sans-serif;}
+  button{cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;}
 `;
 
 /* ── PRIMITIVES ───────────────────────────────────────────────── */
@@ -204,7 +204,7 @@ const Stars=({value,onChange,size=17})=>(
 
 const WineTypePill=({type})=>{
   const c=WINE_TYPE_COLORS[type]||WINE_TYPE_COLORS.Other;
-  return(<span style={{display:"inline-flex",alignItems:"center",gap:5,padding:"3px 9px",borderRadius:20,background:c.bg,color:c.text,fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif",flexShrink:0}}><span style={{width:6,height:6,borderRadius:"50%",background:c.dot,flexShrink:0}}/>{type}</span>);
+  return(<span style={{display:"inline-flex",alignItems:"center",gap:5,padding:"3px 9px",borderRadius:20,background:c.bg,color:c.text,fontSize:12,fontWeight:600,fontFamily:"'Plus Jakarta Sans',sans-serif",flexShrink:0}}><span style={{width:6,height:6,borderRadius:"50%",background:c.dot,flexShrink:0}}/>{type}</span>);
 };
 
 const Modal=({show,onClose,children,wide})=>{
@@ -221,7 +221,7 @@ const Modal=({show,onClose,children,wide})=>{
 
 const ModalHeader=({title,onClose})=>(
   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:22}}>
-    <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,fontWeight:600,color:"var(--text)",lineHeight:1}}>{title}</div>
+    <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:22,fontWeight:700,color:"var(--text)",lineHeight:1}}>{title}</div>
     <button onClick={onClose} style={{background:"var(--inputBg)",border:"none",borderRadius:10,width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",color:"var(--sub)"}}><Icon n="x" size={15}/></button>
   </div>
 );
@@ -229,8 +229,8 @@ const ModalHeader=({title,onClose})=>(
 const Field=({label,value,onChange,type="text",placeholder,rows,optional})=>(
   <div style={{marginBottom:14}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-      <label style={{fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",fontFamily:"'DM Sans',sans-serif"}}>{label}</label>
-      {optional&&<span style={{fontSize:10,color:"var(--sub)",opacity:0.6,fontFamily:"'DM Sans',sans-serif"}}>optional</span>}
+      <label style={{fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{label}</label>
+      {optional&&<span style={{fontSize:10,color:"var(--sub)",opacity:0.6,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>optional</span>}
     </div>
     {rows?<textarea value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} rows={rows} style={{resize:"none"}}/>:<input type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder}/>}
   </div>
@@ -238,7 +238,7 @@ const Field=({label,value,onChange,type="text",placeholder,rows,optional})=>(
 
 const SelField=({label,value,onChange,options})=>(
   <div style={{marginBottom:14}}>
-    {label&&<label style={{display:"block",fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:6,fontFamily:"'DM Sans',sans-serif"}}>{label}</label>}
+    {label&&<label style={{display:"block",fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:6,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{label}</label>}
     <select value={value} onChange={e=>onChange(e.target.value)}>{options.map(o=><option key={o.value??o} value={o.value??o}>{o.label??o}</option>)}</select>
   </div>
 );
@@ -252,7 +252,7 @@ const Btn=({children,onClick,variant="primary",full,disabled,icon})=>{
   };
   return(
     <button disabled={disabled} onClick={disabled?undefined:onClick}
-      style={{display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,padding:"13px 20px",borderRadius:12,fontSize:14,fontWeight:600,fontFamily:"'DM Sans',sans-serif",width:full?"100%":"auto",transition:"opacity 0.15s,transform 0.1s",opacity:disabled?0.4:1,...s[variant]}}
+      style={{display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,padding:"13px 20px",borderRadius:12,fontSize:14,fontWeight:600,fontFamily:"'Plus Jakarta Sans',sans-serif",width:full?"100%":"auto",transition:"opacity 0.15s,transform 0.1s",opacity:disabled?0.4:1,...s[variant]}}
       onMouseEnter={e=>{if(!disabled){e.currentTarget.style.opacity="0.82";e.currentTarget.style.transform="scale(0.98)"}}}
       onMouseLeave={e=>{e.currentTarget.style.opacity="1";e.currentTarget.style.transform="scale(1)"}}>
       {icon&&<Icon n={icon} size={15} color="currentColor"/>}{children}
@@ -286,18 +286,18 @@ const WineCard=({wine,onClick})=>{
       </div>
       <div style={{flex:1,minWidth:0}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:3}}>
-          <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:17,fontWeight:600,color:"var(--text)",lineHeight:1.25,flex:1,paddingRight:8}}>{wine.name}{wine.vintage?` ${wine.vintage}`:""}</div>
-          {!wine.wishlist&&wine.bottles>0&&<div style={{fontFamily:"'DM Sans',sans-serif",fontSize:12,color:"var(--sub)",fontWeight:500,flexShrink:0}}>{wine.bottles} {wine.bottles===1?"btl":"btls"}</div>}
+          <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:16,fontWeight:700,color:"var(--text)",lineHeight:1.25,flex:1,paddingRight:8}}>{wine.name}{wine.vintage?` ${wine.vintage}`:""}</div>
+          {!wine.wishlist&&wine.bottles>0&&<div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:12,color:"var(--sub)",fontWeight:500,flexShrink:0}}>{wine.bottles} {wine.bottles===1?"btl":"btls"}</div>}
         </div>
-        {wine.origin&&<div style={{fontSize:13,color:"var(--sub)",marginBottom:7,fontFamily:"'DM Sans',sans-serif",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{wine.origin.split(",")[0]}</div>}
+        {wine.origin&&<div style={{fontSize:13,color:"var(--sub)",marginBottom:7,fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{wine.origin.split(",")[0]}</div>}
         <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:6}}>
           <WineTypePill type={type}/>
-          {wine.vintage&&<span style={{fontSize:12,color:"var(--sub)",fontFamily:"'DM Sans',sans-serif"}}>{wine.vintage}</span>}
+          {wine.vintage&&<span style={{fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{wine.vintage}</span>}
         </div>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            {wine.origin&&<span style={{fontSize:11,color:"var(--sub)",fontFamily:"'DM Sans',sans-serif",display:"flex",alignItems:"center",gap:3}}><Icon n="location" size={11} color="var(--sub)"/>{wine.origin.split(",").pop()?.trim()}</span>}
-            {wine.grape&&<span style={{fontSize:11,color:"var(--sub)",fontFamily:"'DM Sans',sans-serif"}}>· {wine.grape.split("/")[0].trim()}</span>}
+            {wine.origin&&<span style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",display:"flex",alignItems:"center",gap:3}}><Icon n="location" size={11} color="var(--sub)"/>{wine.origin.split(",").pop()?.trim()}</span>}
+            {wine.grape&&<span style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>· {wine.grape.split("/")[0].trim()}</span>}
           </div>
           {wine.rating>0&&<Stars value={wine.rating} size={12}/>}
         </div>
@@ -315,22 +315,22 @@ const WineDetail=({wine,onEdit,onDelete,onMove})=>{
       <div style={{borderRadius:16,background:tc.bg,padding:"20px",marginBottom:16,position:"relative",overflow:"hidden",minHeight:100}}>
         <div style={{position:"absolute",right:-8,bottom:-12,opacity:0.12}}><Icon n="wine" size={100} color={tc.dot}/></div>
         <WineTypePill type={type}/>
-        <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:26,fontWeight:600,color:"var(--text)",marginTop:8,lineHeight:1.2}}>{wine.name}</div>
-        {wine.vintage&&<div style={{fontSize:14,color:"var(--sub)",marginTop:2,fontFamily:"'DM Sans',sans-serif"}}>{wine.vintage} · {wine.origin}</div>}
+        <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:24,fontWeight:700,color:"var(--text)",marginTop:8,lineHeight:1.2}}>{wine.name}</div>
+        {wine.vintage&&<div style={{fontSize:14,color:"var(--sub)",marginTop:2,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{wine.vintage} · {wine.origin}</div>}
         {wine.rating>0&&<div style={{marginTop:10}}><Stars value={wine.rating} size={16}/></div>}
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
         {[["Grape",wine.grape],["Alcohol",wine.alcohol?`${wine.alcohol}%`:null],!wine.wishlist&&["Bottles",wine.bottles],!wine.wishlist&&["Location",wine.location?(wine.location+(wine.locationSlot?` · ${wine.locationSlot}`:"")):null],["Purchased",fmt(wine.datePurchased)]].filter(x=>x&&x[1]).map(([l,v])=>(
           <div key={l} style={{background:"var(--inputBg)",borderRadius:12,padding:"11px 13px"}}>
-            <div style={{fontSize:10,color:"var(--sub)",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:3,fontFamily:"'DM Sans',sans-serif"}}>{l}</div>
-            <div style={{fontSize:14,color:"var(--text)",fontWeight:500,fontFamily:"'DM Sans',sans-serif"}}>{v}</div>
+            <div style={{fontSize:10,color:"var(--sub)",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:3,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{l}</div>
+            <div style={{fontSize:14,color:"var(--text)",fontWeight:500,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{v}</div>
           </div>
         ))}
       </div>
       {[["Tasting Notes",wine.tastingNotes,false],["Review",wine.review,true],["Personal Notes",wine.notes,false]].map(([l,v,ital])=>v?(
         <div key={l} style={{background:"var(--inputBg)",borderRadius:12,padding:"12px 14px",marginBottom:8}}>
-          <div style={{fontSize:10,color:"var(--sub)",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:5,fontFamily:"'DM Sans',sans-serif"}}>{l}</div>
-          <div style={{fontSize:14,color:"var(--text)",lineHeight:1.65,fontStyle:ital?"italic":"normal",fontFamily:"'DM Sans',sans-serif"}}>{ital?`"${v}"`:v}</div>
+          <div style={{fontSize:10,color:"var(--sub)",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:5,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{l}</div>
+          <div style={{fontSize:14,color:"var(--text)",lineHeight:1.65,fontStyle:ital?"italic":"normal",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{ital?`"${v}"`:v}</div>
         </div>
       ):null)}
       {wine.wishlist&&onMove&&<div style={{marginBottom:8}}><Btn full onClick={onMove}>Move to Collection</Btn></div>}
@@ -366,18 +366,18 @@ const WineForm=({initial,onSave,onClose,isWishlist})=>{
         <PhotoPicker value={f.photo} onChange={v=>set("photo",v)} size={76}/>
       </div>
       <div style={{marginBottom:14,position:"relative"}}>
-        <label style={{display:"block",fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:6,fontFamily:"'DM Sans',sans-serif"}}>Search wine database</label>
+        <label style={{display:"block",fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:6,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Search wine database</label>
         <div style={{position:"relative"}}>
           <input value={q} onChange={e=>handleQ(e.target.value)} placeholder="Wine name, grape, or region…" style={{paddingLeft:38}} onBlur={()=>setTimeout(()=>setSugs([]),160)}/>
           <div style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"var(--sub)",pointerEvents:"none"}}><Icon n="search" size={16}/></div>
         </div>
         {sugs.length>0&&(
           <div style={{position:"absolute",top:"100%",left:0,right:0,background:"var(--surface)",borderRadius:14,border:"1px solid var(--border)",zIndex:99,maxHeight:220,overflowY:"auto",boxShadow:"0 12px 40px var(--shadow)",marginTop:4}}>
-            {sugs.map((w,i)=>(<div key={i} onMouseDown={()=>pickSug(w)} style={{padding:"10px 14px",cursor:"pointer",borderBottom:i<sugs.length-1?"1px solid var(--border)":"none"}} onMouseEnter={e=>e.currentTarget.style.background="var(--inputBg)"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}><div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:15,fontWeight:600,color:"var(--text)"}}>{w.name}</div><div style={{fontSize:12,color:"var(--sub)",marginTop:1}}>{w.grape} · {w.origin}</div></div>))}
-            <div onMouseDown={()=>{setSugs([]);setShowFields(true);}} style={{padding:"10px 14px",cursor:"pointer",color:"#9B2335",fontSize:13,fontWeight:600,textAlign:"center",borderTop:"1px solid var(--border)",fontFamily:"'DM Sans',sans-serif"}}>Add "{q}" manually</div>
+            {sugs.map((w,i)=>(<div key={i} onMouseDown={()=>pickSug(w)} style={{padding:"10px 14px",cursor:"pointer",borderBottom:i<sugs.length-1?"1px solid var(--border)":"none"}} onMouseEnter={e=>e.currentTarget.style.background="var(--inputBg)"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}><div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:15,fontWeight:600,color:"var(--text)"}}>{w.name}</div><div style={{fontSize:12,color:"var(--sub)",marginTop:1}}>{w.grape} · {w.origin}</div></div>))}
+            <div onMouseDown={()=>{setSugs([]);setShowFields(true);}} style={{padding:"10px 14px",cursor:"pointer",color:"#9B2335",fontSize:13,fontWeight:600,textAlign:"center",borderTop:"1px solid var(--border)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Add "{q}" manually</div>
           </div>
         )}
-        {!showFields&&!sugs.length&&q.length>=1&&<button onMouseDown={()=>setShowFields(true)} style={{marginTop:8,width:"100%",padding:"9px",borderRadius:10,border:"1.5px dashed var(--border)",background:"none",color:"#9B2335",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Enter details manually</button>}
+        {!showFields&&!sugs.length&&q.length>=1&&<button onMouseDown={()=>setShowFields(true)} style={{marginTop:8,width:"100%",padding:"9px",borderRadius:10,border:"1.5px dashed var(--border)",background:"none",color:"#9B2335",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Enter details manually</button>}
       </div>
       {showFields&&<>
         <Field label="Wine Name" value={f.name} onChange={v=>set("name",v)} placeholder="e.g. Penfolds Grange"/>
@@ -398,7 +398,7 @@ const WineForm=({initial,onSave,onClose,isWishlist})=>{
         <Field label="Tasting Notes" value={f.tastingNotes} onChange={v=>set("tastingNotes",v)} placeholder="Dark plum, cedar, vanilla…" optional/>
         <Field label="Personal Notes" value={f.notes} onChange={v=>set("notes",v)} placeholder="Pairings, memories…" rows={2} optional/>
         {!isWishlist&&<>
-          <div style={{marginBottom:14}}><div style={{fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8,fontFamily:"'DM Sans',sans-serif"}}>Rating</div><Stars value={f.rating} onChange={v=>set("rating",v)} size={22}/></div>
+          <div style={{marginBottom:14}}><div style={{fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Rating</div><Stars value={f.rating} onChange={v=>set("rating",v)} size={22}/></div>
           <Field label="Review" value={f.review} onChange={v=>set("review",v)} placeholder="Your thoughts…" rows={2} optional/>
           <Field label="Date Purchased" value={f.datePurchased} onChange={v=>set("datePurchased",v)} type="date" optional/>
         </>}
@@ -429,25 +429,25 @@ const FilterPanel=({filters,setFilters,wines,onClose})=>{
   const locs=[...new Set(col.map(w=>w.location).filter(Boolean))].sort();
   const [local,setLocal]=useState({...filters});
   const toggle=(k,v)=>setLocal(p=>({...p,[k]:p[k]===v?"":v}));
-  const chipStyle=(active)=>({padding:"7px 13px",borderRadius:20,border:active?"1.5px solid #9B2335":"1.5px solid var(--border)",background:active?"rgba(155,35,53,0.1)":"var(--inputBg)",color:active?"#9B2335":"var(--text)",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",transition:"all 0.15s"});
+  const chipStyle=(active)=>({padding:"7px 13px",borderRadius:20,border:active?"1.5px solid #9B2335":"1.5px solid var(--border)",background:active?"rgba(155,35,53,0.1)":"var(--inputBg)",color:active?"#9B2335":"var(--text)",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',sans-serif",transition:"all 0.15s"});
   return(
     <div>
       <ModalHeader title="Filter & Sort" onClose={onClose}/>
-      <div style={{fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8,fontFamily:"'DM Sans',sans-serif"}}>Sort By</div>
+      <div style={{fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Sort By</div>
       <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:18}}>{SORTS.map(o=><button key={o.value} onClick={()=>setLocal(p=>({...p,sort:o.value}))} style={chipStyle(local.sort===o.value)}>{o.label}</button>)}</div>
-      <div style={{fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8,fontFamily:"'DM Sans',sans-serif"}}>Min Rating</div>
+      <div style={{fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Min Rating</div>
       <div style={{display:"flex",gap:6,marginBottom:18}}>{[0,1,2,3,4,5].map(r=><button key={r} onClick={()=>setLocal(p=>({...p,minRating:r}))} style={chipStyle(local.minRating===r)}>{r===0?"Any":`${r}+`}</button>)}</div>
-      <div style={{fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8,fontFamily:"'DM Sans',sans-serif"}}>Wine Type</div>
+      <div style={{fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Wine Type</div>
       <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:18}}>{Object.keys(WINE_TYPE_COLORS).filter(k=>k!=="Other").map(t=><button key={t} onClick={()=>toggle("type",t)} style={chipStyle(local.type===t)}>{t}</button>)}</div>
-      {locs.length>0&&<><div style={{fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8,fontFamily:"'DM Sans',sans-serif"}}>Location</div><div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:18}}>{locs.map(l=><button key={l} onClick={()=>toggle("location",l)} style={chipStyle(local.location===l)}>{l}</button>)}</div></>}
+      {locs.length>0&&<><div style={{fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Location</div><div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:18}}>{locs.map(l=><button key={l} onClick={()=>toggle("location",l)} style={chipStyle(local.location===l)}>{l}</button>)}</div></>}
       <div style={{display:"flex",gap:8}}><Btn variant="secondary" onClick={()=>setLocal(DEFAULT_FILTERS)} full>Reset</Btn><Btn onClick={()=>{setFilters(local);onClose();}} full>Apply</Btn></div>
     </div>
   );
 };
 
 /* ── HELPERS ──────────────────────────────────────────────────── */
-const Empty=({icon,text})=>(<div style={{textAlign:"center",padding:"56px 0",color:"var(--sub)"}}><div style={{marginBottom:12,opacity:0.3}}><Icon n={icon} size={44} color="var(--sub)"/></div><div style={{fontFamily:"'DM Sans',sans-serif",fontSize:14}}>{text}</div></div>);
-const Chip=({label,onX})=>(<div style={{display:"inline-flex",alignItems:"center",gap:4,padding:"4px 10px",borderRadius:20,background:"rgba(155,35,53,0.1)",border:"1.5px solid rgba(155,35,53,0.25)"}}><span style={{fontSize:12,color:"#9B2335",fontFamily:"'DM Sans',sans-serif",fontWeight:600}}>{label}</span><button onClick={onX} style={{background:"none",border:"none",color:"#9B2335",padding:0,lineHeight:1,display:"flex",cursor:"pointer"}}><Icon n="x" size={11}/></button></div>);
+const Empty=({icon,text})=>(<div style={{textAlign:"center",padding:"56px 0",color:"var(--sub)"}}><div style={{marginBottom:12,opacity:0.3}}><Icon n={icon} size={44} color="var(--sub)"/></div><div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:14}}>{text}</div></div>);
+const Chip=({label,onX})=>(<div style={{display:"inline-flex",alignItems:"center",gap:4,padding:"4px 10px",borderRadius:20,background:"rgba(155,35,53,0.1)",border:"1.5px solid rgba(155,35,53,0.25)"}}><span style={{fontSize:12,color:"#9B2335",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:600}}>{label}</span><button onClick={onX} style={{background:"none",border:"none",color:"#9B2335",padding:0,lineHeight:1,display:"flex",cursor:"pointer"}}><Icon n="x" size={11}/></button></div>);
 
 /* ── COLLECTION SCREEN ────────────────────────────────────────── */
 const CollectionScreen=({wines,onAdd,onUpdate,onDelete})=>{
@@ -464,10 +464,10 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete})=>{
   return(
     <div>
       <div style={{marginBottom:24}}>
-        <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"2px",textTransform:"uppercase",marginBottom:4}}>My Cellar</div>
+        <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"2px",textTransform:"uppercase",marginBottom:4}}>My Cellar</div>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end"}}>
-          <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:40,fontWeight:600,color:"var(--text)",lineHeight:1,letterSpacing:"-0.5px"}}>{col.length} <span style={{fontSize:24,color:"var(--sub)",fontWeight:400}}>wines</span></div>
-          <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:13,color:"var(--sub)"}}>{bottles} bottles</div>
+          <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:36,fontWeight:700,color:"var(--text)",lineHeight:1,letterSpacing:"-1px"}}>{col.length} <span style={{fontSize:18,color:"var(--sub)",fontWeight:400}}>wines</span></div>
+          <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:13,color:"var(--sub)"}}>{bottles} bottles</div>
         </div>
       </div>
       <div style={{display:"flex",gap:8,marginBottom:16,alignItems:"center"}}>
@@ -488,7 +488,7 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete})=>{
         {filters.minRating>0&&<Chip label={`${filters.minRating}+ stars`} onX={()=>setFilters(p=>({...p,minRating:0}))}/>}
         {filters.type&&<Chip label={filters.type} onX={()=>setFilters(p=>({...p,type:""}))}/>}
         {filters.location&&<Chip label={filters.location} onX={()=>setFilters(p=>({...p,location:""}))}/>}
-        <button onClick={()=>setFilters(DEFAULT_FILTERS)} style={{padding:"4px 10px",borderRadius:20,border:"none",background:"none",color:"var(--sub)",fontSize:12,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textDecoration:"underline"}}>Clear all</button>
+        <button onClick={()=>setFilters(DEFAULT_FILTERS)} style={{padding:"4px 10px",borderRadius:20,border:"none",background:"none",color:"var(--sub)",fontSize:12,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',sans-serif",textDecoration:"underline"}}>Clear all</button>
       </div>}
       {filt.length===0?<Empty icon="wine" text={search||active?"No wines match your filters.":"Your cellar is empty. Add your first wine."}/>:filt.map(w=><WineCard key={w.id} wine={w} onClick={()=>{setSel(w);setEditing(false);}}/>)}
       <Modal show={!!sel&&!editing} onClose={()=>setSel(null)} wide>
@@ -515,9 +515,9 @@ const WishlistScreen=({wishlist,onAdd,onUpdate,onDelete,onMove})=>{
   return(
     <div>
       <div style={{marginBottom:24}}>
-        <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"2px",textTransform:"uppercase",marginBottom:4}}>Wishlist</div>
+        <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"2px",textTransform:"uppercase",marginBottom:4}}>Wishlist</div>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end"}}>
-          <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:40,fontWeight:600,color:"var(--text)",lineHeight:1,letterSpacing:"-0.5px"}}>{wishlist.length} <span style={{fontSize:24,color:"var(--sub)",fontWeight:400}}>to try</span></div>
+          <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:36,fontWeight:700,color:"var(--text)",lineHeight:1,letterSpacing:"-1px"}}>{wishlist.length} <span style={{fontSize:18,color:"var(--sub)",fontWeight:400}}>to try</span></div>
           <button onClick={()=>setAdding(true)} style={{width:44,height:44,borderRadius:14,background:"#9B2335",border:"none",display:"flex",alignItems:"center",justifyContent:"center",color:"white",boxShadow:"0 4px 16px rgba(155,35,53,0.35)"}}><Icon n="plus" size={20}/></button>
         </div>
       </div>
@@ -553,19 +553,19 @@ const AIScreen=({wines})=>{
   return(
     <div style={{display:"flex",flexDirection:"column",height:"calc(100vh - 140px)"}}>
       <div style={{marginBottom:18}}>
-        <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"2px",textTransform:"uppercase",marginBottom:4}}>Vino AI</div>
-        <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:32,fontWeight:600,color:"var(--text)",lineHeight:1}}>Sommelier</div>
+        <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"2px",textTransform:"uppercase",marginBottom:4}}>Vino AI</div>
+        <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:30,fontWeight:700,color:"var(--text)",lineHeight:1}}>Sommelier</div>
       </div>
       <div ref={scrollRef} style={{flex:1,overflowY:"auto",paddingBottom:8}}>
         {msgs.map((m,i)=>(
           <div key={i} style={{marginBottom:12,display:"flex",justifyContent:m.r==="u"?"flex-end":"flex-start",gap:8,alignItems:"flex-end"}}>
             {m.r==="a"&&<div style={{width:30,height:30,borderRadius:10,background:"#9B2335",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon n="wine" size={15} color="white"/></div>}
-            <div style={{maxWidth:"80%",padding:"12px 15px",borderRadius:m.r==="u"?"18px 18px 4px 18px":"18px 18px 18px 4px",background:m.r==="u"?"#9B2335":"var(--card)",color:m.r==="u"?"white":"var(--text)",fontSize:14,lineHeight:1.65,border:m.r==="a"?"1px solid var(--border)":"none",whiteSpace:"pre-wrap",fontFamily:"'DM Sans',sans-serif",boxShadow:"0 2px 8px var(--shadow)"}}>{m.t}</div>
+            <div style={{maxWidth:"80%",padding:"12px 15px",borderRadius:m.r==="u"?"18px 18px 4px 18px":"18px 18px 18px 4px",background:m.r==="u"?"#9B2335":"var(--card)",color:m.r==="u"?"white":"var(--text)",fontSize:14,lineHeight:1.65,border:m.r==="a"?"1px solid var(--border)":"none",whiteSpace:"pre-wrap",fontFamily:"'Plus Jakarta Sans',sans-serif",boxShadow:"0 2px 8px var(--shadow)"}}>{m.t}</div>
           </div>
         ))}
         {loading&&<div style={{display:"flex",alignItems:"flex-end",gap:8}}><div style={{width:30,height:30,borderRadius:10,background:"#9B2335",display:"flex",alignItems:"center",justifyContent:"center"}}><Icon n="wine" size={15} color="white"/></div><div style={{padding:"14px 16px",borderRadius:"18px 18px 18px 4px",background:"var(--card)",border:"1px solid var(--border)",display:"flex",gap:5,alignItems:"center"}}>{[0,1,2].map(d=><div key={d} style={{width:6,height:6,borderRadius:"50%",background:"var(--sub)",animation:"blink 1.2s ease infinite",animationDelay:`${d*0.18}s`}}/>)}</div></div>}
       </div>
-      {msgs.length<=1&&<div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>{chips.map(c=><button key={c} onClick={()=>send(c)} style={{padding:"8px 13px",borderRadius:20,border:"1.5px solid var(--border)",background:"var(--card)",color:"var(--text)",fontSize:12,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontWeight:500}} onMouseEnter={e=>e.currentTarget.style.borderColor="#9B2335"} onMouseLeave={e=>e.currentTarget.style.borderColor="var(--border)"}>{c}</button>)}</div>}
+      {msgs.length<=1&&<div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>{chips.map(c=><button key={c} onClick={()=>send(c)} style={{padding:"8px 13px",borderRadius:20,border:"1.5px solid var(--border)",background:"var(--card)",color:"var(--text)",fontSize:12,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}} onMouseEnter={e=>e.currentTarget.style.borderColor="#9B2335"} onMouseLeave={e=>e.currentTarget.style.borderColor="var(--border)"}>{c}</button>)}</div>}
       <div style={{display:"flex",gap:8,paddingTop:8}}>
         <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&send()} placeholder="Ask anything about wine…" style={{borderRadius:14}}/>
         <button onClick={()=>send()} disabled={!input.trim()||loading} style={{width:44,height:44,flexShrink:0,borderRadius:12,background:input.trim()&&!loading?"#9B2335":"var(--inputBg)",border:"none",cursor:input.trim()&&!loading?"pointer":"default",display:"flex",alignItems:"center",justifyContent:"center",color:input.trim()&&!loading?"white":"var(--sub)",boxShadow:input.trim()&&!loading?"0 4px 14px rgba(155,35,53,0.3)":"none",transition:"all 0.18s"}}><Icon n="send" size={17}/></button>
@@ -584,9 +584,9 @@ const NotesScreen=({wines,notes,onAdd,onDelete})=>{
   return(
     <div>
       <div style={{marginBottom:24}}>
-        <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"2px",textTransform:"uppercase",marginBottom:4}}>Journal</div>
+        <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"2px",textTransform:"uppercase",marginBottom:4}}>Journal</div>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end"}}>
-          <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:40,fontWeight:600,color:"var(--text)",lineHeight:1}}>{notes.length} <span style={{fontSize:24,color:"var(--sub)",fontWeight:400}}>notes</span></div>
+          <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:36,fontWeight:700,color:"var(--text)",lineHeight:1}}>{notes.length} <span style={{fontSize:18,color:"var(--sub)",fontWeight:400}}>notes</span></div>
           <button onClick={()=>{setForm({wineId:col[0]?.id||"",title:"",content:""});setAdding(true);}} style={{width:44,height:44,borderRadius:14,background:"#9B2335",border:"none",display:"flex",alignItems:"center",justifyContent:"center",color:"white",boxShadow:"0 4px 16px rgba(155,35,53,0.35)"}}><Icon n="plus" size={20}/></button>
         </div>
       </div>
@@ -597,11 +597,11 @@ const NotesScreen=({wines,notes,onAdd,onDelete})=>{
         return(
           <div key={n.id} onClick={()=>setSel(n)} style={{background:"var(--card)",borderRadius:18,padding:"16px",cursor:"pointer",border:"1px solid var(--border)",marginBottom:10,transition:"transform 0.15s,box-shadow 0.15s",boxShadow:"0 2px 8px var(--shadow)"}} onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 8px 28px var(--shadow)"}} onMouseLeave={e=>{e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="0 2px 8px var(--shadow)"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
-              <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:18,fontWeight:600,color:"var(--text)",lineHeight:1.2,flex:1,paddingRight:8}}>{n.title}</div>
-              <div style={{fontSize:11,color:"var(--sub)",fontFamily:"'DM Sans',sans-serif",flexShrink:0}}>{n.date?new Date(n.date).toLocaleDateString("en-AU",{day:"numeric",month:"short"}):""}</div>
+              <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:17,fontWeight:700,color:"var(--text)",lineHeight:1.2,flex:1,paddingRight:8}}>{n.title}</div>
+              <div style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",flexShrink:0}}>{n.date?new Date(n.date).toLocaleDateString("en-AU",{day:"numeric",month:"short"}):""}</div>
             </div>
-            {w&&<div style={{display:"inline-flex",alignItems:"center",gap:6,marginBottom:8}}><div style={{width:7,height:7,borderRadius:"50%",background:tc.dot}}/><span style={{fontSize:12,color:"var(--sub)",fontFamily:"'DM Sans',sans-serif"}}>{w.name}</span></div>}
-            <div style={{fontSize:13,color:"var(--sub)",lineHeight:1.55,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",fontFamily:"'DM Sans',sans-serif"}}>{n.content}</div>
+            {w&&<div style={{display:"inline-flex",alignItems:"center",gap:6,marginBottom:8}}><div style={{width:7,height:7,borderRadius:"50%",background:tc.dot}}/><span style={{fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{w.name}</span></div>}
+            <div style={{fontSize:13,color:"var(--sub)",lineHeight:1.55,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{n.content}</div>
           </div>
         );
       })}
@@ -618,9 +618,9 @@ const NotesScreen=({wines,notes,onAdd,onDelete})=>{
       <Modal show={!!sel} onClose={()=>setSel(null)} wide>
         {sel&&<div>
           <ModalHeader title={sel.title} onClose={()=>setSel(null)}/>
-          {getW(sel.wineId)&&<div style={{fontSize:13,color:"#9B2335",marginBottom:8,fontWeight:600,fontFamily:"'DM Sans',sans-serif",display:"flex",alignItems:"center",gap:6}}><div style={{width:7,height:7,borderRadius:"50%",background:"#9B2335"}}/>{getW(sel.wineId)?.name}</div>}
-          <div style={{fontSize:12,color:"var(--sub)",marginBottom:16,fontFamily:"'DM Sans',sans-serif"}}>{sel.date?new Date(sel.date).toLocaleDateString("en-AU",{weekday:"long",day:"numeric",month:"long",year:"numeric"}):""}</div>
-          <div style={{fontSize:15,color:"var(--text)",lineHeight:1.75,marginBottom:24,fontFamily:"'DM Sans',sans-serif"}}>{sel.content}</div>
+          {getW(sel.wineId)&&<div style={{fontSize:13,color:"#9B2335",marginBottom:8,fontWeight:600,fontFamily:"'Plus Jakarta Sans',sans-serif",display:"flex",alignItems:"center",gap:6}}><div style={{width:7,height:7,borderRadius:"50%",background:"#9B2335"}}/>{getW(sel.wineId)?.name}</div>}
+          <div style={{fontSize:12,color:"var(--sub)",marginBottom:16,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{sel.date?new Date(sel.date).toLocaleDateString("en-AU",{weekday:"long",day:"numeric",month:"long",year:"numeric"}):""}</div>
+          <div style={{fontSize:15,color:"var(--text)",lineHeight:1.75,marginBottom:24,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{sel.content}</div>
           <Btn variant="danger" onClick={()=>{onDelete(sel.id);setSel(null);}} full icon="trash">Delete Note</Btn>
         </div>}
       </Modal>
@@ -642,8 +642,8 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
   const THEMES=[{id:"system",label:"System",ic:"monitor"},{id:"light",label:"Light",ic:"sun"},{id:"dark",label:"Dark",ic:"moon"}];
   return(
     <div>
-      <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"2px",textTransform:"uppercase",marginBottom:4}}>My Winery</div>
-      <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:40,fontWeight:600,color:"var(--text)",lineHeight:1,marginBottom:20}}>Profile</div>
+      <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"2px",textTransform:"uppercase",marginBottom:4}}>My Winery</div>
+      <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:36,fontWeight:700,color:"var(--text)",lineHeight:1,marginBottom:20}}>Profile</div>
       <div style={{background:"linear-gradient(135deg,#6B0A0A 0%,#9B2335 60%,#6B0A0A 100%)",borderRadius:22,padding:"20px",marginBottom:14,position:"relative",overflow:"hidden"}}>
         <div style={{position:"absolute",right:-20,top:-20,opacity:0.06}}><Icon n="wine" size={160} color="white"/></div>
         <div style={{display:"flex",alignItems:"center",gap:14}}>
@@ -651,42 +651,42 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
             {profile.avatar?<img src={profile.avatar} alt="avatar" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<Icon n="user" size={28} color="rgba(255,255,255,0.8)"/>}
           </div>
           <div style={{flex:1,minWidth:0}}>
-            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,fontWeight:600,color:"white",lineHeight:1.1}}>{profile.name}</div>
-            <div style={{fontSize:13,color:"rgba(255,255,255,0.65)",marginTop:3,fontFamily:"'DM Sans',sans-serif"}}>{profile.description}</div>
+            <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:22,fontWeight:700,color:"white",lineHeight:1.1}}>{profile.name}</div>
+            <div style={{fontSize:13,color:"rgba(255,255,255,0.65)",marginTop:3,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{profile.description}</div>
           </div>
-          <button onClick={()=>setEditOpen(true)} style={{flexShrink:0,background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.25)",borderRadius:11,padding:"9px 15px",color:"white",fontSize:13,fontFamily:"'DM Sans',sans-serif",fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:6,transition:"background 0.2s"}} onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.25)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(255,255,255,0.15)"}><Icon n="edit" size={13} color="white"/> Edit</button>
+          <button onClick={()=>setEditOpen(true)} style={{flexShrink:0,background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.25)",borderRadius:11,padding:"9px 15px",color:"white",fontSize:13,fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:6,transition:"background 0.2s"}} onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.25)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(255,255,255,0.15)"}><Icon n="edit" size={13} color="white"/> Edit</button>
         </div>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:10}}>
         {[["Wines",col.length],["Bottles",bottles],["Notes",notes.length]].map(([l,v])=>(
           <div key={l} style={{background:"var(--card)",borderRadius:16,padding:"14px 10px",textAlign:"center",border:"1px solid var(--border)"}}>
-            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:28,fontWeight:600,color:"var(--text)",lineHeight:1}}>{v}</div>
-            <div style={{fontSize:10,color:"var(--sub)",fontWeight:600,marginTop:3,textTransform:"uppercase",letterSpacing:"0.7px",fontFamily:"'DM Sans',sans-serif"}}>{l}</div>
+            <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:26,fontWeight:800,color:"var(--text)",lineHeight:1}}>{v}</div>
+            <div style={{fontSize:10,color:"var(--sub)",fontWeight:600,marginTop:3,textTransform:"uppercase",letterSpacing:"0.7px",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{l}</div>
           </div>
         ))}
       </div>
       {Object.keys(types).length>0&&(
         <div style={{background:"var(--card)",borderRadius:16,border:"1px solid var(--border)",padding:"14px 16px",marginBottom:10}}>
-          <div style={{fontSize:10,color:"var(--sub)",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:12,fontFamily:"'DM Sans',sans-serif"}}>Collection Breakdown</div>
+          <div style={{fontSize:10,color:"var(--sub)",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:12,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Collection Breakdown</div>
           {Object.entries(types).sort((a,b)=>b[1]-a[1]).map(([t,c])=>{
             const tc=WINE_TYPE_COLORS[t]||WINE_TYPE_COLORS.Other;
             const pct=Math.round((c/col.length)*100);
-            return(<div key={t} style={{marginBottom:8}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:13,color:"var(--text)",fontFamily:"'DM Sans',sans-serif",fontWeight:500}}>{t}</span><span style={{fontSize:12,color:"var(--sub)",fontFamily:"'DM Sans',sans-serif"}}>{c} · {pct}%</span></div><div style={{height:4,background:"var(--inputBg)",borderRadius:2,overflow:"hidden"}}><div style={{height:"100%",width:`${pct}%`,background:tc.dot,borderRadius:2}}/></div></div>);
+            return(<div key={t} style={{marginBottom:8}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:13,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>{t}</span><span style={{fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{c} · {pct}%</span></div><div style={{height:4,background:"var(--inputBg)",borderRadius:2,overflow:"hidden"}}><div style={{height:"100%",width:`${pct}%`,background:tc.dot,borderRadius:2}}/></div></div>);
           })}
         </div>
       )}
-      {topWine&&<div style={{background:"var(--card)",borderRadius:16,padding:"14px 16px",border:"1px solid var(--border)",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontSize:10,color:"var(--sub)",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:4,fontFamily:"'DM Sans',sans-serif"}}>Top Rated</div><div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:16,fontWeight:600,color:"var(--text)"}}>{topWine.name}</div><div style={{fontSize:12,color:"var(--sub)",marginTop:2,fontFamily:"'DM Sans',sans-serif"}}>{topWine.origin}</div></div><Stars value={topWine.rating} size={14}/></div>}
+      {topWine&&<div style={{background:"var(--card)",borderRadius:16,padding:"14px 16px",border:"1px solid var(--border)",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontSize:10,color:"var(--sub)",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:4,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Top Rated</div><div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:15,fontWeight:700,color:"var(--text)"}}>{topWine.name}</div><div style={{fontSize:12,color:"var(--sub)",marginTop:2,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{topWine.origin}</div></div><Stars value={topWine.rating} size={14}/></div>}
       <div style={{background:"var(--card)",borderRadius:16,border:"1px solid var(--border)",padding:"14px 16px",marginBottom:10}}>
-        <div style={{fontSize:10,color:"var(--sub)",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:12,fontFamily:"'DM Sans',sans-serif"}}>Appearance</div>
+        <div style={{fontSize:10,color:"var(--sub)",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:12,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Appearance</div>
         <div style={{display:"flex",gap:8}}>
-          {THEMES.map(t=><button key={t.id} onClick={()=>setTheme(t.id)} style={{flex:1,padding:"10px 6px",borderRadius:12,border:theme===t.id?"2px solid #9B2335":"1.5px solid var(--border)",background:theme===t.id?"rgba(155,35,53,0.08)":"var(--inputBg)",color:theme===t.id?"#9B2335":"var(--sub)",fontFamily:"'DM Sans',sans-serif",fontWeight:600,fontSize:12,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:6,transition:"all 0.18s"}}><Icon n={t.ic} size={16} color={theme===t.id?"#9B2335":"var(--sub)"}/>{t.label}</button>)}
+          {THEMES.map(t=><button key={t.id} onClick={()=>setTheme(t.id)} style={{flex:1,padding:"10px 6px",borderRadius:12,border:theme===t.id?"2px solid #9B2335":"1.5px solid var(--border)",background:theme===t.id?"rgba(155,35,53,0.08)":"var(--inputBg)",color:theme===t.id?"#9B2335":"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:600,fontSize:12,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:6,transition:"all 0.18s"}}><Icon n={t.ic} size={16} color={theme===t.id?"#9B2335":"var(--sub)"}/>{t.label}</button>)}
         </div>
       </div>
       <div onClick={()=>{const b=new Blob([JSON.stringify({wines,wishlist,notes,profile,exportedAt:new Date().toISOString()},null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="my-winery.json";a.click();}} style={{background:"var(--card)",borderRadius:16,border:"1px solid var(--border)",padding:"14px 16px",marginBottom:24,display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer",transition:"opacity 0.18s"}} onMouseEnter={e=>e.currentTarget.style.opacity="0.7"} onMouseLeave={e=>e.currentTarget.style.opacity="1"}>
-        <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'DM Sans',sans-serif",fontWeight:500}}>Export Collection</span></div>
+        <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export Collection</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'DM Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vino v4 · {profile.name}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vino v4 · {profile.name}</div>
       <Modal show={editOpen} onClose={()=>setEditOpen(false)}>
         <ModalHeader title="Edit Profile" onClose={()=>setEditOpen(false)}/>
         <div style={{display:"flex",justifyContent:"center",marginBottom:18}}>
@@ -766,15 +766,15 @@ export default function App() {
       <style>{CSS}</style>
       <div style={{textAlign:"center",animation:"fadeUp 1s ease"}}>
         <div style={{marginBottom:16,opacity:0.9}}><Icon n="wine" size={52} color="#9B2335"/></div>
-        <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:64,fontWeight:300,color:"#EDE6E0",letterSpacing:"-1px",lineHeight:1}}>Vino</div>
-        <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:11,color:"rgba(237,230,224,0.35)",marginTop:8,letterSpacing:"5px",textTransform:"uppercase"}}>Personal Cellar</div>
-        {ready&&<div style={{marginTop:40,fontFamily:"'Cormorant Garamond',serif",fontSize:22,color:"rgba(237,230,224,0.7)",fontStyle:"italic",animation:"fadeUp 0.8s 0.3s ease both"}}>Good {new Date().getHours()<12?"morning":new Date().getHours()<18?"afternoon":"evening"}, <span style={{color:"#C47060"}}>{DEFAULT_PROFILE.name}</span></div>}
+        <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:58,fontWeight:800,color:"#EDE6E0",letterSpacing:"-2px",lineHeight:1}}>Vino</div>
+        <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:11,color:"rgba(237,230,224,0.35)",marginTop:8,letterSpacing:"5px",textTransform:"uppercase"}}>Personal Cellar</div>
+        {ready&&<div style={{marginTop:40,fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:20,fontWeight:500,color:"rgba(237,230,224,0.7)",animation:"fadeUp 0.8s 0.3s ease both"}}>Good {new Date().getHours()<12?"morning":new Date().getHours()<18?"afternoon":"evening"}, <span style={{color:"#C47060"}}>{DEFAULT_PROFILE.name}</span></div>}
       </div>
     </div>
   );
 
   return(
-    <div style={{...cssVars,background:"var(--bg)",minHeight:"100vh",fontFamily:"'DM Sans',sans-serif",color:"var(--text)",maxWidth:480,margin:"0 auto",display:"flex",flexDirection:"column"}}>
+    <div style={{...cssVars,background:"var(--bg)",minHeight:"100vh",fontFamily:"'Plus Jakarta Sans',sans-serif",color:"var(--text)",maxWidth:480,margin:"0 auto",display:"flex",flexDirection:"column"}}>
       <style>{CSS}</style>
       <div style={{flex:1,overflowY:"auto",padding:"52px 20px 96px",animation:"fadeUp 0.3s ease"}}>
         {tab==="collection"&&<CollectionScreen wines={wines} onAdd={addWine} onUpdate={updWine} onDelete={delWine}/>}
@@ -786,7 +786,7 @@ export default function App() {
       <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:480,background:dark?"rgba(12,10,10,0.92)":"rgba(247,244,242,0.92)",backdropFilter:"blur(24px)",WebkitBackdropFilter:"blur(24px)",borderTop:`1px solid ${dark?"rgba(255,255,255,0.06)":"rgba(0,0,0,0.07)"}`,padding:"10px 0 22px",zIndex:100}}>
         <div style={{display:"flex",justifyContent:"space-around"}}>
           {TABS.map(tb=>{const active=tab===tb.id;return(
-            <button key={tb.id} onClick={()=>setTab(tb.id)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,background:"none",border:"none",padding:"4px 12px",color:active?"#9B2335":"var(--sub)",transition:"color 0.18s",fontFamily:"'DM Sans',sans-serif"}}>
+            <button key={tb.id} onClick={()=>setTab(tb.id)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,background:"none",border:"none",padding:"4px 12px",color:active?"#9B2335":"var(--sub)",transition:"color 0.18s",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
               <div style={{transform:active?"scale(1.1)":"scale(1)",transition:"transform 0.18s"}}><Icon n={tb.ic} size={22} color={active?"#9B2335":"var(--sub)"}/></div>
               <span style={{fontSize:9.5,fontWeight:active?700:500,letterSpacing:"0.3px"}}>{tb.label}</span>
               <div style={{width:4,height:4,borderRadius:"50%",background:active?"#9B2335":"transparent",transition:"background 0.18s"}}/>
