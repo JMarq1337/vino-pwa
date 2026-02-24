@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 
 /* ── SUPABASE ─────────────────────────────────────────────────── */
 const SUPA_URL = "https://dfnvmwoacprkhxfbpybv.supabase.co";
@@ -209,14 +210,15 @@ const WineTypePill=({type})=>{
 
 const Modal=({show,onClose,children,wide})=>{
   if(!show)return null;
-  return(
-    <div style={{position:"fixed",inset:0,zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:"20px"}} onClick={onClose}>
-      <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.6)",backdropFilter:"blur(8px)",animation:"fadeIn .2s"}}/>
-      <div onClick={e=>e.stopPropagation()} style={{position:"relative",width:"100%",maxWidth:wide?520:420,background:"var(--surface)",borderRadius:24,maxHeight:"88vh",overflowY:"auto",animation:"modalIn .22s cubic-bezier(0.34,1.2,0.64,1)",boxShadow:"0 32px 80px rgba(0,0,0,0.35)"}}>
+  const content=(
+    <div style={{position:"fixed",inset:0,zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:"20px"}} onClick={onClose}>
+      <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.65)",backdropFilter:"blur(10px)",animation:"fadeIn .2s"}}/>
+      <div onClick={e=>e.stopPropagation()} style={{position:"relative",width:"100%",maxWidth:wide?520:420,background:"var(--surface)",borderRadius:24,maxHeight:"88vh",overflowY:"auto",animation:"modalIn .22s cubic-bezier(0.34,1.2,0.64,1)",boxShadow:"0 32px 80px rgba(0,0,0,0.4)"}}>
         <div style={{padding:"24px 24px 28px"}}>{children}</div>
       </div>
     </div>
   );
+  return createPortal(content, document.body);
 };
 
 const ModalHeader=({title,onClose})=>(
@@ -694,7 +696,7 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export Collection</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vino v4 · {profile.name}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vino v4.4 · {profile.name}</div>
       <Modal show={editOpen} onClose={()=>setEditOpen(false)}>
         <ModalHeader title="Edit Profile" onClose={()=>setEditOpen(false)}/>
         <div style={{display:"flex",justifyContent:"center",marginBottom:18}}>
