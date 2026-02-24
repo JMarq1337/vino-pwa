@@ -632,28 +632,54 @@ const NotesScreen=({wines,notes,onAdd,onDelete})=>{
 
 /* ── PROFILE ──────────────────────────────────────────────────── */
 const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>{
-  const [editOpen,setEditOpen]=useState(false);
-  const [pForm,setPForm]=useState({name:profile.name,description:profile.description,avatar:profile.avatar||null});
-  
-  const openEdit=()=>{
-    setPForm({name:profile.name,description:profile.description,avatar:profile.avatar||null});
-    setEditOpen(true);
-  };
-  const saveEdit=()=>{
-    setProfile({...pForm});
-    setEditOpen(false);
-  };
+  const [editing,setEditing]=useState(false);
+  const [pForm,setPForm]=useState({name:"",description:"",avatar:null});
   const col=wines.filter(w=>!w.wishlist);
   const bottles=col.reduce((s,w)=>s+(w.bottles||0),0);
   const topWine=[...col].sort((a,b)=>(b.rating||0)-(a.rating||0))[0];
-  const grapes=col.reduce((acc,w)=>{if(w.grape)acc[w.grape]=(acc[w.grape]||0)+1;return acc;},{});
-  const topGrape=Object.entries(grapes).sort((a,b)=>b[1]-a[1])[0];
   const types=col.reduce((acc,w)=>{const t=w.wineType||guessWineType(w.grape,w.name);acc[t]=(acc[t]||0)+1;return acc;},{});
   const THEMES=[{id:"system",label:"System",ic:"monitor"},{id:"light",label:"Light",ic:"sun"},{id:"dark",label:"Dark",ic:"moon"}];
+
+  const openEdit=()=>{
+    setPForm({name:profile.name||"",description:profile.description||"",avatar:profile.avatar||null});
+    setEditing(true);
+  };
+
+  /* ── EDIT VIEW ── */
+  if(editing) return(
+    <div style={{animation:"fadeUp 0.2s ease"}}>
+      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:24}}>
+        <button onClick={()=>setEditing(false)} style={{background:"var(--inputBg)",border:"none",borderRadius:10,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",color:"var(--sub)",cursor:"pointer",flexShrink:0}}>
+          <Icon n="chevR" size={18} color="var(--sub)" style={{transform:"rotate(180deg)"}}/>
+        </button>
+        <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:22,fontWeight:800,color:"var(--text)"}}>Edit Profile</div>
+      </div>
+      <div style={{display:"flex",justifyContent:"center",marginBottom:24}}>
+        <PhotoPicker value={pForm.avatar} onChange={v=>setPForm(p=>({...p,avatar:v}))} size={100} round/>
+      </div>
+      <div style={{marginBottom:14}}>
+        <label style={{display:"block",fontSize:11,fontWeight:700,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:6,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Name</label>
+        <input value={pForm.name} onChange={e=>setPForm(p=>({...p,name:e.target.value}))} placeholder="Your name"/>
+      </div>
+      <div style={{marginBottom:24}}>
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+          <label style={{fontSize:11,fontWeight:700,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Description</label>
+          <span style={{fontSize:10,color:"var(--sub)",opacity:0.6}}>optional</span>
+        </div>
+        <input value={pForm.description} onChange={e=>setPForm(p=>({...p,description:e.target.value}))} placeholder="Winemaker & Collector"/>
+      </div>
+      <div style={{display:"flex",gap:10}}>
+        <button onClick={()=>setEditing(false)} style={{flex:1,padding:"14px",borderRadius:12,border:"1.5px solid var(--border)",background:"var(--inputBg)",color:"var(--text)",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Cancel</button>
+        <button onClick={()=>{if(pForm.name){setProfile({...pForm});setEditing(false);}}} disabled={!pForm.name} style={{flex:1,padding:"14px",borderRadius:12,border:"none",background:pForm.name?"#9B2335":"var(--inputBg)",color:pForm.name?"white":"var(--sub)",fontSize:14,fontWeight:700,cursor:pForm.name?"pointer":"default",fontFamily:"'Plus Jakarta Sans',sans-serif",boxShadow:pForm.name?"0 4px 16px rgba(155,35,53,0.3)":"none",transition:"all 0.18s"}}>Save</button>
+      </div>
+    </div>
+  );
+
+  /* ── MAIN VIEW ── */
   return(
     <div>
       <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"2px",textTransform:"uppercase",marginBottom:4}}>My Winery</div>
-      <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:36,fontWeight:700,color:"var(--text)",lineHeight:1,marginBottom:20}}>Profile</div>
+      <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:36,fontWeight:800,color:"var(--text)",lineHeight:1,marginBottom:20}}>Profile</div>
       <div style={{background:"linear-gradient(135deg,#6B0A0A 0%,#9B2335 60%,#6B0A0A 100%)",borderRadius:22,padding:"20px",marginBottom:14,position:"relative",overflow:"hidden"}}>
         <div style={{position:"absolute",right:-20,top:-20,opacity:0.06}}><Icon n="wine" size={160} color="white"/></div>
         <div style={{display:"flex",alignItems:"center",gap:14}}>
@@ -664,7 +690,9 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
             <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:22,fontWeight:700,color:"white",lineHeight:1.1}}>{profile.name}</div>
             <div style={{fontSize:13,color:"rgba(255,255,255,0.65)",marginTop:3,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{profile.description}</div>
           </div>
-          <button onClick={()=>openEdit()} style={{flexShrink:0,background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.25)",borderRadius:11,padding:"9px 15px",color:"white",fontSize:13,fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:6,transition:"background 0.2s"}} onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.25)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(255,255,255,0.15)"}><Icon n="edit" size={13} color="white"/> Edit</button>
+          <button onClick={openEdit} style={{flexShrink:0,background:"rgba(255,255,255,0.2)",border:"1.5px solid rgba(255,255,255,0.35)",borderRadius:11,padding:"9px 16px",color:"white",fontSize:13,fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
+            <Icon n="edit" size={13} color="white"/> Edit
+          </button>
         </div>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:10}}>
@@ -678,37 +706,32 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
       {Object.keys(types).length>0&&(
         <div style={{background:"var(--card)",borderRadius:16,border:"1px solid var(--border)",padding:"14px 16px",marginBottom:10}}>
           <div style={{fontSize:10,color:"var(--sub)",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:12,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Collection Breakdown</div>
-          {Object.entries(types).sort((a,b)=>b[1]-a[1]).map(([t,c])=>{
+          {Object.entries(types).sort((a,b)=>b[1]-a[1]).map(([t,ct])=>{
             const tc=WINE_TYPE_COLORS[t]||WINE_TYPE_COLORS.Other;
-            const pct=Math.round((c/col.length)*100);
-            return(<div key={t} style={{marginBottom:8}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:13,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>{t}</span><span style={{fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{c} · {pct}%</span></div><div style={{height:4,background:"var(--inputBg)",borderRadius:2,overflow:"hidden"}}><div style={{height:"100%",width:`${pct}%`,background:tc.dot,borderRadius:2}}/></div></div>);
+            const pct=Math.round((ct/col.length)*100);
+            return(<div key={t} style={{marginBottom:8}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:13,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>{t}</span><span style={{fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{ct} · {pct}%</span></div><div style={{height:4,background:"var(--inputBg)",borderRadius:2,overflow:"hidden"}}><div style={{height:"100%",width:`${pct}%`,background:tc.dot,borderRadius:2}}/></div></div>);
           })}
         </div>
       )}
       {topWine&&<div style={{background:"var(--card)",borderRadius:16,padding:"14px 16px",border:"1px solid var(--border)",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontSize:10,color:"var(--sub)",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:4,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Top Rated</div><div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:15,fontWeight:700,color:"var(--text)"}}>{topWine.name}</div><div style={{fontSize:12,color:"var(--sub)",marginTop:2,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{topWine.origin}</div></div><Stars value={topWine.rating} size={14}/></div>}
-      <div style={{background:"var(--card)",borderRadius:16,border:"1px solid var(--border)",padding:"16px 16px",marginBottom:10}}>
+      <div style={{background:"var(--card)",borderRadius:16,border:"1px solid var(--border)",padding:"16px",marginBottom:10}}>
         <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:14,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Theme</div>
         <div style={{display:"flex",gap:8}}>
-          {THEMES.map(t=>{const act=theme===t.id;return(<button key={t.id} onClick={()=>setTheme(t.id)} style={{flex:1,padding:"14px 8px",borderRadius:14,border:act?"2px solid #9B2335":"1.5px solid var(--border)",background:act?"rgba(155,35,53,0.08)":"var(--inputBg)",color:act?"#9B2335":"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:700,fontSize:13,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:8,transition:"all 0.18s",transform:act?"scale(1.02)":"scale(1)"}}><div style={{width:32,height:32,borderRadius:10,background:act?"rgba(155,35,53,0.15)":"var(--border)",display:"flex",alignItems:"center",justifyContent:"center"}}><Icon n={t.ic} size={18} color={act?"#9B2335":"var(--sub)"}/></div>{t.label}</button>);})}
+          {THEMES.map(t=>{const act=theme===t.id;return(
+            <button key={t.id} onClick={()=>setTheme(t.id)} style={{flex:1,padding:"14px 8px",borderRadius:14,border:act?"2px solid #9B2335":"1.5px solid var(--border)",background:act?"rgba(155,35,53,0.08)":"var(--inputBg)",color:act?"#9B2335":"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:700,fontSize:13,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:8,transition:"all 0.18s"}}>
+              <div style={{width:32,height:32,borderRadius:10,background:act?"rgba(155,35,53,0.15)":"var(--border)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                <Icon n={t.ic} size={18} color={act?"#9B2335":"var(--sub)"}/>
+              </div>
+              {t.label}
+            </button>
+          );})}
         </div>
       </div>
       <div onClick={()=>{const b=new Blob([JSON.stringify({wines,wishlist,notes,profile,exportedAt:new Date().toISOString()},null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="my-winery.json";a.click();}} style={{background:"var(--card)",borderRadius:16,border:"1px solid var(--border)",padding:"14px 16px",marginBottom:24,display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer",transition:"opacity 0.18s"}} onMouseEnter={e=>e.currentTarget.style.opacity="0.7"} onMouseLeave={e=>e.currentTarget.style.opacity="1"}>
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export Collection</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vino v4.4 · {profile.name}</div>
-      <Modal show={editOpen} onClose={()=>setEditOpen(false)}>
-        <ModalHeader title="Edit Profile" onClose={()=>setEditOpen(false)}/>
-        <div style={{display:"flex",justifyContent:"center",marginBottom:18}}>
-          <PhotoPicker value={pForm.avatar} onChange={v=>setPForm(p=>({...p,avatar:v}))} size={84} round/>
-        </div>
-        <Field label="Name" value={pForm.name} onChange={v=>setPForm(p=>({...p,name:v}))} placeholder="Your name"/>
-        <Field label="Description" value={pForm.description} onChange={v=>setPForm(p=>({...p,description:v}))} placeholder="Winemaker & Collector" optional/>
-        <div style={{display:"flex",gap:8}}>
-          <Btn variant="secondary" onClick={()=>setEditOpen(false)} full>Cancel</Btn>
-          <Btn onClick={()=>saveEdit()} full disabled={!pForm.name}>Save</Btn>
-        </div>
-      </Modal>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vino v4.5 · {profile.name}</div>
     </div>
   );
 };
