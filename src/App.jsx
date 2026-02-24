@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { createPortal } from "react-dom";
 
 /* ── SUPABASE ─────────────────────────────────────────────────── */
 const SUPA_URL = "https://dfnvmwoacprkhxfbpybv.supabase.co";
@@ -210,15 +209,14 @@ const WineTypePill=({type})=>{
 
 const Modal=({show,onClose,children,wide})=>{
   if(!show)return null;
-  const content=(
+  return(
     <div style={{position:"fixed",inset:0,zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:"20px"}} onClick={onClose}>
-      <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.65)",backdropFilter:"blur(10px)",animation:"fadeIn .2s"}}/>
+      <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.65)",backdropFilter:"blur(10px)",WebkitBackdropFilter:"blur(10px)",animation:"fadeIn .2s"}}/>
       <div onClick={e=>e.stopPropagation()} style={{position:"relative",width:"100%",maxWidth:wide?520:420,background:"var(--surface)",borderRadius:24,maxHeight:"88vh",overflowY:"auto",animation:"modalIn .22s cubic-bezier(0.34,1.2,0.64,1)",boxShadow:"0 32px 80px rgba(0,0,0,0.4)"}}>
         <div style={{padding:"24px 24px 28px"}}>{children}</div>
       </div>
     </div>
   );
-  return createPortal(content, document.body);
 };
 
 const ModalHeader=({title,onClose})=>(
@@ -682,7 +680,7 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
       <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"2px",textTransform:"uppercase",marginBottom:4}}>My Winery</div>
       <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:36,fontWeight:800,color:"var(--text)",lineHeight:1,marginBottom:20}}>Profile</div>
       <div style={{background:"linear-gradient(135deg,#6B0A0A 0%,#9B2335 60%,#6B0A0A 100%)",borderRadius:22,padding:"20px",marginBottom:14,position:"relative",overflow:"hidden"}}>
-        <div style={{position:"absolute",right:-20,top:-20,opacity:0.06}}><Icon n="wine" size={160} color="white"/></div>
+        <div style={{position:"absolute",right:-20,top:-20,opacity:0.06,pointerEvents:"none"}}><Icon n="wine" size={160} color="white"/></div>
         <div style={{display:"flex",alignItems:"center",gap:14}}>
           <div style={{width:66,height:66,borderRadius:"50%",background:"rgba(255,255,255,0.15)",overflow:"hidden",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",border:"2px solid rgba(255,255,255,0.25)"}}>
             {profile.avatar?<img src={profile.avatar} alt="avatar" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<Icon n="user" size={28} color="rgba(255,255,255,0.8)"/>}
@@ -732,7 +730,7 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export Collection</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vino v4.6 · {profile.name}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vino v4.8 · {profile.name}</div>
     </div>
   );
 };
@@ -781,6 +779,11 @@ export default function App() {
   const dark=themeMode==="dark"||(themeMode==="system"&&sysDark);
   const th=T(dark);
   const cssVars={"--bg":th.bg,"--surface":th.surface,"--card":th.card,"--border":th.border,"--text":th.text,"--sub":th.sub,"--inputBg":th.inputBg,"--shadow":th.shadow};
+  // Apply CSS vars to root element so portals and fixed children can access them
+  useEffect(()=>{
+    const root=document.documentElement;
+    Object.entries(cssVars).forEach(([k,v])=>root.style.setProperty(k,v));
+  });
 
   const addWine=async w=>{setWines(p=>[...p,w]);await db.upsert("wines",toDb.wine(w));};
   const updWine=async w=>{setWines(p=>p.map(x=>x.id===w.id?w:x));await db.upsert("wines",toDb.wine(w));};
