@@ -631,8 +631,16 @@ const NotesScreen=({wines,notes,onAdd,onDelete})=>{
 /* ── PROFILE ──────────────────────────────────────────────────── */
 const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>{
   const [editOpen,setEditOpen]=useState(false);
-  const [pForm,setPForm]=useState({name:profile.name,description:profile.description,avatar:profile.avatar});
-  useEffect(()=>{ if(editOpen) setPForm({name:profile.name,description:profile.description,avatar:profile.avatar||null}); },[editOpen]);
+  const [pForm,setPForm]=useState({name:profile.name,description:profile.description,avatar:profile.avatar||null});
+  
+  const openEdit=()=>{
+    setPForm({name:profile.name,description:profile.description,avatar:profile.avatar||null});
+    setEditOpen(true);
+  };
+  const saveEdit=()=>{
+    setProfile({...pForm});
+    setEditOpen(false);
+  };
   const col=wines.filter(w=>!w.wishlist);
   const bottles=col.reduce((s,w)=>s+(w.bottles||0),0);
   const topWine=[...col].sort((a,b)=>(b.rating||0)-(a.rating||0))[0];
@@ -654,7 +662,7 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
             <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:22,fontWeight:700,color:"white",lineHeight:1.1}}>{profile.name}</div>
             <div style={{fontSize:13,color:"rgba(255,255,255,0.65)",marginTop:3,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{profile.description}</div>
           </div>
-          <button onClick={()=>setEditOpen(true)} style={{flexShrink:0,background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.25)",borderRadius:11,padding:"9px 15px",color:"white",fontSize:13,fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:6,transition:"background 0.2s"}} onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.25)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(255,255,255,0.15)"}><Icon n="edit" size={13} color="white"/> Edit</button>
+          <button onClick={()=>openEdit()} style={{flexShrink:0,background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.25)",borderRadius:11,padding:"9px 15px",color:"white",fontSize:13,fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:6,transition:"background 0.2s"}} onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.25)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(255,255,255,0.15)"}><Icon n="edit" size={13} color="white"/> Edit</button>
         </div>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:10}}>
@@ -676,10 +684,10 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
         </div>
       )}
       {topWine&&<div style={{background:"var(--card)",borderRadius:16,padding:"14px 16px",border:"1px solid var(--border)",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontSize:10,color:"var(--sub)",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:4,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Top Rated</div><div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:15,fontWeight:700,color:"var(--text)"}}>{topWine.name}</div><div style={{fontSize:12,color:"var(--sub)",marginTop:2,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{topWine.origin}</div></div><Stars value={topWine.rating} size={14}/></div>}
-      <div style={{background:"var(--card)",borderRadius:16,border:"1px solid var(--border)",padding:"14px 16px",marginBottom:10}}>
-        <div style={{fontSize:10,color:"var(--sub)",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:12,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Appearance</div>
+      <div style={{background:"var(--card)",borderRadius:16,border:"1px solid var(--border)",padding:"16px 16px",marginBottom:10}}>
+        <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:14,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Theme</div>
         <div style={{display:"flex",gap:8}}>
-          {THEMES.map(t=><button key={t.id} onClick={()=>setTheme(t.id)} style={{flex:1,padding:"10px 6px",borderRadius:12,border:theme===t.id?"2px solid #9B2335":"1.5px solid var(--border)",background:theme===t.id?"rgba(155,35,53,0.08)":"var(--inputBg)",color:theme===t.id?"#9B2335":"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:600,fontSize:12,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:6,transition:"all 0.18s"}}><Icon n={t.ic} size={16} color={theme===t.id?"#9B2335":"var(--sub)"}/>{t.label}</button>)}
+          {THEMES.map(t=>{const act=theme===t.id;return(<button key={t.id} onClick={()=>setTheme(t.id)} style={{flex:1,padding:"14px 8px",borderRadius:14,border:act?"2px solid #9B2335":"1.5px solid var(--border)",background:act?"rgba(155,35,53,0.08)":"var(--inputBg)",color:act?"#9B2335":"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:700,fontSize:13,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:8,transition:"all 0.18s",transform:act?"scale(1.02)":"scale(1)"}}><div style={{width:32,height:32,borderRadius:10,background:act?"rgba(155,35,53,0.15)":"var(--border)",display:"flex",alignItems:"center",justifyContent:"center"}}><Icon n={t.ic} size={18} color={act?"#9B2335":"var(--sub)"}/></div>{t.label}</button>);})}
         </div>
       </div>
       <div onClick={()=>{const b=new Blob([JSON.stringify({wines,wishlist,notes,profile,exportedAt:new Date().toISOString()},null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="my-winery.json";a.click();}} style={{background:"var(--card)",borderRadius:16,border:"1px solid var(--border)",padding:"14px 16px",marginBottom:24,display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer",transition:"opacity 0.18s"}} onMouseEnter={e=>e.currentTarget.style.opacity="0.7"} onMouseLeave={e=>e.currentTarget.style.opacity="1"}>
@@ -696,7 +704,7 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
         <Field label="Description" value={pForm.description} onChange={v=>setPForm(p=>({...p,description:v}))} placeholder="Winemaker & Collector" optional/>
         <div style={{display:"flex",gap:8}}>
           <Btn variant="secondary" onClick={()=>setEditOpen(false)} full>Cancel</Btn>
-          <Btn onClick={async()=>{await setProfile({...pForm});setEditOpen(false);}} full disabled={!pForm.name}>Save</Btn>
+          <Btn onClick={()=>saveEdit()} full disabled={!pForm.name}>Save</Btn>
         </div>
       </Modal>
     </div>
