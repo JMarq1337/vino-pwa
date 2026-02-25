@@ -730,7 +730,7 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export Collection</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vino v4.9 · {profile.name}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vino v5.0 · {profile.name}</div>
     </div>
   );
 };
@@ -749,9 +749,16 @@ export default function App() {
   const [profile,setProfileState]=useState(DEFAULT_PROFILE);
   const [ready,setReady]=useState(false);
   const [splashDone,setSplashDone]=useState(false);
+  const [isDesktop,setIsDesktop]=useState(()=>window.innerWidth>=768);
 
   useEffect(()=>{try{localStorage.setItem("vino_theme",themeMode)}catch{}},[themeMode]);
   useEffect(()=>{const mq=window.matchMedia?.("(prefers-color-scheme:dark)");const h=e=>setSysDark(e.matches);mq?.addEventListener("change",h);return()=>mq?.removeEventListener("change",h);},[]);
+
+  useEffect(()=>{
+    const h=()=>setIsDesktop(window.innerWidth>=768);
+    window.addEventListener("resize",h);
+    return()=>window.removeEventListener("resize",h);
+  },[]);
 
   useEffect(()=>{
     async function load(){
@@ -796,13 +803,6 @@ export default function App() {
   const delNote=async id=>{setNotes(p=>p.filter(x=>x.id!==id));await db.del("tasting_notes",id);};
   const setProfile=async p=>{setProfileState(p);await db.saveProfile(p);};
 
-
-  const [isDesktop,setIsDesktop]=useState(()=>window.innerWidth>=768);
-  useEffect(()=>{
-    const h=()=>setIsDesktop(window.innerWidth>=768);
-    window.addEventListener("resize",h);
-    return()=>window.removeEventListener("resize",h);
-  },[]);
 
   if(!splashDone)return(
     <div style={{...cssVars,background:"#0C0202",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}>
