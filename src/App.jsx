@@ -279,20 +279,19 @@ const WineCard=({wine,onClick})=>{
   const tc=WINE_TYPE_COLORS[type]||WINE_TYPE_COLORS.Other;
   return(
     <div onClick={onClick} style={{background:"var(--card)",borderRadius:20,padding:"16px",cursor:"pointer",border:"1px solid var(--border)",marginBottom:10,display:"flex",gap:14,alignItems:"flex-start",transition:"transform 0.15s,box-shadow 0.15s",boxShadow:"0 2px 8px var(--shadow)"}}
-      onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 8px 28px var(--shadow)"}}
-      onMouseLeave={e=>{e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="0 2px 8px var(--shadow)"}}>
+      onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 8px 28px var(--shadow)";}}
+      onMouseLeave={e=>{e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="0 2px 8px var(--shadow)";}}>
       <div style={{width:60,height:72,borderRadius:13,background:tc.bg,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden"}}>
         {wine.photo?<img src={wine.photo} alt={wine.name} style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<Icon n="wine" size={24} color={tc.dot}/>}
       </div>
       <div style={{flex:1,minWidth:0}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:3}}>
-          <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:16,fontWeight:700,color:"var(--text)",lineHeight:1.25,flex:1,paddingRight:8}}>{wine.name}{wine.vintage?` ${wine.vintage}`:""}</div>
-          {!wine.wishlist&&wine.bottles>0&&<div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:12,color:"var(--sub)",fontWeight:500,flexShrink:0}}>{wine.bottles} {wine.bottles===1?"btl":"btls"}</div>}
+          <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:15,fontWeight:700,color:"var(--text)",lineHeight:1.25,flex:1,paddingRight:8}}>{wine.name}{wine.vintage?` ${wine.vintage}`:""}</div>
+          {!wine.wishlist&&wine.bottles>0&&<div style={{fontSize:12,color:"var(--sub)",fontWeight:500,flexShrink:0,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{wine.bottles} {wine.bottles===1?"btl":"btls"}</div>}
         </div>
         {wine.origin&&<div style={{fontSize:13,color:"var(--sub)",marginBottom:7,fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{wine.origin.split(",")[0]}</div>}
         <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:6}}>
           <WineTypePill type={type}/>
-          {wine.vintage&&<span style={{fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{wine.vintage}</span>}
         </div>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
@@ -313,9 +312,9 @@ const WineDetail=({wine,onEdit,onDelete,onMove})=>{
   return(
     <div>
       <div style={{borderRadius:16,background:tc.bg,padding:"20px",marginBottom:16,position:"relative",overflow:"hidden",minHeight:100}}>
-        <div style={{position:"absolute",right:-8,bottom:-12,opacity:0.12}}><Icon n="wine" size={100} color={tc.dot}/></div>
+        <div style={{position:"absolute",right:-8,bottom:-12,opacity:0.12,pointerEvents:"none"}}><Icon n="wine" size={100} color={tc.dot}/></div>
         <WineTypePill type={type}/>
-        <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:24,fontWeight:700,color:"var(--text)",marginTop:8,lineHeight:1.2}}>{wine.name}</div>
+        <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:22,fontWeight:800,color:"var(--text)",marginTop:8,lineHeight:1.2}}>{wine.name}</div>
         {wine.vintage&&<div style={{fontSize:14,color:"var(--sub)",marginTop:2,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{wine.vintage} · {wine.origin}</div>}
         {wine.rating>0&&<div style={{marginTop:10}}><Stars value={wine.rating} size={16}/></div>}
       </div>
@@ -351,7 +350,7 @@ const WineForm=({initial,onSave,onClose,isWishlist})=>{
   const [sugs,setSugs]=useState([]);
   const [showFields,setShowFields]=useState(!!initial);
   const handleQ=v=>{setQ(v);set("name",v);setSugs(v.length>=2?fuzzySearch(v):[]);};
-  const pickSug=w=>{setF(p=>({...p,name:w.name,origin:w.origin,grape:w.grape,alcohol:w.alcohol?.toString()||"",tastingNotes:w.tastingNotes||"",wineType:w.wineType||guessWineType(w.grape,w.name)}));setQ(w.name);setSugs([]);setShowFields(true);};
+  const pickSug=w=>{setF(p=>({...p,name:w.name,origin:w.origin||"",grape:w.grape||"",alcohol:w.alcohol?.toString()||"",tastingNotes:w.tastingNotes||"",wineType:w.wineType||guessWineType(w.grape||"",w.name)}));setQ(w.name);setSugs([]);setShowFields(true);};
   const save=()=>{
     if(!f.name)return;
     const wt=f.wineType||guessWineType(f.grape,f.name);
@@ -366,52 +365,74 @@ const WineForm=({initial,onSave,onClose,isWishlist})=>{
         <PhotoPicker value={f.photo} onChange={v=>set("photo",v)} size={76}/>
       </div>
       <div style={{marginBottom:14,position:"relative"}}>
-        <label style={{display:"block",fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:6,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Search wine database</label>
+        <label style={{display:"block",fontSize:11,fontWeight:700,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:6,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Search wine database</label>
         <div style={{position:"relative"}}>
           <input value={q} onChange={e=>handleQ(e.target.value)} placeholder="Wine name, grape, or region…" style={{paddingLeft:38}} onBlur={()=>setTimeout(()=>setSugs([]),160)}/>
           <div style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"var(--sub)",pointerEvents:"none"}}><Icon n="search" size={16}/></div>
         </div>
         {sugs.length>0&&(
-          <div style={{position:"absolute",top:"100%",left:0,right:0,background:"var(--surface)",borderRadius:14,border:"1px solid var(--border)",zIndex:99,maxHeight:220,overflowY:"auto",boxShadow:"0 12px 40px var(--shadow)",marginTop:4}}>
-            {sugs.map((w,i)=>(<div key={i} onMouseDown={()=>pickSug(w)} style={{padding:"10px 14px",cursor:"pointer",borderBottom:i<sugs.length-1?"1px solid var(--border)":"none"}} onMouseEnter={e=>e.currentTarget.style.background="var(--inputBg)"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}><div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:15,fontWeight:600,color:"var(--text)"}}>{w.name}</div><div style={{fontSize:12,color:"var(--sub)",marginTop:1}}>{w.grape} · {w.origin}</div></div>))}
-            <div onMouseDown={()=>{setSugs([]);setShowFields(true);}} style={{padding:"10px 14px",cursor:"pointer",color:"#9B2335",fontSize:13,fontWeight:600,textAlign:"center",borderTop:"1px solid var(--border)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Add "{q}" manually</div>
+          <div style={{position:"absolute",top:"100%",left:0,right:0,background:"var(--surface)",borderRadius:14,border:"1px solid var(--border)",zIndex:99,maxHeight:220,overflowY:"auto",boxShadow:"0 12px 40px rgba(0,0,0,0.2)",marginTop:4}}>
+            {sugs.map((w,i)=>(
+              <div key={i} onMouseDown={()=>pickSug(w)} style={{padding:"10px 14px",cursor:"pointer",borderBottom:i<sugs.length-1?"1px solid var(--border)":"none"}}
+                onMouseEnter={e=>e.currentTarget.style.background="var(--inputBg)"}
+                onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:15,fontWeight:700,color:"var(--text)"}}>{w.name}</div>
+                <div style={{fontSize:12,color:"var(--sub)",marginTop:1}}>{w.grape} · {w.origin}</div>
+              </div>
+            ))}
+            <div onMouseDown={()=>{setSugs([]);setShowFields(true);}} style={{padding:"10px 14px",cursor:"pointer",color:"#9B2335",fontSize:13,fontWeight:600,textAlign:"center",borderTop:"1px solid var(--border)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+              Add "{q}" manually
+            </div>
           </div>
         )}
-        {!showFields&&!sugs.length&&q.length>=1&&<button onMouseDown={()=>setShowFields(true)} style={{marginTop:8,width:"100%",padding:"9px",borderRadius:10,border:"1.5px dashed var(--border)",background:"none",color:"#9B2335",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Enter details manually</button>}
+        {!showFields&&!sugs.length&&q.length>=1&&(
+          <button onMouseDown={()=>setShowFields(true)} style={{marginTop:8,width:"100%",padding:"9px",borderRadius:10,border:"1.5px dashed var(--border)",background:"none",color:"#9B2335",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+            Enter details manually
+          </button>
+        )}
       </div>
-      {showFields&&<>
-        <Field label="Wine Name" value={f.name} onChange={v=>set("name",v)} placeholder="e.g. Penfolds Grange"/>
-        <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:10}}>
-          <Field label="Origin" value={f.origin} onChange={v=>set("origin",v)} placeholder="Region, Country" optional/>
-          <SelField label="Type" value={f.wineType} onChange={v=>set("wineType",v)} options={Object.keys(WINE_TYPE_COLORS).filter(k=>k!=="Other")}/>
+      {showFields&&(
+        <div>
+          <Field label="Wine Name" value={f.name} onChange={v=>set("name",v)} placeholder="e.g. Penfolds Grange"/>
+          <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:10}}>
+            <Field label="Origin" value={f.origin} onChange={v=>set("origin",v)} placeholder="Region, Country" optional/>
+            <SelField label="Type" value={f.wineType} onChange={v=>set("wineType",v)} options={Object.keys(WINE_TYPE_COLORS).filter(k=>k!=="Other")}/>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+            <Field label="Grape" value={f.grape} onChange={v=>set("grape",v)} placeholder="Shiraz" optional/>
+            <Field label="Vintage" value={f.vintage} onChange={v=>set("vintage",v)} type="number" placeholder="2019" optional/>
+            <Field label="Alc %" value={f.alcohol} onChange={v=>set("alcohol",v)} type="number" placeholder="14.5" optional/>
+          </div>
+          {!isWishlist&&(
+            <div style={{display:"grid",gridTemplateColumns:"1fr 2fr 1fr",gap:10}}>
+              <Field label="Bottles" value={f.bottles} onChange={v=>set("bottles",v)} type="number" placeholder="1" optional/>
+              <SelField label="Location" value={f.location} onChange={v=>set("location",v)} options={LOCATIONS}/>
+              <Field label="Slot" value={f.locationSlot} onChange={v=>set("locationSlot",v)} placeholder="A3" optional/>
+            </div>
+          )}
+          <Field label="Tasting Notes" value={f.tastingNotes} onChange={v=>set("tastingNotes",v)} placeholder="Dark plum, cedar…" optional/>
+          <Field label="Personal Notes" value={f.notes} onChange={v=>set("notes",v)} placeholder="Pairings, memories…" rows={2} optional/>
+          {!isWishlist&&(
+            <div>
+              <div style={{marginBottom:14}}>
+                <div style={{fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Rating</div>
+                <Stars value={f.rating} onChange={v=>set("rating",v)} size={22}/>
+              </div>
+              <Field label="Review" value={f.review} onChange={v=>set("review",v)} placeholder="Your thoughts…" rows={2} optional/>
+              <Field label="Date Purchased" value={f.datePurchased} onChange={v=>set("datePurchased",v)} type="date" optional/>
+            </div>
+          )}
+          <div style={{display:"flex",gap:8,marginTop:4}}>
+            <Btn variant="secondary" onClick={onClose} full>Cancel</Btn>
+            <Btn onClick={save} full disabled={!f.name}>Save Wine</Btn>
+          </div>
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
-          <Field label="Grape" value={f.grape} onChange={v=>set("grape",v)} placeholder="Shiraz" optional/>
-          <Field label="Vintage" value={f.vintage} onChange={v=>set("vintage",v)} type="number" placeholder="2019" optional/>
-          <Field label="Alc %" value={f.alcohol} onChange={v=>set("alcohol",v)} type="number" placeholder="14.5" optional/>
-        </div>
-        {!isWishlist&&<div style={{display:"grid",gridTemplateColumns:"1fr 2fr 1fr",gap:10}}>
-          <Field label="Bottles" value={f.bottles} onChange={v=>set("bottles",v)} type="number" placeholder="1" optional/>
-          <SelField label="Location" value={f.location} onChange={v=>set("location",v)} options={LOCATIONS}/>
-          <Field label="Slot" value={f.locationSlot} onChange={v=>set("locationSlot",v)} placeholder="A3" optional/>
-        </div>}
-        <Field label="Tasting Notes" value={f.tastingNotes} onChange={v=>set("tastingNotes",v)} placeholder="Dark plum, cedar, vanilla…" optional/>
-        <Field label="Personal Notes" value={f.notes} onChange={v=>set("notes",v)} placeholder="Pairings, memories…" rows={2} optional/>
-        {!isWishlist&&<>
-          <div style={{marginBottom:14}}><div style={{fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Rating</div><Stars value={f.rating} onChange={v=>set("rating",v)} size={22}/></div>
-          <Field label="Review" value={f.review} onChange={v=>set("review",v)} placeholder="Your thoughts…" rows={2} optional/>
-          <Field label="Date Purchased" value={f.datePurchased} onChange={v=>set("datePurchased",v)} type="date" optional/>
-        </>}
-        <div style={{display:"flex",gap:8}}>
-          <Btn variant="secondary" onClick={onClose} full>Cancel</Btn>
-          <Btn onClick={save} full disabled={!f.name}>Save Wine</Btn>
-        </div>
-      </>}
+      )}
     </div>
   );
 };
 
-/* ── FILTER ───────────────────────────────────────────────────── */
+/* ── FILTER PANEL ─────────────────────────────────────────────── */
 const SORTS=[{value:"name",label:"Name A–Z"},{value:"rating",label:"Rating"},{value:"vintage",label:"Vintage"},{value:"bottles",label:"Bottles"},{value:"recent",label:"Recently Added"}];
 const DEFAULT_FILTERS={sort:"name",type:"",minRating:0,location:""};
 const hasFilters=f=>f.sort!=="name"||f.type||f.minRating>0||f.location;
@@ -421,35 +442,65 @@ const applyFilters=(wines,f,s)=>{
   if(f.minRating>0)r=r.filter(w=>(w.rating||0)>=f.minRating);
   if(f.type)r=r.filter(w=>(w.wineType||guessWineType(w.grape,w.name))===f.type);
   if(f.location)r=r.filter(w=>w.location===f.location);
-  return r.sort((a,b)=>{if(f.sort==="rating")return(b.rating||0)-(a.rating||0);if(f.sort==="vintage")return(b.vintage||0)-(a.vintage||0);if(f.sort==="bottles")return(b.bottles||0)-(a.bottles||0);if(f.sort==="recent")return b.id.localeCompare(a.id);return a.name.localeCompare(b.name);});
+  return r.sort((a,b)=>{
+    if(f.sort==="rating")return(b.rating||0)-(a.rating||0);
+    if(f.sort==="vintage")return(b.vintage||0)-(a.vintage||0);
+    if(f.sort==="bottles")return(b.bottles||0)-(a.bottles||0);
+    if(f.sort==="recent")return b.id.localeCompare(a.id);
+    return a.name.localeCompare(b.name);
+  });
 };
 
 const FilterPanel=({filters,setFilters,wines,onClose})=>{
   const col=wines.filter(w=>!w.wishlist);
   const locs=[...new Set(col.map(w=>w.location).filter(Boolean))].sort();
   const [local,setLocal]=useState({...filters});
-  const toggle=(k,v)=>setLocal(p=>({...p,[k]:p[k]===v?"":v}));
-  const chipStyle=(active)=>({padding:"7px 13px",borderRadius:20,border:active?"1.5px solid #9B2335":"1.5px solid var(--border)",background:active?"rgba(155,35,53,0.1)":"var(--inputBg)",color:active?"#9B2335":"var(--text)",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',sans-serif",transition:"all 0.15s"});
+  const chip=(active)=>({padding:"7px 13px",borderRadius:20,border:active?"1.5px solid #9B2335":"1.5px solid var(--border)",background:active?"rgba(155,35,53,0.1)":"var(--inputBg)",color:active?"#9B2335":"var(--text)",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',sans-serif",transition:"all 0.15s"});
   return(
     <div>
       <ModalHeader title="Filter & Sort" onClose={onClose}/>
       <div style={{fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Sort By</div>
-      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:18}}>{SORTS.map(o=><button key={o.value} onClick={()=>setLocal(p=>({...p,sort:o.value}))} style={chipStyle(local.sort===o.value)}>{o.label}</button>)}</div>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:18}}>
+        {SORTS.map(o=><button key={o.value} onClick={()=>setLocal(p=>({...p,sort:o.value}))} style={chip(local.sort===o.value)}>{o.label}</button>)}
+      </div>
       <div style={{fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Min Rating</div>
-      <div style={{display:"flex",gap:6,marginBottom:18}}>{[0,1,2,3,4,5].map(r=><button key={r} onClick={()=>setLocal(p=>({...p,minRating:r}))} style={chipStyle(local.minRating===r)}>{r===0?"Any":`${r}+`}</button>)}</div>
+      <div style={{display:"flex",gap:6,marginBottom:18}}>
+        {[0,1,2,3,4,5].map(r=><button key={r} onClick={()=>setLocal(p=>({...p,minRating:r}))} style={chip(local.minRating===r)}>{r===0?"Any":`${r}+`}</button>)}
+      </div>
       <div style={{fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Wine Type</div>
-      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:18}}>{Object.keys(WINE_TYPE_COLORS).filter(k=>k!=="Other").map(t=><button key={t} onClick={()=>toggle("type",t)} style={chipStyle(local.type===t)}>{t}</button>)}</div>
-      {locs.length>0&&<><div style={{fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Location</div><div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:18}}>{locs.map(l=><button key={l} onClick={()=>toggle("location",l)} style={chipStyle(local.location===l)}>{l}</button>)}</div></>}
-      <div style={{display:"flex",gap:8}}><Btn variant="secondary" onClick={()=>setLocal(DEFAULT_FILTERS)} full>Reset</Btn><Btn onClick={()=>{setFilters(local);onClose();}} full>Apply</Btn></div>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:18}}>
+        {Object.keys(WINE_TYPE_COLORS).filter(k=>k!=="Other").map(t=><button key={t} onClick={()=>setLocal(p=>({...p,type:p.type===t?"":t}))} style={chip(local.type===t)}>{t}</button>)}
+      </div>
+      {locs.length>0&&(
+        <div>
+          <div style={{fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Location</div>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:18}}>
+            {locs.map(l=><button key={l} onClick={()=>setLocal(p=>({...p,location:p.location===l?"":l}))} style={chip(local.location===l)}>{l}</button>)}
+          </div>
+        </div>
+      )}
+      <div style={{display:"flex",gap:8}}>
+        <Btn variant="secondary" onClick={()=>setLocal(DEFAULT_FILTERS)} full>Reset</Btn>
+        <Btn onClick={()=>{setFilters(local);onClose();}} full>Apply</Btn>
+      </div>
     </div>
   );
 };
 
-/* ── HELPERS ──────────────────────────────────────────────────── */
-const Empty=({icon,text})=>(<div style={{textAlign:"center",padding:"56px 0",color:"var(--sub)"}}><div style={{marginBottom:12,opacity:0.3}}><Icon n={icon} size={44} color="var(--sub)"/></div><div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:14}}>{text}</div></div>);
-const Chip=({label,onX})=>(<div style={{display:"inline-flex",alignItems:"center",gap:4,padding:"4px 10px",borderRadius:20,background:"rgba(155,35,53,0.1)",border:"1.5px solid rgba(155,35,53,0.25)"}}><span style={{fontSize:12,color:"#9B2335",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:600}}>{label}</span><button onClick={onX} style={{background:"none",border:"none",color:"#9B2335",padding:0,lineHeight:1,display:"flex",cursor:"pointer"}}><Icon n="x" size={11}/></button></div>);
+const Empty=({icon,text})=>(
+  <div style={{textAlign:"center",padding:"56px 0",color:"var(--sub)"}}>
+    <div style={{marginBottom:12,opacity:0.3}}><Icon n={icon} size={44} color="var(--sub)"/></div>
+    <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:14}}>{text}</div>
+  </div>
+);
+const Chip=({label,onX})=>(
+  <div style={{display:"inline-flex",alignItems:"center",gap:4,padding:"4px 10px",borderRadius:20,background:"rgba(155,35,53,0.1)",border:"1.5px solid rgba(155,35,53,0.25)"}}>
+    <span style={{fontSize:12,color:"#9B2335",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:600}}>{label}</span>
+    <button onClick={onX} style={{background:"none",border:"none",color:"#9B2335",padding:0,lineHeight:1,display:"flex",cursor:"pointer"}}><Icon n="x" size={11}/></button>
+  </div>
+);
 
-/* ── COLLECTION SCREEN ────────────────────────────────────────── */
+/* ── COLLECTION ───────────────────────────────────────────────── */
 const CollectionScreen=({wines,onAdd,onUpdate,onDelete,desktop})=>{
   const [sel,setSel]=useState(null);
   const [editing,setEditing]=useState(false);
@@ -466,7 +517,9 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,desktop})=>{
       <div style={{marginBottom:24}}>
         <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"2px",textTransform:"uppercase",marginBottom:4}}>My Cellar</div>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end"}}>
-          <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:36,fontWeight:700,color:"var(--text)",lineHeight:1,letterSpacing:"-1px"}}>{col.length} <span style={{fontSize:18,color:"var(--sub)",fontWeight:400}}>wines</span></div>
+          <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:34,fontWeight:800,color:"var(--text)",lineHeight:1,letterSpacing:"-1px"}}>
+            {col.length} <span style={{fontSize:18,color:"var(--sub)",fontWeight:400}}>wines</span>
+          </div>
           <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:13,color:"var(--sub)"}}>{bottles} bottles</div>
         </div>
       </div>
@@ -475,22 +528,29 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,desktop})=>{
           <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search wines, regions…" style={{paddingLeft:38,borderRadius:14}}/>
           <div style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"var(--sub)",pointerEvents:"none"}}><Icon n="search" size={16}/></div>
         </div>
-        <button onClick={()=>setFilterOpen(true)} style={{width:44,height:44,borderRadius:14,background:active?"rgba(155,35,53,0.12)":"var(--card)",border:active?"1.5px solid #9B2335":"1.5px solid var(--border)",display:"flex",alignItems:"center",justifyContent:"center",color:active?"#9B2335":"var(--sub)",flexShrink:0,position:"relative"}}>
+        <button onClick={()=>setFilterOpen(true)} style={{width:44,height:44,borderRadius:14,background:active?"rgba(155,35,53,0.12)":"var(--card)",border:active?"1.5px solid #9B2335":"1.5px solid var(--border)",display:"flex",alignItems:"center",justifyContent:"center",color:active?"#9B2335":"var(--sub)",flexShrink:0,position:"relative",cursor:"pointer"}}>
           <Icon n="filter" size={17}/>
           {active&&<div style={{position:"absolute",top:-2,right:-2,width:7,height:7,borderRadius:"50%",background:"#9B2335",border:"1.5px solid var(--bg)"}}/>}
         </button>
-        <button onClick={()=>setAdding(true)} style={{width:44,height:44,borderRadius:14,background:"#9B2335",border:"none",display:"flex",alignItems:"center",justifyContent:"center",color:"white",flexShrink:0,boxShadow:"0 4px 16px rgba(155,35,53,0.35)"}}>
+        <button onClick={()=>setAdding(true)} style={{width:44,height:44,borderRadius:14,background:"#9B2335",border:"none",display:"flex",alignItems:"center",justifyContent:"center",color:"white",flexShrink:0,boxShadow:"0 4px 16px rgba(155,35,53,0.35)",cursor:"pointer"}}>
           <Icon n="plus" size={20}/>
         </button>
       </div>
-      {active&&<div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
-        {filters.sort!=="name"&&<Chip label={SORTS.find(o=>o.value===filters.sort)?.label} onX={()=>setFilters(p=>({...p,sort:"name"}))}/>}
-        {filters.minRating>0&&<Chip label={`${filters.minRating}+ stars`} onX={()=>setFilters(p=>({...p,minRating:0}))}/>}
-        {filters.type&&<Chip label={filters.type} onX={()=>setFilters(p=>({...p,type:""}))}/>}
-        {filters.location&&<Chip label={filters.location} onX={()=>setFilters(p=>({...p,location:""}))}/>}
-        <button onClick={()=>setFilters(DEFAULT_FILTERS)} style={{padding:"4px 10px",borderRadius:20,border:"none",background:"none",color:"var(--sub)",fontSize:12,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',sans-serif",textDecoration:"underline"}}>Clear all</button>
-      </div>}
-      {filt.length===0?<Empty icon="wine" text={search||active?"No wines match your filters.":"Your cellar is empty. Add your first wine."}/>:<div style={{display:desktop?"grid":"block",gridTemplateColumns:desktop?"1fr 1fr":"none",gap:desktop?"10px":0}}>{filt.map(w=><WineCard key={w.id} wine={w} onClick={()=>{setSel(w);setEditing(false);}}/>)}</div>}
+      {active&&(
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
+          {filters.sort!=="name"&&<Chip label={SORTS.find(o=>o.value===filters.sort)?.label} onX={()=>setFilters(p=>({...p,sort:"name"}))}/>}
+          {filters.minRating>0&&<Chip label={`${filters.minRating}+ stars`} onX={()=>setFilters(p=>({...p,minRating:0}))}/>}
+          {filters.type&&<Chip label={filters.type} onX={()=>setFilters(p=>({...p,type:""}))}/>}
+          {filters.location&&<Chip label={filters.location} onX={()=>setFilters(p=>({...p,location:""}))}/>}
+          <button onClick={()=>setFilters(DEFAULT_FILTERS)} style={{padding:"4px 10px",borderRadius:20,border:"none",background:"none",color:"var(--sub)",fontSize:12,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',sans-serif",textDecoration:"underline"}}>Clear all</button>
+        </div>
+      )}
+      {filt.length===0
+        ? <Empty icon="wine" text={search||active?"No wines match your filters.":"Your cellar is empty. Add your first wine."}/>
+        : <div style={{display:desktop?"grid":"block",gridTemplateColumns:desktop?"1fr 1fr":"none",gap:desktop?10:0}}>
+            {filt.map(w=><WineCard key={w.id} wine={w} onClick={()=>{setSel(w);setEditing(false);}}/>)}
+          </div>
+      }
       <Modal show={!!sel&&!editing} onClose={()=>setSel(null)} wide>
         {sel&&<WineDetail wine={sel} onEdit={()=>setEditing(true)} onDelete={()=>{onDelete(sel.id);setSel(null);}}/>}
       </Modal>
@@ -503,6 +563,7 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,desktop})=>{
       <Modal show={filterOpen} onClose={()=>setFilterOpen(false)}>
         <FilterPanel filters={filters} setFilters={setFilters} wines={wines} onClose={()=>setFilterOpen(false)}/>
       </Modal>
+    </div>
     </div>
   );
 };
@@ -517,11 +578,18 @@ const WishlistScreen=({wishlist,onAdd,onUpdate,onDelete,onMove,desktop})=>{
       <div style={{marginBottom:24}}>
         <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"2px",textTransform:"uppercase",marginBottom:4}}>Wishlist</div>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end"}}>
-          <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:36,fontWeight:700,color:"var(--text)",lineHeight:1,letterSpacing:"-1px"}}>{wishlist.length} <span style={{fontSize:18,color:"var(--sub)",fontWeight:400}}>to try</span></div>
-          <button onClick={()=>setAdding(true)} style={{width:44,height:44,borderRadius:14,background:"#9B2335",border:"none",display:"flex",alignItems:"center",justifyContent:"center",color:"white",boxShadow:"0 4px 16px rgba(155,35,53,0.35)"}}><Icon n="plus" size={20}/></button>
+          <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:34,fontWeight:800,color:"var(--text)",lineHeight:1,letterSpacing:"-1px"}}>
+            {wishlist.length} <span style={{fontSize:18,color:"var(--sub)",fontWeight:400}}>to try</span>
+          </div>
+          <button onClick={()=>setAdding(true)} style={{width:44,height:44,borderRadius:14,background:"#9B2335",border:"none",display:"flex",alignItems:"center",justifyContent:"center",color:"white",boxShadow:"0 4px 16px rgba(155,35,53,0.35)",cursor:"pointer"}}><Icon n="plus" size={20}/></button>
         </div>
       </div>
-      {wishlist.length===0?<Empty icon="heart" text="Add wines you dream of trying."/>:<div style={{display:desktop?"grid":"block",gridTemplateColumns:desktop?"1fr 1fr":"none",gap:desktop?"10px":0}}>{wishlist.map(w=><WineCard key={w.id} wine={w} onClick={()=>{setSel(w);setEditing(false);}}/>)}</div>}
+      {wishlist.length===0
+        ? <Empty icon="heart" text="Add wines you dream of trying."/>
+        : <div style={{display:desktop?"grid":"block",gridTemplateColumns:desktop?"1fr 1fr":"none",gap:desktop?10:0}}>
+            {wishlist.map(w=><WineCard key={w.id} wine={w} onClick={()=>{setSel(w);setEditing(false);}}/>)}
+          </div>
+      }
       <Modal show={!!sel&&!editing} onClose={()=>setSel(null)} wide>
         {sel&&<WineDetail wine={sel} onEdit={()=>setEditing(true)} onDelete={()=>{onDelete(sel.id);setSel(null);}} onMove={()=>{onMove(sel.id);setSel(null);}}/>}
       </Modal>
@@ -535,7 +603,7 @@ const WishlistScreen=({wishlist,onAdd,onUpdate,onDelete,onMove,desktop})=>{
   );
 };
 
-/* ── AI SCREEN ────────────────────────────────────────────────── */
+/* ── AI ───────────────────────────────────────────────────────── */
 const AIScreen=({wines})=>{
   const [msgs,setMsgs]=useState([{r:"a",t:"Hello. I'm Vino — your personal sommelier.\n\nAsk me anything about your collection, food pairings, what to open tonight, or recommendations."}]);
   const [input,setInput]=useState("");
@@ -545,16 +613,19 @@ const AIScreen=({wines})=>{
   const send=useCallback(async msg=>{
     const txt=msg||input.trim();
     if(!txt||loading)return;
-    setInput("");setMsgs(p=>[...p,{r:"u",t:txt}]);setLoading(true);
+    setInput("");
+    setMsgs(p=>[...p,{r:"u",t:txt}]);
+    setLoading(true);
     const reply=await callAI(txt,wines);
-    setMsgs(p=>[...p,{r:"a",t:reply}]);setLoading(false);
+    setMsgs(p=>[...p,{r:"a",t:reply}]);
+    setLoading(false);
     setTimeout(()=>scrollRef.current?.scrollTo({top:99999,behavior:"smooth"}),80);
   },[input,wines,loading]);
   return(
     <div style={{display:"flex",flexDirection:"column",height:"calc(100vh - 140px)"}}>
       <div style={{marginBottom:18}}>
         <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"2px",textTransform:"uppercase",marginBottom:4}}>Vino AI</div>
-        <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:30,fontWeight:700,color:"var(--text)",lineHeight:1}}>Sommelier</div>
+        <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:28,fontWeight:800,color:"var(--text)",lineHeight:1}}>Sommelier</div>
       </div>
       <div ref={scrollRef} style={{flex:1,overflowY:"auto",paddingBottom:8}}>
         {msgs.map((m,i)=>(
@@ -563,13 +634,32 @@ const AIScreen=({wines})=>{
             <div style={{maxWidth:"80%",padding:"12px 15px",borderRadius:m.r==="u"?"18px 18px 4px 18px":"18px 18px 18px 4px",background:m.r==="u"?"#9B2335":"var(--card)",color:m.r==="u"?"white":"var(--text)",fontSize:14,lineHeight:1.65,border:m.r==="a"?"1px solid var(--border)":"none",whiteSpace:"pre-wrap",fontFamily:"'Plus Jakarta Sans',sans-serif",boxShadow:"0 2px 8px var(--shadow)"}}>{m.t}</div>
           </div>
         ))}
-        {loading&&<div style={{display:"flex",alignItems:"flex-end",gap:8}}><div style={{width:30,height:30,borderRadius:10,background:"#9B2335",display:"flex",alignItems:"center",justifyContent:"center"}}><Icon n="wine" size={15} color="white"/></div><div style={{padding:"14px 16px",borderRadius:"18px 18px 18px 4px",background:"var(--card)",border:"1px solid var(--border)",display:"flex",gap:5,alignItems:"center"}}>{[0,1,2].map(d=><div key={d} style={{width:6,height:6,borderRadius:"50%",background:"var(--sub)",animation:"blink 1.2s ease infinite",animationDelay:`${d*0.18}s`}}/>)}</div></div>}
+        {loading&&(
+          <div style={{display:"flex",alignItems:"flex-end",gap:8}}>
+            <div style={{width:30,height:30,borderRadius:10,background:"#9B2335",display:"flex",alignItems:"center",justifyContent:"center"}}><Icon n="wine" size={15} color="white"/></div>
+            <div style={{padding:"14px 16px",borderRadius:"18px 18px 18px 4px",background:"var(--card)",border:"1px solid var(--border)",display:"flex",gap:5,alignItems:"center"}}>
+              {[0,1,2].map(d=><div key={d} style={{width:6,height:6,borderRadius:"50%",background:"var(--sub)",animation:"blink 1.2s ease infinite",animationDelay:`${d*0.18}s`}}/>)}
+            </div>
+          </div>
+        )}
       </div>
-      {msgs.length<=1&&<div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>{chips.map(c=><button key={c} onClick={()=>send(c)} style={{padding:"8px 13px",borderRadius:20,border:"1.5px solid var(--border)",background:"var(--card)",color:"var(--text)",fontSize:12,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}} onMouseEnter={e=>e.currentTarget.style.borderColor="#9B2335"} onMouseLeave={e=>e.currentTarget.style.borderColor="var(--border)"}>{c}</button>)}</div>}
+      {msgs.length<=1&&(
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
+          {chips.map(c=>(
+            <button key={c} onClick={()=>send(c)} style={{padding:"8px 13px",borderRadius:20,border:"1.5px solid var(--border)",background:"var(--card)",color:"var(--text)",fontSize:12,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}
+              onMouseEnter={e=>e.currentTarget.style.borderColor="#9B2335"}
+              onMouseLeave={e=>e.currentTarget.style.borderColor="var(--border)"}>{c}</button>
+          ))}
+        </div>
+      )}
       <div style={{display:"flex",gap:8,paddingTop:8}}>
         <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&send()} placeholder="Ask anything about wine…" style={{borderRadius:14}}/>
-        <button onClick={()=>send()} disabled={!input.trim()||loading} style={{width:44,height:44,flexShrink:0,borderRadius:12,background:input.trim()&&!loading?"#9B2335":"var(--inputBg)",border:"none",cursor:input.trim()&&!loading?"pointer":"default",display:"flex",alignItems:"center",justifyContent:"center",color:input.trim()&&!loading?"white":"var(--sub)",boxShadow:input.trim()&&!loading?"0 4px 14px rgba(155,35,53,0.3)":"none",transition:"all 0.18s"}}><Icon n="send" size={17}/></button>
+        <button onClick={()=>send()} disabled={!input.trim()||loading}
+          style={{width:44,height:44,flexShrink:0,borderRadius:12,background:input.trim()&&!loading?"#9B2335":"var(--inputBg)",border:"none",cursor:input.trim()&&!loading?"pointer":"default",display:"flex",alignItems:"center",justifyContent:"center",color:input.trim()&&!loading?"white":"var(--sub)",transition:"all 0.18s"}}>
+          <Icon n="send" size={17}/>
+        </button>
       </div>
+    </div>
     </div>
   );
 };
@@ -586,25 +676,32 @@ const NotesScreen=({wines,notes,onAdd,onDelete})=>{
       <div style={{marginBottom:24}}>
         <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"2px",textTransform:"uppercase",marginBottom:4}}>Journal</div>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end"}}>
-          <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:36,fontWeight:700,color:"var(--text)",lineHeight:1}}>{notes.length} <span style={{fontSize:18,color:"var(--sub)",fontWeight:400}}>notes</span></div>
-          <button onClick={()=>{setForm({wineId:col[0]?.id||"",title:"",content:""});setAdding(true);}} style={{width:44,height:44,borderRadius:14,background:"#9B2335",border:"none",display:"flex",alignItems:"center",justifyContent:"center",color:"white",boxShadow:"0 4px 16px rgba(155,35,53,0.35)"}}><Icon n="plus" size={20}/></button>
+          <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:34,fontWeight:800,color:"var(--text)",lineHeight:1}}>
+            {notes.length} <span style={{fontSize:18,color:"var(--sub)",fontWeight:400}}>notes</span>
+          </div>
+          <button onClick={()=>{setForm({wineId:col[0]?.id||"",title:"",content:""});setAdding(true);}} style={{width:44,height:44,borderRadius:14,background:"#9B2335",border:"none",display:"flex",alignItems:"center",justifyContent:"center",color:"white",boxShadow:"0 4px 16px rgba(155,35,53,0.35)",cursor:"pointer"}}><Icon n="plus" size={20}/></button>
         </div>
       </div>
-      {notes.length===0?<Empty icon="note" text="Capture your tasting memories."/>:notes.map(n=>{
-        const w=getW(n.wineId);
-        const type=w?(w.wineType||guessWineType(w.grape,w.name)):"Other";
-        const tc=WINE_TYPE_COLORS[type]||WINE_TYPE_COLORS.Other;
-        return(
-          <div key={n.id} onClick={()=>setSel(n)} style={{background:"var(--card)",borderRadius:18,padding:"16px",cursor:"pointer",border:"1px solid var(--border)",marginBottom:10,transition:"transform 0.15s,box-shadow 0.15s",boxShadow:"0 2px 8px var(--shadow)"}} onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 8px 28px var(--shadow)"}} onMouseLeave={e=>{e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="0 2px 8px var(--shadow)"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
-              <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:17,fontWeight:700,color:"var(--text)",lineHeight:1.2,flex:1,paddingRight:8}}>{n.title}</div>
-              <div style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",flexShrink:0}}>{n.date?new Date(n.date).toLocaleDateString("en-AU",{day:"numeric",month:"short"}):""}</div>
-            </div>
-            {w&&<div style={{display:"inline-flex",alignItems:"center",gap:6,marginBottom:8}}><div style={{width:7,height:7,borderRadius:"50%",background:tc.dot}}/><span style={{fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{w.name}</span></div>}
-            <div style={{fontSize:13,color:"var(--sub)",lineHeight:1.55,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{n.content}</div>
-          </div>
-        );
-      })}
+      {notes.length===0
+        ? <Empty icon="note" text="Capture your tasting memories."/>
+        : notes.map(n=>{
+            const w=getW(n.wineId);
+            const type=w?(w.wineType||guessWineType(w.grape,w.name)):"Other";
+            const tc=WINE_TYPE_COLORS[type]||WINE_TYPE_COLORS.Other;
+            return(
+              <div key={n.id} onClick={()=>setSel(n)} style={{background:"var(--card)",borderRadius:18,padding:"16px",cursor:"pointer",border:"1px solid var(--border)",marginBottom:10,transition:"transform 0.15s,box-shadow 0.15s",boxShadow:"0 2px 8px var(--shadow)"}}
+                onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 8px 28px var(--shadow)";}}
+                onMouseLeave={e=>{e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="0 2px 8px var(--shadow)";}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
+                  <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:16,fontWeight:700,color:"var(--text)",lineHeight:1.2,flex:1,paddingRight:8}}>{n.title}</div>
+                  <div style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",flexShrink:0}}>{n.date?new Date(n.date).toLocaleDateString("en-AU",{day:"numeric",month:"short"}):""}</div>
+                </div>
+                {w&&<div style={{display:"inline-flex",alignItems:"center",gap:6,marginBottom:8}}><div style={{width:7,height:7,borderRadius:"50%",background:tc.dot}}/><span style={{fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{w.name}</span></div>}
+                <div style={{fontSize:13,color:"var(--sub)",lineHeight:1.55,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{n.content}</div>
+              </div>
+            );
+          })
+      }
       <Modal show={adding} onClose={()=>setAdding(false)}>
         <ModalHeader title="New Note" onClose={()=>setAdding(false)}/>
         {col.length>0&&<SelField label="Wine" value={form.wineId} onChange={v=>setForm(p=>({...p,wineId:v}))} options={col.map(w=>({value:w.id,label:w.name}))}/>}
@@ -616,14 +713,18 @@ const NotesScreen=({wines,notes,onAdd,onDelete})=>{
         </div>
       </Modal>
       <Modal show={!!sel} onClose={()=>setSel(null)} wide>
-        {sel&&<div>
-          <ModalHeader title={sel.title} onClose={()=>setSel(null)}/>
-          {getW(sel.wineId)&&<div style={{fontSize:13,color:"#9B2335",marginBottom:8,fontWeight:600,fontFamily:"'Plus Jakarta Sans',sans-serif",display:"flex",alignItems:"center",gap:6}}><div style={{width:7,height:7,borderRadius:"50%",background:"#9B2335"}}/>{getW(sel.wineId)?.name}</div>}
-          <div style={{fontSize:12,color:"var(--sub)",marginBottom:16,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{sel.date?new Date(sel.date).toLocaleDateString("en-AU",{weekday:"long",day:"numeric",month:"long",year:"numeric"}):""}</div>
-          <div style={{fontSize:15,color:"var(--text)",lineHeight:1.75,marginBottom:24,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{sel.content}</div>
-          <Btn variant="danger" onClick={()=>{onDelete(sel.id);setSel(null);}} full icon="trash">Delete Note</Btn>
-        </div>}
+        {sel&&(
+          <div>
+            <ModalHeader title={sel.title} onClose={()=>setSel(null)}/>
+            {getW(sel.wineId)&&<div style={{fontSize:13,color:"#9B2335",marginBottom:8,fontWeight:600,fontFamily:"'Plus Jakarta Sans',sans-serif",display:"flex",alignItems:"center",gap:6}}><div style={{width:7,height:7,borderRadius:"50%",background:"#9B2335"}}/>{getW(sel.wineId)?.name}</div>}
+            <div style={{fontSize:12,color:"var(--sub)",marginBottom:16,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{sel.date?new Date(sel.date).toLocaleDateString("en-AU",{weekday:"long",day:"numeric",month:"long",year:"numeric"}):""}</div>
+            <div style={{fontSize:15,color:"var(--text)",lineHeight:1.75,marginBottom:24,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{sel.content}</div>
+            <Btn variant="danger" onClick={()=>{onDelete(sel.id);setSel(null);}} full icon="trash">Delete Note</Btn>
+          </div>
+        )}
       </Modal>
+    </div>
+    </div>
     </div>
   );
 };
@@ -641,16 +742,13 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
   const openEdit=()=>{
     setPForm({name:profile.name||"",description:profile.description||"",avatar:profile.avatar||null});
     setEditing(true);
-    setTimeout(()=>{ document.querySelector('[data-scroll="main"]')?.scrollTo({top:0,behavior:'smooth'}); },30);
+    setTimeout(()=>document.querySelector('[data-scroll="main"]')?.scrollTo({top:0,behavior:"smooth"}),30);
   };
 
-  /* ── EDIT VIEW ── */
   if(editing) return(
     <div style={{animation:"fadeUp 0.2s ease"}}>
-      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:24}}>
-        <button onClick={()=>setEditing(false)} style={{background:"var(--inputBg)",border:"none",borderRadius:10,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",color:"var(--sub)",cursor:"pointer",flexShrink:0}}>
-          <Icon n="chevR" size={18} color="var(--sub)" style={{transform:"rotate(180deg)"}}/>
-        </button>
+      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:28}}>
+        <button onClick={()=>setEditing(false)} style={{background:"var(--inputBg)",border:"none",borderRadius:10,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",color:"var(--sub)",cursor:"pointer",flexShrink:0,fontSize:20}}>←</button>
         <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:22,fontWeight:800,color:"var(--text)"}}>Edit Profile</div>
       </div>
       <div style={{display:"flex",justifyContent:"center",marginBottom:24}}>
@@ -660,7 +758,7 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
         <label style={{display:"block",fontSize:11,fontWeight:700,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:6,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Name</label>
         <input value={pForm.name} onChange={e=>setPForm(p=>({...p,name:e.target.value}))} placeholder="Your name"/>
       </div>
-      <div style={{marginBottom:24}}>
+      <div style={{marginBottom:28}}>
         <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
           <label style={{fontSize:11,fontWeight:700,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Description</label>
           <span style={{fontSize:10,color:"var(--sub)",opacity:0.6}}>optional</span>
@@ -669,19 +767,18 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
       </div>
       <div style={{display:"flex",gap:10}}>
         <button onClick={()=>setEditing(false)} style={{flex:1,padding:"14px",borderRadius:12,border:"1.5px solid var(--border)",background:"var(--inputBg)",color:"var(--text)",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Cancel</button>
-        <button onClick={()=>{if(pForm.name){setProfile({...pForm});setEditing(false);}}} disabled={!pForm.name} style={{flex:1,padding:"14px",borderRadius:12,border:"none",background:pForm.name?"#9B2335":"var(--inputBg)",color:pForm.name?"white":"var(--sub)",fontSize:14,fontWeight:700,cursor:pForm.name?"pointer":"default",fontFamily:"'Plus Jakarta Sans',sans-serif",boxShadow:pForm.name?"0 4px 16px rgba(155,35,53,0.3)":"none",transition:"all 0.18s"}}>Save</button>
+        <button onClick={()=>{if(pForm.name){setProfile({...pForm});setEditing(false);}}} disabled={!pForm.name} style={{flex:1,padding:"14px",borderRadius:12,border:"none",background:pForm.name?"#9B2335":"var(--inputBg)",color:pForm.name?"white":"var(--sub)",fontSize:14,fontWeight:700,cursor:pForm.name?"pointer":"default",fontFamily:"'Plus Jakarta Sans',sans-serif",transition:"all 0.18s"}}>Save</button>
       </div>
     </div>
   );
 
-  /* ── MAIN VIEW ── */
   return(
     <div>
       <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"2px",textTransform:"uppercase",marginBottom:4}}>My Winery</div>
-      <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:36,fontWeight:800,color:"var(--text)",lineHeight:1,marginBottom:20}}>Profile</div>
+      <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:34,fontWeight:800,color:"var(--text)",lineHeight:1,marginBottom:20}}>Profile</div>
       <div style={{background:"linear-gradient(135deg,#6B0A0A 0%,#9B2335 60%,#6B0A0A 100%)",borderRadius:22,padding:"20px",marginBottom:14,position:"relative",overflow:"hidden"}}>
         <div style={{position:"absolute",right:-20,top:-20,opacity:0.06,pointerEvents:"none"}}><Icon n="wine" size={160} color="white"/></div>
-        <div style={{display:"flex",alignItems:"center",gap:14}}>
+        <div style={{display:"flex",alignItems:"center",gap:14,position:"relative",zIndex:1}}>
           <div style={{width:66,height:66,borderRadius:"50%",background:"rgba(255,255,255,0.15)",overflow:"hidden",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",border:"2px solid rgba(255,255,255,0.25)"}}>
             {profile.avatar?<img src={profile.avatar} alt="avatar" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<Icon n="user" size={28} color="rgba(255,255,255,0.8)"/>}
           </div>
@@ -689,7 +786,7 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
             <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:22,fontWeight:700,color:"white",lineHeight:1.1}}>{profile.name}</div>
             <div style={{fontSize:13,color:"rgba(255,255,255,0.65)",marginTop:3,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{profile.description}</div>
           </div>
-          <button onClick={openEdit} style={{flexShrink:0,background:"rgba(255,255,255,0.2)",border:"1.5px solid rgba(255,255,255,0.35)",borderRadius:11,padding:"9px 16px",color:"white",fontSize:13,fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
+          <button onClick={openEdit} style={{flexShrink:0,background:"rgba(255,255,255,0.2)",border:"1.5px solid rgba(255,255,255,0.4)",borderRadius:11,padding:"9px 16px",color:"white",fontSize:13,fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,zIndex:2}}>
             <Icon n="edit" size={13} color="white"/> Edit
           </button>
         </div>
@@ -708,29 +805,54 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
           {Object.entries(types).sort((a,b)=>b[1]-a[1]).map(([t,ct])=>{
             const tc=WINE_TYPE_COLORS[t]||WINE_TYPE_COLORS.Other;
             const pct=Math.round((ct/col.length)*100);
-            return(<div key={t} style={{marginBottom:8}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:13,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>{t}</span><span style={{fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{ct} · {pct}%</span></div><div style={{height:4,background:"var(--inputBg)",borderRadius:2,overflow:"hidden"}}><div style={{height:"100%",width:`${pct}%`,background:tc.dot,borderRadius:2}}/></div></div>);
+            return(
+              <div key={t} style={{marginBottom:8}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                  <span style={{fontSize:13,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>{t}</span>
+                  <span style={{fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{ct} · {pct}%</span>
+                </div>
+                <div style={{height:4,background:"var(--inputBg)",borderRadius:2,overflow:"hidden"}}>
+                  <div style={{height:"100%",width:`${pct}%`,background:tc.dot,borderRadius:2}}/>
+                </div>
+              </div>
+            );
           })}
         </div>
       )}
-      {topWine&&<div style={{background:"var(--card)",borderRadius:16,padding:"14px 16px",border:"1px solid var(--border)",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontSize:10,color:"var(--sub)",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:4,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Top Rated</div><div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:15,fontWeight:700,color:"var(--text)"}}>{topWine.name}</div><div style={{fontSize:12,color:"var(--sub)",marginTop:2,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{topWine.origin}</div></div><Stars value={topWine.rating} size={14}/></div>}
+      {topWine&&(
+        <div style={{background:"var(--card)",borderRadius:16,padding:"14px 16px",border:"1px solid var(--border)",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div>
+            <div style={{fontSize:10,color:"var(--sub)",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:4,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Top Rated</div>
+            <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:15,fontWeight:700,color:"var(--text)"}}>{topWine.name}</div>
+            <div style={{fontSize:12,color:"var(--sub)",marginTop:2,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{topWine.origin}</div>
+          </div>
+          <Stars value={topWine.rating} size={14}/>
+        </div>
+      )}
       <div style={{background:"var(--card)",borderRadius:16,border:"1px solid var(--border)",padding:"16px",marginBottom:10}}>
         <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:14,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Theme</div>
         <div style={{display:"flex",gap:8}}>
-          {THEMES.map(t=>{const act=theme===t.id;return(
-            <button key={t.id} onClick={()=>setTheme(t.id)} style={{flex:1,padding:"14px 8px",borderRadius:14,border:act?"2px solid #9B2335":"1.5px solid var(--border)",background:act?"rgba(155,35,53,0.08)":"var(--inputBg)",color:act?"#9B2335":"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:700,fontSize:13,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:8,transition:"all 0.18s"}}>
-              <div style={{width:32,height:32,borderRadius:10,background:act?"rgba(155,35,53,0.15)":"var(--border)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                <Icon n={t.ic} size={18} color={act?"#9B2335":"var(--sub)"}/>
-              </div>
-              {t.label}
-            </button>
-          );})}
+          {THEMES.map(t=>{
+            const act=theme===t.id;
+            return(
+              <button key={t.id} onClick={()=>setTheme(t.id)} style={{flex:1,padding:"14px 8px",borderRadius:14,border:act?"2px solid #9B2335":"1.5px solid var(--border)",background:act?"rgba(155,35,53,0.08)":"var(--inputBg)",color:act?"#9B2335":"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:700,fontSize:13,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:8,transition:"all 0.18s"}}>
+                <div style={{width:32,height:32,borderRadius:10,background:act?"rgba(155,35,53,0.15)":"var(--border)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  <Icon n={t.ic} size={18} color={act?"#9B2335":"var(--sub)"}/>
+                </div>
+                {t.label}
+              </button>
+            );
+          })}
         </div>
       </div>
-      <div onClick={()=>{const b=new Blob([JSON.stringify({wines,wishlist,notes,profile,exportedAt:new Date().toISOString()},null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="my-winery.json";a.click();}} style={{background:"var(--card)",borderRadius:16,border:"1px solid var(--border)",padding:"14px 16px",marginBottom:24,display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer",transition:"opacity 0.18s"}} onMouseEnter={e=>e.currentTarget.style.opacity="0.7"} onMouseLeave={e=>e.currentTarget.style.opacity="1"}>
+      <div onClick={()=>{const b=new Blob([JSON.stringify({wines,wishlist,notes,profile,exportedAt:new Date().toISOString()},null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="my-winery.json";a.click();}}
+        style={{background:"var(--card)",borderRadius:16,border:"1px solid var(--border)",padding:"14px 16px",marginBottom:24,display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer",transition:"opacity 0.18s"}}
+        onMouseEnter={e=>e.currentTarget.style.opacity="0.7"} onMouseLeave={e=>e.currentTarget.style.opacity="1"}>
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export Collection</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vino v5.0 · {profile.name}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vino v5.1 · {profile.name}</div>
+    </div>
     </div>
   );
 };
@@ -739,7 +861,7 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
 const TABS=[{id:"collection",label:"Cellar",ic:"wine"},{id:"wishlist",label:"Wishlist",ic:"heart"},{id:"ai",label:"Sommelier",ic:"chat"},{id:"notes",label:"Journal",ic:"note"},{id:"profile",label:"Winery",ic:"user"}];
 
 /* ── APP ──────────────────────────────────────────────────────── */
-export default function App() {
+export default function App(){
   const [themeMode,setThemeMode]=useState(()=>{try{return localStorage.getItem("vino_theme")||"system"}catch{return"system"}});
   const [sysDark,setSysDark]=useState(()=>window.matchMedia?.("(prefers-color-scheme:dark)").matches??false);
   const [tab,setTab]=useState("collection");
@@ -752,14 +874,17 @@ export default function App() {
   const [isDesktop,setIsDesktop]=useState(()=>window.innerWidth>=768);
 
   useEffect(()=>{try{localStorage.setItem("vino_theme",themeMode)}catch{}},[themeMode]);
-  useEffect(()=>{const mq=window.matchMedia?.("(prefers-color-scheme:dark)");const h=e=>setSysDark(e.matches);mq?.addEventListener("change",h);return()=>mq?.removeEventListener("change",h);},[]);
-
+  useEffect(()=>{
+    const mq=window.matchMedia?.("(prefers-color-scheme:dark)");
+    const h=e=>setSysDark(e.matches);
+    mq?.addEventListener("change",h);
+    return()=>mq?.removeEventListener("change",h);
+  },[]);
   useEffect(()=>{
     const h=()=>setIsDesktop(window.innerWidth>=768);
     window.addEventListener("resize",h);
     return()=>window.removeEventListener("resize",h);
   },[]);
-
   useEffect(()=>{
     async function load(){
       try{
@@ -771,25 +896,26 @@ export default function App() {
           setWines(SEED_WINES);setWishlist(SEED_WISHLIST);setNotes(SEED_NOTES);
         }else{
           const all=wineRows.map(fromDb.wine);
-          setWines(all.filter(w=>!w.wishlist));setWishlist(all.filter(w=>w.wishlist));
+          setWines(all.filter(w=>!w.wishlist));
+          setWishlist(all.filter(w=>w.wishlist));
           setNotes(noteRows.map(fromDb.note));
           if(prof)setProfileState({name:prof.name,description:prof.description,avatar:prof.avatar||null});
         }
-      }catch(e){console.error("Load error:",e);setWines(SEED_WINES);setWishlist(SEED_WISHLIST);setNotes(SEED_NOTES);}
+      }catch(e){
+        console.error("Load error:",e);
+        setWines(SEED_WINES);setWishlist(SEED_WISHLIST);setNotes(SEED_NOTES);
+      }
       setReady(true);
     }
     load();
   },[]);
-
-  useEffect(()=>{const t=setTimeout(()=>setSplashDone(true),2400);return()=>clearTimeout(t);},[]);
+  useEffect(()=>{const t=setTimeout(()=>setSplashDone(true),2000);return()=>clearTimeout(t);},[]);
 
   const dark=themeMode==="dark"||(themeMode==="system"&&sysDark);
   const th=T(dark);
   const cssVars={"--bg":th.bg,"--surface":th.surface,"--card":th.card,"--border":th.border,"--text":th.text,"--sub":th.sub,"--inputBg":th.inputBg,"--shadow":th.shadow};
-  // Apply CSS vars to root element so portals and fixed children can access them
   useEffect(()=>{
-    const root=document.documentElement;
-    Object.entries(cssVars).forEach(([k,v])=>root.style.setProperty(k,v));
+    Object.entries(cssVars).forEach(([k,v])=>document.documentElement.style.setProperty(k,v));
   });
 
   const addWine=async w=>{setWines(p=>[...p,w]);await db.upsert("wines",toDb.wine(w));};
@@ -798,37 +924,54 @@ export default function App() {
   const addWish=async w=>{setWishlist(p=>[...p,w]);await db.upsert("wines",toDb.wine(w));};
   const updWish=async w=>{setWishlist(p=>p.map(x=>x.id===w.id?w:x));await db.upsert("wines",toDb.wine(w));};
   const delWish=async id=>{setWishlist(p=>p.filter(x=>x.id!==id));await db.del("wines",id);};
-  const moveToCol=async id=>{const w=wishlist.find(x=>x.id===id);if(!w)return;const m={...w,wishlist:false,bottles:1,rating:0};setWishlist(p=>p.filter(x=>x.id!==id));setWines(p=>[...p,m]);await db.upsert("wines",toDb.wine(m));};
+  const moveToCol=async id=>{
+    const w=wishlist.find(x=>x.id===id);if(!w)return;
+    const m={...w,wishlist:false,bottles:1,rating:0};
+    setWishlist(p=>p.filter(x=>x.id!==id));
+    setWines(p=>[...p,m]);
+    await db.upsert("wines",toDb.wine(m));
+  };
   const addNote=async n=>{setNotes(p=>[...p,n]);await db.upsert("tasting_notes",toDb.note(n));};
   const delNote=async id=>{setNotes(p=>p.filter(x=>x.id!==id));await db.del("tasting_notes",id);};
   const setProfile=async p=>{setProfileState(p);await db.saveProfile(p);};
 
+  const CSS=makeCSS(dark);
 
-  if(!splashDone)return(
-    <div style={{...cssVars,background:"#0C0202",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}>
+  if(!splashDone) return(
+    <div style={{...cssVars,background:"#0C0202",height:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}>
       <style>{CSS}</style>
       <div style={{textAlign:"center",animation:"fadeUp 1s ease"}}>
-        <div style={{marginBottom:16,opacity:0.9}}><Icon n="wine" size={52} color="#9B2335"/></div>
-        <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:58,fontWeight:800,color:"#EDE6E0",letterSpacing:"-2px",lineHeight:1}}>Vino</div>
+        <div style={{marginBottom:16}}><Icon n="wine" size={52} color="#9B2335"/></div>
+        <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:56,fontWeight:800,color:"#EDE6E0",letterSpacing:"-2px",lineHeight:1}}>Vino</div>
         <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:11,color:"rgba(237,230,224,0.35)",marginTop:8,letterSpacing:"5px",textTransform:"uppercase"}}>Personal Cellar</div>
-        {ready&&<div style={{marginTop:40,fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:20,fontWeight:500,color:"rgba(237,230,224,0.7)",animation:"fadeUp 0.8s 0.3s ease both"}}>Good {new Date().getHours()<12?"morning":new Date().getHours()<18?"afternoon":"evening"}, <span style={{color:"#C47060"}}>{profile.name||DEFAULT_PROFILE.name}</span></div>}
+        {ready&&<div style={{marginTop:40,fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:20,fontWeight:500,color:"rgba(237,230,224,0.7)",animation:"fadeUp 0.8s 0.3s ease both"}}>Good {new Date().getHours()<12?"morning":new Date().getHours()<18?"afternoon":"evening"}, <span style={{color:"#C47060"}}>{profile.name}</span></div>}
       </div>
     </div>
   );
 
+  const screens=(
+    <>
+      {tab==="collection"&&<CollectionScreen wines={wines} onAdd={addWine} onUpdate={updWine} onDelete={delWine} desktop={isDesktop}/>}
+      {tab==="wishlist"&&<WishlistScreen wishlist={wishlist} onAdd={addWish} onUpdate={updWish} onDelete={delWish} onMove={moveToCol} desktop={isDesktop}/>}
+      {tab==="ai"&&<AIScreen wines={wines}/>}
+      {tab==="notes"&&<NotesScreen wines={wines} notes={notes} onAdd={addNote} onDelete={delNote}/>}
+      {tab==="profile"&&<ProfileScreen wines={wines} wishlist={wishlist} notes={notes} theme={themeMode} setTheme={setThemeMode} profile={profile} setProfile={setProfile}/>}
+    </>
+  );
+
   if(isDesktop) return(
-    <div style={{...cssVars,background:"var(--bg)",height:"100vh",fontFamily:"'Plus Jakarta Sans',sans-serif",color:"var(--text)",display:"flex",overflow:"hidden"}}>
+    <div style={{...cssVars,background:"var(--bg)",height:"100vh",display:"flex",overflow:"hidden",fontFamily:"'Plus Jakarta Sans',sans-serif",color:"var(--text)"}}>
       <style>{CSS}</style>
-      <div style={{width:220,flexShrink:0,background:dark?"#100C0C":"#140606",display:"flex",flexDirection:"column",padding:"28px 12px 20px",borderRight:"1px solid rgba(255,255,255,0.06)"}}>
-        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:36,paddingLeft:10}}>
+      <div style={{width:220,flexShrink:0,background:dark?"#100C0C":"#1A0808",display:"flex",flexDirection:"column",padding:"28px 12px 24px"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:36,paddingLeft:8}}>
           <Icon n="wine" size={20} color="#9B2335"/>
-          <span style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:19,fontWeight:800,color:"#EDE6E0",letterSpacing:"-0.5px"}}>Vino</span>
+          <span style={{fontSize:20,fontWeight:800,color:"#EDE6E0",letterSpacing:"-0.5px"}}>Vino</span>
         </div>
         <nav style={{flex:1,display:"flex",flexDirection:"column",gap:2}}>
           {TABS.map(tb=>{
             const active=tab===tb.id;
             return(
-              <button key={tb.id} onClick={()=>setTab(tb.id)} style={{display:"flex",alignItems:"center",gap:11,padding:"10px 12px",borderRadius:11,border:"none",background:active?"rgba(155,35,53,0.18)":"transparent",color:active?"#F08090":"rgba(237,230,224,0.45)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:active?700:500,fontSize:14,cursor:"pointer",transition:"all 0.15s",textAlign:"left",width:"100%"}}>
+              <button key={tb.id} onClick={()=>setTab(tb.id)} style={{display:"flex",alignItems:"center",gap:11,padding:"11px 12px",borderRadius:11,border:"none",background:active?"rgba(155,35,53,0.18)":"transparent",color:active?"#F08090":"rgba(237,230,224,0.45)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:active?700:500,fontSize:14,cursor:"pointer",transition:"all 0.15s",textAlign:"left",width:"100%"}}>
                 <Icon n={tb.ic} size={17} color={active?"#F08090":"rgba(237,230,224,0.35)"}/>
                 {tb.label}
                 {active&&<div style={{marginLeft:"auto",width:5,height:5,borderRadius:"50%",background:"#9B2335",flexShrink:0}}/>}
@@ -836,23 +979,19 @@ export default function App() {
             );
           })}
         </nav>
-        <div style={{borderTop:"1px solid rgba(255,255,255,0.07)",paddingTop:14,display:"flex",alignItems:"center",gap:9}}>
-          <div style={{width:32,height:32,borderRadius:"50%",background:"rgba(155,35,53,0.3)",overflow:"hidden",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div style={{borderTop:"1px solid rgba(255,255,255,0.07)",paddingTop:16,display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:34,height:34,borderRadius:"50%",background:"rgba(155,35,53,0.3)",overflow:"hidden",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
             {profile.avatar?<img src={profile.avatar} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<Icon n="user" size={15} color="#F08090"/>}
           </div>
           <div style={{minWidth:0}}>
-            <div style={{fontSize:12,fontWeight:700,color:"#EDE6E0",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{profile.name}</div>
-            <div style={{fontSize:10,color:"rgba(237,230,224,0.35)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{profile.description}</div>
+            <div style={{fontSize:13,fontWeight:700,color:"#EDE6E0",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{profile.name}</div>
+            <div style={{fontSize:11,color:"rgba(237,230,224,0.35)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{profile.description}</div>
           </div>
         </div>
       </div>
       <div data-scroll="main" style={{flex:1,overflowY:"auto",overflowX:"hidden",WebkitOverflowScrolling:"touch"}}>
         <div style={{maxWidth:900,margin:"0 auto",padding:"40px 48px 60px"}}>
-          {tab==="collection"&&<CollectionScreen wines={wines} onAdd={addWine} onUpdate={updWine} onDelete={delWine} desktop/>}
-          {tab==="wishlist"&&<WishlistScreen wishlist={wishlist} onAdd={addWish} onUpdate={updWish} onDelete={delWish} onMove={moveToCol} desktop/>}
-          {tab==="ai"&&<AIScreen wines={wines} desktop/>}
-          {tab==="notes"&&<NotesScreen wines={wines} notes={notes} onAdd={addNote} onDelete={delNote} desktop/>}
-          {tab==="profile"&&<ProfileScreen wines={wines} wishlist={wishlist} notes={notes} theme={themeMode} setTheme={setThemeMode} profile={profile} setProfile={setProfile} desktop/>}
+          {screens}
         </div>
       </div>
     </div>
@@ -861,22 +1000,21 @@ export default function App() {
   return(
     <div style={{...cssVars,background:"var(--bg)",height:"100vh",fontFamily:"'Plus Jakarta Sans',sans-serif",color:"var(--text)",maxWidth:480,margin:"0 auto",display:"flex",flexDirection:"column",overflow:"hidden",position:"fixed",left:"50%",transform:"translateX(-50%)",width:"100%"}}>
       <style>{CSS}</style>
-      <div data-scroll="main" style={{flex:1,overflowY:"auto",overflowX:"hidden",padding:"52px 20px 96px",animation:"fadeUp 0.3s ease",WebkitOverflowScrolling:"touch"}}>
-        {tab==="collection"&&<CollectionScreen wines={wines} onAdd={addWine} onUpdate={updWine} onDelete={delWine}/>}
-        {tab==="wishlist"&&<WishlistScreen wishlist={wishlist} onAdd={addWish} onUpdate={updWish} onDelete={delWish} onMove={moveToCol}/>}
-        {tab==="ai"&&<AIScreen wines={wines}/>}
-        {tab==="notes"&&<NotesScreen wines={wines} notes={notes} onAdd={addNote} onDelete={delNote}/>}
-        {tab==="profile"&&<ProfileScreen wines={wines} wishlist={wishlist} notes={notes} theme={themeMode} setTheme={setThemeMode} profile={profile} setProfile={setProfile}/>}
+      <div data-scroll="main" style={{flex:1,overflowY:"auto",overflowX:"hidden",padding:"20px 20px 96px",WebkitOverflowScrolling:"touch"}}>
+        {screens}
       </div>
-      <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:480,background:dark?"rgba(12,10,10,0.92)":"rgba(247,244,242,0.92)",backdropFilter:"blur(24px)",WebkitBackdropFilter:"blur(24px)",borderTop:`1px solid ${dark?"rgba(255,255,255,0.06)":"rgba(0,0,0,0.07)"}`,padding:"10px 0 22px",zIndex:100}}>
+      <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:480,background:dark?"rgba(12,10,10,0.94)":"rgba(247,244,242,0.94)",backdropFilter:"blur(24px)",WebkitBackdropFilter:"blur(24px)",borderTop:`1px solid ${dark?"rgba(255,255,255,0.06)":"rgba(0,0,0,0.07)"}`,padding:"10px 0 22px",zIndex:100}}>
         <div style={{display:"flex",justifyContent:"space-around"}}>
-          {TABS.map(tb=>{const active=tab===tb.id;return(
-            <button key={tb.id} onClick={()=>setTab(tb.id)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,background:"none",border:"none",padding:"4px 12px",color:active?"#9B2335":"var(--sub)",transition:"color 0.18s",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
-              <div style={{transform:active?"scale(1.1)":"scale(1)",transition:"transform 0.18s"}}><Icon n={tb.ic} size={22} color={active?"#9B2335":"var(--sub)"}/></div>
-              <span style={{fontSize:9.5,fontWeight:active?700:500,letterSpacing:"0.3px"}}>{tb.label}</span>
-              <div style={{width:4,height:4,borderRadius:"50%",background:active?"#9B2335":"transparent",transition:"background 0.18s"}}/>
-            </button>
-          );})}
+          {TABS.map(tb=>{
+            const active=tab===tb.id;
+            return(
+              <button key={tb.id} onClick={()=>setTab(tb.id)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,background:"none",border:"none",padding:"4px 12px",color:active?"#9B2335":"var(--sub)",transition:"color 0.18s",fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:"pointer"}}>
+                <div style={{transform:active?"scale(1.1)":"scale(1)",transition:"transform 0.18s"}}><Icon n={tb.ic} size={22} color={active?"#9B2335":"var(--sub)"}/></div>
+                <span style={{fontSize:9.5,fontWeight:active?700:500,letterSpacing:"0.3px"}}>{tb.label}</span>
+                <div style={{width:4,height:4,borderRadius:"50%",background:active?"#9B2335":"transparent",transition:"background 0.18s"}}/>
+              </button>
+            );
+          })}
         </div>
       </div>
     </div>
