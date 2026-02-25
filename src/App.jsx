@@ -564,7 +564,6 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,desktop})=>{
         <FilterPanel filters={filters} setFilters={setFilters} wines={wines} onClose={()=>setFilterOpen(false)}/>
       </Modal>
     </div>
-    </div>
   );
 };
 
@@ -660,7 +659,6 @@ const AIScreen=({wines})=>{
         </button>
       </div>
     </div>
-    </div>
   );
 };
 
@@ -723,8 +721,6 @@ const NotesScreen=({wines,notes,onAdd,onDelete})=>{
           </div>
         )}
       </Modal>
-    </div>
-    </div>
     </div>
   );
 };
@@ -852,7 +848,6 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
       <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vino v5.1 · {profile.name}</div>
-    </div>
     </div>
   );
 };
