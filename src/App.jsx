@@ -450,7 +450,7 @@ const Empty=({icon,text})=>(<div style={{textAlign:"center",padding:"56px 0",col
 const Chip=({label,onX})=>(<div style={{display:"inline-flex",alignItems:"center",gap:4,padding:"4px 10px",borderRadius:20,background:"rgba(155,35,53,0.1)",border:"1.5px solid rgba(155,35,53,0.25)"}}><span style={{fontSize:12,color:"#9B2335",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:600}}>{label}</span><button onClick={onX} style={{background:"none",border:"none",color:"#9B2335",padding:0,lineHeight:1,display:"flex",cursor:"pointer"}}><Icon n="x" size={11}/></button></div>);
 
 /* ── COLLECTION SCREEN ────────────────────────────────────────── */
-const CollectionScreen=({wines,onAdd,onUpdate,onDelete})=>{
+const CollectionScreen=({wines,onAdd,onUpdate,onDelete,desktop})=>{
   const [sel,setSel]=useState(null);
   const [editing,setEditing]=useState(false);
   const [adding,setAdding]=useState(false);
@@ -490,7 +490,7 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete})=>{
         {filters.location&&<Chip label={filters.location} onX={()=>setFilters(p=>({...p,location:""}))}/>}
         <button onClick={()=>setFilters(DEFAULT_FILTERS)} style={{padding:"4px 10px",borderRadius:20,border:"none",background:"none",color:"var(--sub)",fontSize:12,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',sans-serif",textDecoration:"underline"}}>Clear all</button>
       </div>}
-      {filt.length===0?<Empty icon="wine" text={search||active?"No wines match your filters.":"Your cellar is empty. Add your first wine."}/>:filt.map(w=><WineCard key={w.id} wine={w} onClick={()=>{setSel(w);setEditing(false);}}/>)}
+      {filt.length===0?<Empty icon="wine" text={search||active?"No wines match your filters.":"Your cellar is empty. Add your first wine."}/>:<div style={{display:desktop?"grid":"block",gridTemplateColumns:desktop?"1fr 1fr":"none",gap:desktop?"10px":0}}>{filt.map(w=><WineCard key={w.id} wine={w} onClick={()=>{setSel(w);setEditing(false);}}/>)}</div>}
       <Modal show={!!sel&&!editing} onClose={()=>setSel(null)} wide>
         {sel&&<WineDetail wine={sel} onEdit={()=>setEditing(true)} onDelete={()=>{onDelete(sel.id);setSel(null);}}/>}
       </Modal>
@@ -508,7 +508,7 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete})=>{
 };
 
 /* ── WISHLIST ─────────────────────────────────────────────────── */
-const WishlistScreen=({wishlist,onAdd,onUpdate,onDelete,onMove})=>{
+const WishlistScreen=({wishlist,onAdd,onUpdate,onDelete,onMove,desktop})=>{
   const [sel,setSel]=useState(null);
   const [editing,setEditing]=useState(false);
   const [adding,setAdding]=useState(false);
@@ -521,7 +521,7 @@ const WishlistScreen=({wishlist,onAdd,onUpdate,onDelete,onMove})=>{
           <button onClick={()=>setAdding(true)} style={{width:44,height:44,borderRadius:14,background:"#9B2335",border:"none",display:"flex",alignItems:"center",justifyContent:"center",color:"white",boxShadow:"0 4px 16px rgba(155,35,53,0.35)"}}><Icon n="plus" size={20}/></button>
         </div>
       </div>
-      {wishlist.length===0?<Empty icon="heart" text="Add wines you dream of trying."/>:wishlist.map(w=><WineCard key={w.id} wine={w} onClick={()=>{setSel(w);setEditing(false);}}/>)}
+      {wishlist.length===0?<Empty icon="heart" text="Add wines you dream of trying."/>:<div style={{display:desktop?"grid":"block",gridTemplateColumns:desktop?"1fr 1fr":"none",gap:desktop?"10px":0}}>{wishlist.map(w=><WineCard key={w.id} wine={w} onClick={()=>{setSel(w);setEditing(false);}}/>)}</div>}
       <Modal show={!!sel&&!editing} onClose={()=>setSel(null)} wide>
         {sel&&<WineDetail wine={sel} onEdit={()=>setEditing(true)} onDelete={()=>{onDelete(sel.id);setSel(null);}} onMove={()=>{onMove(sel.id);setSel(null);}}/>}
       </Modal>
@@ -730,7 +730,7 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export Collection</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vino v4.8 · {profile.name}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vino v4.9 · {profile.name}</div>
     </div>
   );
 };
@@ -796,7 +796,13 @@ export default function App() {
   const delNote=async id=>{setNotes(p=>p.filter(x=>x.id!==id));await db.del("tasting_notes",id);};
   const setProfile=async p=>{setProfileState(p);await db.saveProfile(p);};
 
-  const CSS=makeCSS(dark);
+
+  const [isDesktop,setIsDesktop]=useState(()=>window.innerWidth>=768);
+  useEffect(()=>{
+    const h=()=>setIsDesktop(window.innerWidth>=768);
+    window.addEventListener("resize",h);
+    return()=>window.removeEventListener("resize",h);
+  },[]);
 
   if(!splashDone)return(
     <div style={{...cssVars,background:"#0C0202",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -805,7 +811,49 @@ export default function App() {
         <div style={{marginBottom:16,opacity:0.9}}><Icon n="wine" size={52} color="#9B2335"/></div>
         <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:58,fontWeight:800,color:"#EDE6E0",letterSpacing:"-2px",lineHeight:1}}>Vino</div>
         <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:11,color:"rgba(237,230,224,0.35)",marginTop:8,letterSpacing:"5px",textTransform:"uppercase"}}>Personal Cellar</div>
-        {ready&&<div style={{marginTop:40,fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:20,fontWeight:500,color:"rgba(237,230,224,0.7)",animation:"fadeUp 0.8s 0.3s ease both"}}>Good {new Date().getHours()<12?"morning":new Date().getHours()<18?"afternoon":"evening"}, <span style={{color:"#C47060"}}>{DEFAULT_PROFILE.name}</span></div>}
+        {ready&&<div style={{marginTop:40,fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:20,fontWeight:500,color:"rgba(237,230,224,0.7)",animation:"fadeUp 0.8s 0.3s ease both"}}>Good {new Date().getHours()<12?"morning":new Date().getHours()<18?"afternoon":"evening"}, <span style={{color:"#C47060"}}>{profile.name||DEFAULT_PROFILE.name}</span></div>}
+      </div>
+    </div>
+  );
+
+  if(isDesktop) return(
+    <div style={{...cssVars,background:"var(--bg)",height:"100vh",fontFamily:"'Plus Jakarta Sans',sans-serif",color:"var(--text)",display:"flex",overflow:"hidden"}}>
+      <style>{CSS}</style>
+      <div style={{width:220,flexShrink:0,background:dark?"#100C0C":"#140606",display:"flex",flexDirection:"column",padding:"28px 12px 20px",borderRight:"1px solid rgba(255,255,255,0.06)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:36,paddingLeft:10}}>
+          <Icon n="wine" size={20} color="#9B2335"/>
+          <span style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:19,fontWeight:800,color:"#EDE6E0",letterSpacing:"-0.5px"}}>Vino</span>
+        </div>
+        <nav style={{flex:1,display:"flex",flexDirection:"column",gap:2}}>
+          {TABS.map(tb=>{
+            const active=tab===tb.id;
+            return(
+              <button key={tb.id} onClick={()=>setTab(tb.id)} style={{display:"flex",alignItems:"center",gap:11,padding:"10px 12px",borderRadius:11,border:"none",background:active?"rgba(155,35,53,0.18)":"transparent",color:active?"#F08090":"rgba(237,230,224,0.45)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:active?700:500,fontSize:14,cursor:"pointer",transition:"all 0.15s",textAlign:"left",width:"100%"}}>
+                <Icon n={tb.ic} size={17} color={active?"#F08090":"rgba(237,230,224,0.35)"}/>
+                {tb.label}
+                {active&&<div style={{marginLeft:"auto",width:5,height:5,borderRadius:"50%",background:"#9B2335",flexShrink:0}}/>}
+              </button>
+            );
+          })}
+        </nav>
+        <div style={{borderTop:"1px solid rgba(255,255,255,0.07)",paddingTop:14,display:"flex",alignItems:"center",gap:9}}>
+          <div style={{width:32,height:32,borderRadius:"50%",background:"rgba(155,35,53,0.3)",overflow:"hidden",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+            {profile.avatar?<img src={profile.avatar} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<Icon n="user" size={15} color="#F08090"/>}
+          </div>
+          <div style={{minWidth:0}}>
+            <div style={{fontSize:12,fontWeight:700,color:"#EDE6E0",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{profile.name}</div>
+            <div style={{fontSize:10,color:"rgba(237,230,224,0.35)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{profile.description}</div>
+          </div>
+        </div>
+      </div>
+      <div data-scroll="main" style={{flex:1,overflowY:"auto",overflowX:"hidden",WebkitOverflowScrolling:"touch"}}>
+        <div style={{maxWidth:900,margin:"0 auto",padding:"40px 48px 60px"}}>
+          {tab==="collection"&&<CollectionScreen wines={wines} onAdd={addWine} onUpdate={updWine} onDelete={delWine} desktop/>}
+          {tab==="wishlist"&&<WishlistScreen wishlist={wishlist} onAdd={addWish} onUpdate={updWish} onDelete={delWish} onMove={moveToCol} desktop/>}
+          {tab==="ai"&&<AIScreen wines={wines} desktop/>}
+          {tab==="notes"&&<NotesScreen wines={wines} notes={notes} onAdd={addNote} onDelete={delNote} desktop/>}
+          {tab==="profile"&&<ProfileScreen wines={wines} wishlist={wishlist} notes={notes} theme={themeMode} setTheme={setThemeMode} profile={profile} setProfile={setProfile} desktop/>}
+        </div>
       </div>
     </div>
   );
