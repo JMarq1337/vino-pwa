@@ -749,7 +749,6 @@ const TYPE_STYLES={
   Other:    {hdr:"555555",row:"F5F5F5",alt:"EBEBEB"},
 };
 const TYPE_EMOJI={Red:"🍷",White:"🥂",Rosé:"🌸",Sparkling:"✨",Dessert:"🍯",Fortified:"🏰",Other:"🍾"};
-const TYPE_ORDER=["Red","White","Rosé","Sparkling","Dessert","Fortified","Other"];
 
 const exportToExcel=async(wines,wishlist)=>{
   // Load SheetJS
