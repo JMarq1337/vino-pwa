@@ -1681,9 +1681,9 @@ const SettingsPanel=({onBack,profile,setProfile,theme,setTheme})=>{
           {COUNTRIES.map(c=><option key={c} value={c}>{c}</option>)}
         </select>
       </div>
-      {/* Profile card background */}
+      {/* Unified App Color */}
       <div style={{marginBottom:20}}>
-        <div style={{fontSize:11,fontWeight:700,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:10,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Profile Card Background</div>
+        <div style={{fontSize:11,fontWeight:700,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:10,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>App Color</div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8}}>
           {BG_PRESETS.map(bg=>(
             <button key={bg.value} onClick={()=>setColorTheme(bg.accentId,bg.value)}
@@ -1693,27 +1693,6 @@ const SettingsPanel=({onBack,profile,setProfile,theme,setTheme})=>{
               {form.profileBg===bg.value&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{width:8,height:8,borderRadius:"50%",background:"white"}}/></div>}
             </button>
           ))}
-        </div>
-        <div style={{marginTop:10}}>
-          <label style={{display:"block",fontSize:11,fontWeight:600,color:"var(--sub)",marginBottom:6,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Or custom image URL</label>
-          <input value={form.profileBg?.startsWith("url(")?form.profileBg.slice(4,-1):""} onChange={e=>set("profileBg",e.target.value?`url(${e.target.value})`:BG_PRESETS[0].value)} placeholder="https://…"/>
-        </div>
-      </div>
-      {/* Theme */}
-      <div style={{marginBottom:18}}>
-        <div style={{fontSize:11,fontWeight:700,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:10,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>App Color Theme</div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8}}>
-          {Object.values(ACCENTS).map(a=>{
-            const active=form.accent===a.id;
-            return(
-              <button key={a.id} onClick={()=>{
-                const preset=THEME_BY_ID[a.id];
-                setColorTheme(a.id,preset?.profileBg||form.profileBg);
-              }} title={a.label} style={{height:38,borderRadius:11,border:active?"2px solid var(--text)":"1.5px solid rgba(255,255,255,.26)",background:`linear-gradient(135deg,${a.accent},${a.accentLight})`,position:"relative",outline:"none",appearance:"none",WebkitAppearance:"none",boxShadow:"inset 0 0 0 1px rgba(0,0,0,.1)",overflow:"hidden"}}>
-                {active&&<span style={{position:"absolute",inset:0,display:"grid",placeItems:"center",fontSize:11,color:"#fff",fontWeight:700}}>✓</span>}
-              </button>
-            );
-          })}
         </div>
       </div>
       <div style={{marginBottom:24}}>
@@ -1857,7 +1836,7 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.4 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.5 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
