@@ -26,11 +26,23 @@ const db = {
     catch(e){console.error(e);}
   },
   async saveProfile(p) {
-    try { await fetch(`${supa("profile")}?id=eq.1`,{method:"PATCH",headers:UH,body:JSON.stringify({name:p.name,description:p.description,avatar:p.avatar,surname:p.surname||"",cellar_name:p.cellarName||"",bio:p.bio||"",country:p.country||"",profile_bg:p.profileBg||""})}); }
-    catch{}
+    try {
+      const payload={id:1,name:p.name,description:p.description,avatar:p.avatar,surname:p.surname||"",cellar_name:p.cellarName||"",bio:p.bio||"",country:p.country||"",profile_bg:p.profileBg||""};
+      // Upsert is safer than PATCH for first-run profile creation.
+      const r=await fetch(`${supa("profile")}?on_conflict=id`,{method:"POST",headers:UH,body:JSON.stringify(payload)});
+      if(!r.ok){
+        const r2=await fetch(`${supa("profile")}?id=eq.1`,{method:"PATCH",headers:UH,body:JSON.stringify(payload)});
+        if(!r2.ok)console.error("saveProfile failed",await r2.text());
+      }
+    }catch(e){console.error("saveProfile err",e);}
   },
   async getProfile() {
-    try { const r=await fetch(`${supa("profile")}?id=eq.1`,{headers:BH}); const d=r.ok?await r.json():[]; const p=d[0]||null; if(!p)return null; return{name:p.name,description:p.description,avatar:p.avatar||null,surname:p.surname||"",cellarName:p.cellar_name||"",bio:p.bio||"",country:p.country||"",profileBg:p.profile_bg||""}; }
+    try {
+      let r=await fetch(`${supa("profile")}?id=eq.1`,{headers:BH});
+      if(!r.ok) r=await fetch(`${supa("profile")}?order=id.asc&limit=1`,{headers:BH});
+      const d=r.ok?await r.json():[]; const p=d[0]||null; if(!p)return null;
+      return{name:p.name,description:p.description,avatar:p.avatar||null,surname:p.surname||"",cellarName:p.cellar_name||"",bio:p.bio||"",country:p.country||"",profileBg:p.profile_bg||""};
+    }
     catch{return null;}
   }
 };
@@ -299,12 +311,16 @@ const BrandLogo=({size=42})=>(
         <stop offset="0%" stopColor="var(--accent)"/>
         <stop offset="100%" stopColor="var(--accentLight)"/>
       </linearGradient>
+      <linearGradient id="brandGlass" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stopColor="rgba(255,255,255,.8)"/>
+        <stop offset="100%" stopColor="rgba(255,255,255,.1)"/>
+      </linearGradient>
     </defs>
-    <rect x="7" y="7" width="58" height="58" rx="18" fill="rgba(255,255,255,.06)" stroke="rgba(255,255,255,.14)" />
-    <path d="M29 18h14v14c0 4 2 6 5 9 3 3 5 7 5 12v2c0 6-5 11-11 11H30c-6 0-11-5-11-11v-2c0-5 2-9 5-12 3-3 5-5 5-9V18z" fill="url(#brandGrad)" />
-    <path d="M31 18h10v6H31z" fill="rgba(255,255,255,.78)"/>
-    <path d="M25 43c4 3 18 3 22 0" stroke="rgba(255,255,255,.45)" strokeWidth="2" strokeLinecap="round"/>
-    <circle cx="51" cy="23" r="3" fill="rgba(255,255,255,.55)"/>
+    <rect x="7" y="7" width="58" height="58" rx="18" fill="rgba(255,255,255,.05)" stroke="rgba(255,255,255,.13)" />
+    <path d="M18 18h36L36 54 18 18z" fill="url(#brandGrad)" opacity=".95"/>
+    <path d="M24 23h24L36 46 24 23z" fill="url(#brandGlass)" opacity=".75"/>
+    <path d="M20 16c8 4 24 4 32 0" stroke="rgba(255,255,255,.55)" strokeWidth="2" strokeLinecap="round"/>
+    <circle cx="36" cy="55" r="5" fill="url(#brandGrad)"/>
   </svg>
 );
 
@@ -1312,7 +1328,7 @@ const WineBottleViz=({types,total})=>{
   const segments=ORDER.map(t=>({type:t,count:types[t]||0,pct:total?Math.round(((types[t]||0)/total)*100):0,color:WINE_TYPE_COLORS[t]?.dot||"#888"})).filter(s=>s.count>0);
   if(!segments.length)return null;
   // Build SVG bottle with stacked fill
-  const H=220,W=110;
+  const H=230,W=120;
   let cumY=0;
   const fills=segments.map(s=>{
     const h=(s.pct/100)*H;
@@ -1323,28 +1339,34 @@ const WineBottleViz=({types,total})=>{
   return(
     <div style={{display:"flex",gap:20,alignItems:"flex-start"}}>
       <div style={{flexShrink:0}}>
-        <svg width={W} height={H+70} viewBox={`0 0 ${W} ${H+70}`}>
+        <svg width={W} height={H+78} viewBox={`0 0 ${W} ${H+78}`}>
           <defs>
             <linearGradient id="glassShine" x1="0" y1="0" x2="1" y2="1">
               <stop offset="0%" stopColor="rgba(255,255,255,0.55)"/>
               <stop offset="40%" stopColor="rgba(255,255,255,0.12)"/>
               <stop offset="100%" stopColor="rgba(255,255,255,0.02)"/>
             </linearGradient>
+            <linearGradient id="bottleDark" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="rgba(35,25,20,.28)"/>
+              <stop offset="100%" stopColor="rgba(35,25,20,.45)"/>
+            </linearGradient>
             <clipPath id="bottle">
-              <path d={`M43 4 L67 4 L67 40 C67 49 73 57 80 66 C86 74 90 82 90 96 L90 ${H+35} C90 ${H+50} 78 ${H+60} 64 ${H+60} L46 ${H+60} C32 ${H+60} 20 ${H+50} 20 ${H+35} L20 96 C20 82 24 74 30 66 C37 57 43 49 43 40 Z`}/>
+              <path d={`M46 6 L74 6 L74 41 C74 50 80 58 87 67 C93 75 97 84 97 100 L97 ${H+34} C97 ${H+50} 84 ${H+61} 70 ${H+61} L50 ${H+61} C36 ${H+61} 23 ${H+50} 23 ${H+34} L23 100 C23 84 27 75 33 67 C40 58 46 50 46 41 Z`}/>
             </clipPath>
           </defs>
           <g clipPath="url(#bottle)">
-            <rect x="0" y="0" width={W} height={H+70} fill="rgba(120,90,70,0.12)"/>
+            <rect x="0" y="0" width={W} height={H+78} fill="rgba(120,90,70,0.12)"/>
             {fills.map((s,i)=>(
-              <rect key={i} x="0" y={H+60-s.y-s.h} width={W} height={s.h+1} fill={s.color} opacity="0.92"/>
+              <rect key={i} x="0" y={H+61-s.y-s.h} width={W} height={s.h+1} fill={s.color} opacity="0.92"/>
             ))}
-            <rect x="22" y="8" width="14" height={H+48} fill="url(#glassShine)" opacity="0.45"/>
+            <rect x="30" y="10" width="14" height={H+50} fill="url(#glassShine)" opacity="0.44"/>
+            <rect x="48" y="10" width="42" height={H+52} fill="url(#bottleDark)" opacity="0.25"/>
           </g>
-          <path d={`M43 4 L67 4 L67 40 C67 49 73 57 80 66 C86 74 90 82 90 96 L90 ${H+35} C90 ${H+50} 78 ${H+60} 64 ${H+60} L46 ${H+60} C32 ${H+60} 20 ${H+50} 20 ${H+35} L20 96 C20 82 24 74 30 66 C37 57 43 49 43 40 Z`}
-            fill="none" stroke="rgba(70,55,45,0.55)" strokeWidth="2"/>
-          <rect x="46" y="0" width="18" height="8" rx="2" fill="#B7894C" opacity="0.95"/>
-          <rect x="44" y="8" width="22" height="7" rx="2" fill="#6A4A33" opacity="0.8"/>
+          <path d={`M46 6 L74 6 L74 41 C74 50 80 58 87 67 C93 75 97 84 97 100 L97 ${H+34} C97 ${H+50} 84 ${H+61} 70 ${H+61} L50 ${H+61} C36 ${H+61} 23 ${H+50} 23 ${H+34} L23 100 C23 84 27 75 33 67 C40 58 46 50 46 41 Z`}
+            fill="none" stroke="rgba(65,48,38,0.7)" strokeWidth="2.2"/>
+          <rect x="50" y="0" width="20" height="8" rx="2" fill="#B98A4E" opacity="0.95"/>
+          <rect x="48" y="8" width="24" height="8" rx="2" fill="#6B4A34" opacity="0.85"/>
+          <ellipse cx="60" cy={H+62} rx="22" ry="5" fill="rgba(0,0,0,.08)"/>
         </svg>
       </div>
       <div style={{flex:1,paddingTop:8}}>
@@ -1489,6 +1511,7 @@ const SettingsPanel=({onBack,profile,setProfile,theme,setTheme})=>{
   const COUNTRIES=["Australia","New Zealand","France","Italy","Spain","USA","Argentina","Chile","South Africa","Germany","Portugal","Austria","Other"];
   const [form,setForm]=useState({
     name:profile.name||"",
+    description:profile.description||"",
     surname:profile.surname||"",
     cellarName:profile.cellarName||"",
     bio:profile.bio||"",
@@ -1519,6 +1542,10 @@ const SettingsPanel=({onBack,profile,setProfile,theme,setTheme})=>{
           <label style={{display:"block",fontSize:11,fontWeight:700,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:6,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Surname</label>
           <input value={form.surname} onChange={e=>set("surname",e.target.value)} placeholder="Surname"/>
         </div>
+      </div>
+      <div style={{marginBottom:14}}>
+        <label style={{display:"block",fontSize:11,fontWeight:700,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:6,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Title</label>
+        <input value={form.description} onChange={e=>set("description",e.target.value)} placeholder="e.g. Winemaker & Collector"/>
       </div>
       <div style={{marginBottom:14}}>
         <label style={{display:"block",fontSize:11,fontWeight:700,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:6,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Cellar / Winery Name</label>
@@ -1598,6 +1625,11 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
   const bottles=col.reduce((s,w)=>s+(w.bottles||0),0);
   const topWine=[...col].sort((a,b)=>(b.rating||0)-(a.rating||0))[0];
   const types=col.reduce((acc,w)=>{const t=w.wineType||guessWineType(w.grape,w.name);acc[t]=(acc[t]||0)+1;return acc;},{});
+  const wineryValue=col.reduce((s,w)=>s+((safeNum(w.cellarMeta?.pricePerBottle)||0)*(safeNum(w.bottles)||0)),0);
+  const readyCount=col.filter(w=>wineReadiness(w).key==="ready").length;
+  const regionStats=col.reduce((acc,w)=>{const r=(w.origin||"").split(",")[0]?.trim();if(r)acc[r]=(acc[r]||0)+1;return acc;},{});
+  const topRegion=Object.entries(regionStats).sort((a,b)=>b[1]-a[1])[0]?.[0]||"—";
+  const avgBottle=bottles?wineryValue/bottles:0;
   const profileBg=profile.profileBg||"linear-gradient(135deg,#6B0A0A 0%,var(--accent) 60%,#6B0A0A 100%)";
   const displayName=[profile.name,profile.surname].filter(Boolean).join(" ")||"Winemaker";
 
@@ -1642,6 +1674,18 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
             <div style={{fontSize:10,color:"var(--sub)",fontWeight:600,marginTop:3,textTransform:"uppercase",letterSpacing:"0.7px",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{l}</div>
           </div>
         ))}
+      </div>
+
+      <div style={{background:"var(--card)",borderRadius:16,border:"1px solid var(--border)",padding:"14px 16px",marginBottom:10}}>
+        <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:10,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Winery Summary</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8}}>
+          {[["Winery Value",`$${wineryValue.toLocaleString(undefined,{maximumFractionDigits:2})}`],["Most Common Origin",topRegion],["Ready to Drink",`${readyCount} wines`],["Avg Bottle Value",`$${avgBottle.toLocaleString(undefined,{maximumFractionDigits:2})}`]].map(([k,v])=>(
+            <div key={k} style={{background:"var(--inputBg)",borderRadius:12,padding:"10px 11px",border:"1px solid var(--border)"}}>
+              <div style={{fontSize:10,color:"var(--sub)",textTransform:"uppercase",fontWeight:700,letterSpacing:"0.7px",marginBottom:3,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{k}</div>
+              <div style={{fontSize:14,color:"var(--text)",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{v}</div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Wine bottle viz */}
@@ -1882,7 +1926,7 @@ export default function App(){
                 style={{background:"var(--accent)",color:"white",border:"none",borderRadius:20,padding:"16px 44px",fontSize:16,fontWeight:700,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',sans-serif",letterSpacing:"-0.3px",boxShadow:"0 8px 32px rgba(var(--accentRgb),0.5)",transition:"transform 0.15s,box-shadow 0.15s",display:"inline-flex",alignItems:"center",gap:10}}
                 onMouseEnter={e=>{e.currentTarget.style.transform="scale(1.04)";e.currentTarget.style.boxShadow="0 12px 40px rgba(var(--accentRgb),0.65)";}}
                 onMouseLeave={e=>{e.currentTarget.style.transform="scale(1)";e.currentTarget.style.boxShadow="0 8px 32px rgba(var(--accentRgb),0.5)";}}>
-                <Icon n="wine" size={18} color="white"/>
+                <Icon n="chevR" size={18} color="white"/>
                 {isNewUser?"Let's Get Started":"Enter My Winery"}
               </button>
             </div>
