@@ -404,21 +404,36 @@ const Icon=({n,size=20,color="currentColor",fill="none",sw=1.5})=>{
 
 const BrandLogo=({size=42})=>(
   <svg width={size} height={size} viewBox="0 0 72 72" aria-hidden="true">
-    <defs>
-      <linearGradient id="brandGrad" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0%" stopColor="#9B2335"/>
-        <stop offset="100%" stopColor="#F08FA0"/>
-      </linearGradient>
-      <linearGradient id="brandGlass" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stopColor="rgba(255,255,255,.8)"/>
-        <stop offset="100%" stopColor="rgba(255,255,255,.1)"/>
-      </linearGradient>
-    </defs>
-    <rect x="7" y="7" width="58" height="58" rx="18" fill="rgba(255,255,255,.05)" stroke="rgba(255,255,255,.13)" />
-    <path d="M18 18h36L36 54 18 18z" fill="url(#brandGrad)" opacity=".95"/>
-    <path d="M24 23h24L36 46 24 23z" fill="url(#brandGlass)" opacity=".75"/>
-    <path d="M20 16c8 4 24 4 32 0" stroke="rgba(255,255,255,.55)" strokeWidth="2" strokeLinecap="round"/>
-    <circle cx="36" cy="55" r="5" fill="url(#brandGrad)"/>
+    <rect x="7" y="7" width="58" height="58" rx="18" fill="rgba(255,255,255,.05)" stroke="rgba(255,255,255,.13)"/>
+    <path d="M20 18c6-7 26-7 32 0" fill="none" stroke="#4E7A3A" strokeWidth="2.2" strokeLinecap="round"/>
+    <path d="M36 18c0-4 2-7 6-8" fill="none" stroke="#4E7A3A" strokeWidth="1.8" strokeLinecap="round"/>
+    <path d="M27 15c2 0 4 1 5 3-2 1-4 1-6 0-1-1 0-3 1-3z" fill="#6FA44A"/>
+    <path d="M44 15c2 0 4 1 5 3-2 1-4 1-6 0-1-1 0-3 1-3z" fill="#6FA44A"/>
+    <path d="M52 18c3 1 4 4 3 7-2-1-4-2-5-4-1-1 0-2 2-3z" fill="#6FA44A"/>
+
+    <g fill="#6B2452" stroke="#3B1730" strokeWidth="1.2">
+      <circle cx="23" cy="26" r="5"/>
+      <circle cx="25" cy="33" r="5"/>
+      <circle cx="27" cy="40" r="5"/>
+      <circle cx="29" cy="47" r="5"/>
+      <circle cx="31" cy="54" r="5"/>
+      <circle cx="49" cy="26" r="5"/>
+      <circle cx="47" cy="33" r="5"/>
+      <circle cx="45" cy="40" r="5"/>
+      <circle cx="43" cy="47" r="5"/>
+      <circle cx="41" cy="54" r="5"/>
+      <circle cx="36" cy="58" r="5.3"/>
+    </g>
+
+    <g fill="rgba(255,255,255,.35)">
+      <circle cx="21.8" cy="24.6" r="1.1"/>
+      <circle cx="23.8" cy="31.8" r="1.1"/>
+      <circle cx="25.8" cy="38.8" r="1.1"/>
+      <circle cx="47.8" cy="24.6" r="1.1"/>
+      <circle cx="45.8" cy="31.8" r="1.1"/>
+      <circle cx="43.8" cy="38.8" r="1.1"/>
+      <circle cx="34.8" cy="56.6" r="1.1"/>
+    </g>
   </svg>
 );
 
@@ -1819,7 +1834,7 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.8 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.9 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
