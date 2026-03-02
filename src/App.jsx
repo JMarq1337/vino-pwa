@@ -482,7 +482,7 @@ const makeCSS=dark=>`
 const Stars=({value,onChange,size=17})=>(
   <div style={{display:"flex",gap:2}}>
     {[1,2,3,4,5].map(s=>(
-      <button key={s} onClick={()=>onChange?.(s)} style={{background:"none",border:"none",padding:"2px",color:s<=value?"#E8A020":"var(--sub)",transition:"transform 0.1s"}}
+      <button key={s} onClick={()=>onChange?.(s===value?0:s)} style={{background:"none",border:"none",padding:"2px",color:s<=value?"#E8A020":"var(--sub)",transition:"transform 0.1s"}}
         onMouseEnter={e=>{if(onChange)e.currentTarget.style.transform="scale(1.25)"}}
         onMouseLeave={e=>{e.currentTarget.style.transform="scale(1)"}}>
         <Icon n="star" size={size} fill={s<=value?"currentColor":"none"} color={s<=value?"#E8A020":"var(--sub)"} sw={1.5}/>
@@ -562,20 +562,23 @@ const PhotoPicker=({value,onChange,size=80,round})=>{
   );
 };
 
-const BottleGlyph=()=>{
+const BottleGlyph=({color="#8B1A1A"})=>{
+  const rgb=hexToRgb(color)||"139,26,26";
   return(
     <svg width="56" height="72" viewBox="0 0 56 72" aria-hidden="true">
       <path
         d="M20 4c4-2 12-2 16 0v3c0 1 0 2 1 3v13c0 3 2 6 4 9 4 5 6 10 6 16v16c0 5-5 7-19 7S9 69 9 64V48c0-6 2-11 6-16 2-3 4-6 4-9V10c1-1 1-2 1-3V4z"
-        fill="none"
+        fill={`rgba(${rgb},0.26)`}
         stroke="#121216"
         strokeWidth="1.8"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
+      <path d="M18 49h20v20H18z" fill={`rgba(${rgb},0.42)`}/>
       <path d="M19 30.5c6 1 12 1 18 0" stroke="#121216" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
       <path d="M19 48c6 1 12 1 18 0" stroke="#121216" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
       <path d="M20 14h16" stroke="#121216" strokeWidth="1.4" strokeLinecap="round"/>
+      <path d="M22 7h12v5H22z" fill="rgba(255,255,255,0.75)"/>
     </svg>
   );
 };
@@ -589,32 +592,38 @@ const WineCard=({wine,onClick})=>{
   const yearTag=wine.vintage?String(wine.vintage):null;
   const locationTag=wine.location?(wine.location+(wine.locationSlot?` · ${wine.locationSlot}`:"")):null;
   const priceTag=safeNum(wine.cellarMeta?.pricePerBottle);
+  const readinessTag=!wine.wishlist&&ready.key!=="none"?ready.label:null;
+  const priceText=!wine.wishlist&&priceTag!=null&&priceTag>0?`$${priceTag.toFixed(2)}`:null;
   return(
-    <div onClick={onClick} style={{background:"linear-gradient(180deg,var(--card),var(--inputBg))",borderRadius:20,padding:"16px",cursor:"pointer",border:"1px solid var(--border)",marginBottom:10,display:"flex",gap:14,alignItems:"flex-start",transition:"transform 0.15s,box-shadow 0.15s",boxShadow:"0 2px 10px var(--shadow)"}}
+    <div onClick={onClick} style={{background:"linear-gradient(180deg,var(--card),var(--inputBg))",borderRadius:20,padding:"16px",cursor:"pointer",border:"1px solid var(--border)",marginBottom:10,display:"flex",gap:14,alignItems:"stretch",transition:"transform 0.15s,box-shadow 0.15s",boxShadow:"0 2px 10px var(--shadow)",minHeight:154}}
       onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 8px 28px var(--shadow)";}}
       onMouseLeave={e=>{e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="0 2px 8px var(--shadow)";}}>
-      <div style={{width:60,height:76,borderRadius:14,background:`radial-gradient(circle at 25% 15%,rgba(255,255,255,.55),${tc.bg})`,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",border:"1px solid rgba(255,255,255,.5)",boxShadow:"inset 0 1px 8px rgba(255,255,255,.35)"}}>
+      <div style={{width:60,height:76,borderRadius:14,background:"var(--inputBg)",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",border:"1px solid var(--border)"}}>
         {wine.photo?<img src={wine.photo} alt={wine.name} style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<BottleGlyph color={tc.dot}/>}
       </div>
-      <div style={{flex:1,minWidth:0}}>
+      <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",justifyContent:"space-between",gap:8}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:3}}>
-          <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:15,fontWeight:700,color:"var(--text)",lineHeight:1.25,flex:1,paddingRight:8}}>{wine.name}</div>
+          <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:15,fontWeight:700,color:"var(--text)",lineHeight:1.25,flex:1,paddingRight:8,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden",minHeight:38,maxHeight:38}}>{wine.name}</div>
           {!wine.wishlist&&wine.bottles>0&&<div style={{fontSize:12,color:"var(--sub)",fontWeight:500,flexShrink:0,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{wine.bottles} {wine.bottles===1?"btl":"btls"}</div>}
         </div>
-        {(geo.region||geo.country)&&<div style={{fontSize:13,color:"var(--sub)",marginBottom:7,fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{geo.region||geo.country}</div>}
-        <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:6}}>
+        <div style={{fontSize:13,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",minHeight:19}}>
+          {geo.region||geo.country||"\u00A0"}
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"nowrap",overflow:"hidden",minHeight:24}}>
           <WineTypePill type={type}/>
           {yearTag&&<span style={{padding:"3px 8px",borderRadius:20,fontSize:11,fontWeight:700,color:"var(--text)",background:"var(--inputBg)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{yearTag}</span>}
-          {locationTag&&<span style={{padding:"3px 8px",borderRadius:20,fontSize:11,fontWeight:700,color:"var(--text)",background:"var(--inputBg)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{locationTag}</span>}
-          {!wine.wishlist&&ready.key!=="none"&&<span style={{padding:"3px 8px",borderRadius:20,fontSize:11,fontWeight:700,color:"#fff",background:ready.color,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{ready.label}</span>}
-          {!wine.wishlist&&priceTag!=null&&priceTag>0&&<span style={{padding:"3px 8px",borderRadius:20,fontSize:11,fontWeight:700,color:"var(--text)",background:"rgba(var(--accentRgb),0.12)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>${priceTag.toFixed(2)}</span>}
+          {locationTag&&<span style={{padding:"3px 8px",borderRadius:20,fontSize:11,fontWeight:700,color:"var(--text)",background:"var(--inputBg)",fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap",maxWidth:132,overflow:"hidden",textOverflow:"ellipsis"}}>{locationTag}</span>}
         </div>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          <div style={{display:"flex",gap:8,alignItems:"center",minWidth:0}}>
             {geo.country&&<span style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",display:"flex",alignItems:"center",gap:3}}><Icon n="location" size={11} color="var(--sub)"/>{geo.country}</span>}
-            {wine.grape&&<span style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>· {wine.grape.split("/")[0].trim()}</span>}
+            {wine.grape&&<span style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>· {wine.grape.split("/")[0].trim()}</span>}
           </div>
-          {wine.rating>0&&<Stars value={wine.rating} size={12}/>}
+          <div style={{display:"flex",gap:5,alignItems:"center",flexShrink:0}}>
+            {readinessTag&&<span style={{padding:"3px 8px",borderRadius:20,fontSize:11,fontWeight:700,color:"#fff",background:ready.color,fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap"}}>{readinessTag}</span>}
+            {priceText&&<span style={{padding:"3px 8px",borderRadius:20,fontSize:11,fontWeight:700,color:"var(--text)",background:"rgba(var(--accentRgb),0.12)",fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap"}}>{priceText}</span>}
+            {wine.rating>0&&<Stars value={wine.rating} size={12}/>}
+          </div>
         </div>
       </div>
     </div>
@@ -1469,10 +1478,35 @@ const WineBottleViz=({types,total})=>{
   const ORDER=["Red","White","Rosé","Sparkling","Dessert","Fortified","Other"];
   const segments=ORDER.map(t=>({type:t,count:types[t]||0,pct:total?Math.round(((types[t]||0)/total)*100):0,color:WINE_TYPE_COLORS[t]?.dot||"#888"})).filter(s=>s.count>0);
   if(!segments.length)return null;
+  const fillTop=34;
+  const fillBottom=200;
+  const fillHeight=fillBottom-fillTop;
+  let cursor=fillBottom;
+  const fills=segments.map((s,idx)=>{
+    const remaining=segments.length-idx;
+    const raw=Math.round((s.count/total)*fillHeight);
+    const minH=5;
+    const maxForThis=cursor-fillTop-(remaining-1)*minH;
+    const h=Math.max(minH,Math.min(raw,maxForThis));
+    const y=cursor-h;
+    cursor=y;
+    return {...s,y,h};
+  });
   return(
     <div style={{display:"flex",gap:12,alignItems:"flex-start",flexWrap:"wrap"}}>
       <div style={{flexShrink:0}}>
         <svg width="108" height="216" viewBox="0 0 108 216" role="img" aria-label="Collection breakdown bottle">
+          <defs>
+            <clipPath id="winery-bottle-fill">
+              <path d="M41 6c6-3 20-3 26 0v4c0 1 0 2 1 3v27c0 5 3 10 7 16 6 8 9 18 9 28v112c0 7-7 11-30 11s-30-4-30-11V84c0-10 3-20 9-28 4-6 7-11 7-16V13c1-1 1-2 1-3V6z"/>
+            </clipPath>
+          </defs>
+          <g clipPath="url(#winery-bottle-fill)">
+            <rect x="0" y="0" width="108" height="216" fill="rgba(255,255,255,0.96)"/>
+            {fills.map(s=>(
+              <rect key={s.type} x="0" y={s.y} width="108" height={s.h} fill={s.color} opacity="0.84"/>
+            ))}
+          </g>
           <path
             d="M41 6c6-3 20-3 26 0v4c0 1 0 2 1 3v27c0 5 3 10 7 16 6 8 9 18 9 28v112c0 7-7 11-30 11s-30-4-30-11V84c0-10 3-20 9-28 4-6 7-11 7-16V13c1-1 1-2 1-3V6z"
             fill="none"
@@ -1839,7 +1873,7 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.12 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.13 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
@@ -2119,7 +2153,7 @@ export default function App(){
           </div>
         </div>
         <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:58,fontWeight:800,color:"#EDE6E0",letterSpacing:"-2px",lineHeight:1,animation:"floatUp 1s 0.1s ease both"}}>Vinology</div>
-        <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:12,color:"rgba(237,230,224,0.3)",marginTop:8,letterSpacing:"6px",textTransform:"uppercase",animation:"floatUp 1s 0.2s ease both"}}>Personal Cellar</div>
+        <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:12,color:"rgba(237,230,224,0.3)",marginTop:16,letterSpacing:"6px",textTransform:"uppercase",animation:"floatUp 1s 0.2s ease both"}}>Personal Cellar</div>
 
         {/* Greeting + button — shown after logo phase */}
         {splashPhase==="greet"&&ready&&(
