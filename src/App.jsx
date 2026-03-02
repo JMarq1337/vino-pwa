@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { wineHoldings2021 } from "./data/wineHoldings2021";
 
 /* ── SUPABASE ─────────────────────────────────────────────────── */
 const SUPA_URL = "https://dfnvmwoacprkhxfbpybv.supabase.co";
@@ -30,12 +31,61 @@ const db = {
   }
 };
 
+const META_PREFIX = "[[VINO_META]]";
+const YEAR_NOW = new Date().getFullYear();
+const EXCEL_IMPORT_FLAG = "vino_excel_seed_v1";
+const safeNum = v => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+};
+const ratingFromHalliday = score => {
+  const n = safeNum(score);
+  if(!n) return 0;
+  if(n>=96) return 5;
+  if(n>=93) return 4;
+  if(n>=90) return 3;
+  if(n>=87) return 2;
+  if(n>=84) return 1;
+  return 0;
+};
+const parseWineMetaFromNotes = notes => {
+  if(!notes || typeof notes!=="string" || !notes.startsWith(META_PREFIX)) return { plain: notes||"", meta: null };
+  const nl = notes.indexOf("\n");
+  const metaRaw = nl===-1 ? notes.slice(META_PREFIX.length) : notes.slice(META_PREFIX.length, nl);
+  try{
+    const meta = JSON.parse(metaRaw);
+    const plain = nl===-1 ? "" : notes.slice(nl+1);
+    return { plain, meta };
+  }catch{
+    return { plain: notes, meta: null };
+  }
+};
+const encodeWineNotes = (plain,meta) => {
+  const clean = plain||"";
+  if(!meta) return clean;
+  const hasMeta = Object.values(meta).some(v=>v!==null&&v!==""&&v!==undefined);
+  if(!hasMeta) return clean;
+  return `${META_PREFIX}${JSON.stringify(meta)}${clean?`\n${clean}`:""}`;
+};
+const wineReadiness = w => {
+  const m=w.cellarMeta||{};
+  const s=safeNum(m.drinkStart);
+  const e=safeNum(m.drinkEnd);
+  if(!s&&!e) return {key:"none",label:"No window",color:"var(--sub)"};
+  if(s&&YEAR_NOW<s) return {key:"early",label:`Wait until ${s}`,color:"#2A5AB8"};
+  if(e&&YEAR_NOW>e) return {key:"late",label:`Past ${e}`,color:"#B83232"};
+  return {key:"ready",label:"Ready to drink",color:"#2F855A"};
+};
+
 const fromDb = {
-  wine: r=>({ id:r.id,name:r.name,origin:r.origin,grape:r.grape,alcohol:r.alcohol,vintage:r.vintage,bottles:r.bottles,rating:r.rating,notes:r.notes,review:r.review,tastingNotes:r.tasting_notes,datePurchased:r.date_purchased,wishlist:r.wishlist,color:r.color,photo:r.photo,location:r.location,locationSlot:r.location_slot,wineType:r.wine_type }),
+  wine: r=>{
+    const parsed=parseWineMetaFromNotes(r.notes);
+    return ({ id:r.id,name:r.name,origin:r.origin,grape:r.grape,alcohol:r.alcohol,vintage:r.vintage,bottles:r.bottles,rating:r.rating,notes:parsed.plain,cellarMeta:parsed.meta,review:r.review,tastingNotes:r.tasting_notes,datePurchased:r.date_purchased,wishlist:r.wishlist,color:r.color,photo:r.photo,location:r.location,locationSlot:r.location_slot,wineType:r.wine_type });
+  },
   note: r=>({ id:r.id,wineId:r.wine_id,title:r.title,content:r.content,date:r.date })
 };
 const toDb = {
-  wine: w=>({ id:w.id,name:w.name,origin:w.origin,grape:w.grape,alcohol:w.alcohol,vintage:w.vintage,bottles:w.bottles,rating:w.rating,notes:w.notes,review:w.review,tasting_notes:w.tastingNotes,date_purchased:w.datePurchased,wishlist:w.wishlist||false,color:w.color,photo:w.photo,location:w.location,location_slot:w.locationSlot,wine_type:w.wineType }),
+  wine: w=>({ id:w.id,name:w.name,origin:w.origin,grape:w.grape,alcohol:w.alcohol,vintage:w.vintage,bottles:w.bottles,rating:w.rating,notes:encodeWineNotes(w.notes,w.cellarMeta),review:w.review,tasting_notes:w.tastingNotes,date_purchased:w.datePurchased,wishlist:w.wishlist||false,color:w.color,photo:w.photo,location:w.location,location_slot:w.locationSlot,wine_type:w.wineType }),
   note: n=>({ id:n.id,wine_id:n.wineId,title:n.title,content:n.content,date:n.date })
 };
 
@@ -111,12 +161,58 @@ const LOCATIONS=["Rack A","Rack B","Rack C","Fridge Top","Fridge Bottom","Cellar
 const fmt=d=>d?new Date(d).toLocaleDateString("en-AU",{month:"short",year:"numeric"}):null;
 
 /* ── SEED DATA ────────────────────────────────────────────────── */
-const SEED_WINES=[
-  {id:"s1",name:"Penfolds Grange",origin:"Barossa Valley, Australia",grape:"Shiraz",alcohol:14.5,vintage:2018,bottles:3,rating:5,notes:"Pairs beautifully with slow-roasted lamb.",review:"Absolutely extraordinary.",tastingNotes:"Dark plum, leather, cedar, dark chocolate",datePurchased:"2023-06-15",wishlist:false,color:"#8B1A1A",photo:null,location:"Cellar Row 1",locationSlot:"B3",wineType:"Red"},
-  {id:"s2",name:"Château Margaux",origin:"Bordeaux, France",grape:"Cabernet Sauvignon blend",alcohol:13.5,vintage:2016,bottles:1,rating:5,notes:"Best with truffle risotto.",review:"Perfection in a glass.",tastingNotes:"Blackcurrant, violet, tobacco, cedar",datePurchased:"2022-12-01",wishlist:false,color:"#8B1A1A",photo:null,location:"Rack A",locationSlot:"A1",wineType:"Red"},
-  {id:"s3",name:"Cloudy Bay Sauvignon Blanc",origin:"Marlborough, New Zealand",grape:"Sauvignon Blanc",alcohol:13.0,vintage:2022,bottles:6,rating:4,notes:"Amazing with fresh seafood.",review:"My go-to white.",tastingNotes:"Passionfruit, lime, cut grass, gooseberry",datePurchased:"2023-09-20",wishlist:false,color:"#8B7355",photo:null,location:"Fridge Top",locationSlot:null,wineType:"White"},
-  {id:"s4",name:"Whispering Angel Rosé",origin:"Provence, France",grape:"Grenache / Cinsault",alcohol:13.0,vintage:2023,bottles:4,rating:4,notes:"Perfect for summer evenings.",review:"Elegant and refreshing.",tastingNotes:"Strawberry, peach, rose petal",datePurchased:"2023-11-10",wishlist:false,color:"#C47A8A",photo:null,location:"Fridge Bottom",locationSlot:null,wineType:"Rosé"},
-];
+const STORAGE_CODE_MAP = Object.fromEntries((wineHoldings2021.storageLocations||[]).map(r=>[r[0],r[1]]));
+const SEED_WINES=(wineHoldings2021.cellar||[]).map((r,i)=>{
+  const winery=(r.winery||"").trim();
+  const label=(r.label||"").trim();
+  const varietal=(r.varietal||"").trim();
+  const year=safeNum(r.year_num??r.year);
+  const name=[winery,label].filter(Boolean).join(" ").trim()||[varietal,year||""].filter(Boolean).join(" ").trim()||`Wine ${i+1}`;
+  const grape=varietal||"";
+  const wineType=guessWineType(grape,name);
+  const typeColor=(WINE_TYPE_COLORS[wineType]||WINE_TYPE_COLORS.Other).dot;
+  const cellarMeta={
+    drinkStart:safeNum(r.drink_start_num??r.drinking_window_start),
+    drinkEnd:safeNum(r.drink_end_num??r.drinking_window_end),
+    pricePerBottle:safeNum(r.price_per_bottle_num??r.price_per_bottle??r.btl_price),
+    rrp:safeNum(r.rrp_num??r.rrp??r.rrp_2),
+    totalPaid:safeNum(r.total_paid_num??r.total_paid??r.total_cost),
+    insuranceValue:safeNum(r.total_insurance_num??r.total_ins_value),
+    supplier:r.supplier||r.from||"",
+    sourceStorage:r.where_stored||"",
+    hallidayScore:safeNum(r.halliday),
+    otherRatings:r.other_ratings||"",
+    rawReviewLink:r.reviews||r.webpage||"",
+  };
+  const extraNotes=[
+    r.notes||"",
+    r.halliday_review||"",
+    r.other_review_1||"",
+    r.other_review_2||"",
+    r.other_review_3||"",
+  ].filter(Boolean).join("\n\n");
+  return{
+    id:`xl-${r.row_index||i+1}`,
+    name,
+    origin:r.region?`${r.region}, Australia`:r.region||"",
+    grape,
+    alcohol:0,
+    vintage:year||null,
+    bottles:Math.max(0,safeNum(r.remaining_num??r.remaining)||0),
+    rating:ratingFromHalliday(r.halliday),
+    notes:extraNotes,
+    cellarMeta,
+    review:r.halliday_review||"",
+    tastingNotes:r.other_ratings||"",
+    datePurchased:r.acquired_date_iso||"",
+    wishlist:false,
+    color:typeColor,
+    photo:null,
+    location:STORAGE_CODE_MAP[r.where_stored]||r.where_stored||"Cellar",
+    locationSlot:r.box_no||null,
+    wineType,
+  };
+});
 const SEED_WISHLIST=[
   {id:"w1",name:"Opus One",origin:"Napa Valley, USA",grape:"Cabernet Sauvignon blend",alcohol:14.5,vintage:2019,notes:"Dream bottle.",wishlist:true,color:"#1A1A2E",photo:null,wineType:"Red"},
   {id:"w2",name:"Dom Pérignon",origin:"Champagne, France",grape:"Chardonnay / Pinot Noir",alcohol:12.5,vintage:2013,notes:"For a very special celebration.",wishlist:true,color:"#8B7355",photo:null,wineType:"Sparkling"},
@@ -285,6 +381,7 @@ const PhotoPicker=({value,onChange,size=80,round})=>{
 const WineCard=({wine,onClick})=>{
   const type=wine.wineType||guessWineType(wine.grape,wine.name);
   const tc=WINE_TYPE_COLORS[type]||WINE_TYPE_COLORS.Other;
+  const ready=wineReadiness(wine);
   return(
     <div onClick={onClick} style={{background:"var(--card)",borderRadius:20,padding:"16px",cursor:"pointer",border:"1px solid var(--border)",marginBottom:10,display:"flex",gap:14,alignItems:"flex-start",transition:"transform 0.15s,box-shadow 0.15s",boxShadow:"0 2px 8px var(--shadow)"}}
       onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 8px 28px var(--shadow)";}}
@@ -300,6 +397,7 @@ const WineCard=({wine,onClick})=>{
         {wine.origin&&<div style={{fontSize:13,color:"var(--sub)",marginBottom:7,fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{wine.origin.split(",")[0]}</div>}
         <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:6}}>
           <WineTypePill type={type}/>
+          {!wine.wishlist&&ready.key!=="none"&&<span style={{padding:"3px 8px",borderRadius:20,fontSize:11,fontWeight:700,color:"#fff",background:ready.color,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{ready.label}</span>}
         </div>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
@@ -317,6 +415,10 @@ const WineCard=({wine,onClick})=>{
 const WineDetail=({wine,onEdit,onDelete,onMove})=>{
   const type=wine.wineType||guessWineType(wine.grape,wine.name);
   const tc=WINE_TYPE_COLORS[type]||WINE_TYPE_COLORS.Other;
+  const ready=wineReadiness(wine);
+  const m=wine.cellarMeta||{};
+  const drinkWindow=(m.drinkStart||m.drinkEnd)?`${m.drinkStart||"?"} - ${m.drinkEnd||"?"}`:null;
+  const pricePerBottle=safeNum(m.pricePerBottle);
   return(
     <div>
       <div style={{borderRadius:16,background:tc.bg,padding:"20px",marginBottom:16,position:"relative",overflow:"hidden",minHeight:100}}>
@@ -327,7 +429,7 @@ const WineDetail=({wine,onEdit,onDelete,onMove})=>{
         {wine.rating>0&&<div style={{marginTop:10}}><Stars value={wine.rating} size={16}/></div>}
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
-        {[["Grape",wine.grape],["Alcohol",wine.alcohol?`${wine.alcohol}%`:null],!wine.wishlist&&["Bottles",wine.bottles],!wine.wishlist&&["Location",wine.location?(wine.location+(wine.locationSlot?` · ${wine.locationSlot}`:"")):null],["Purchased",fmt(wine.datePurchased)]].filter(x=>x&&x[1]).map(([l,v])=>(
+        {[["Grape",wine.grape],["Alcohol",wine.alcohol?`${wine.alcohol}%`:null],!wine.wishlist&&["Readiness",ready.label],!wine.wishlist&&["Drink Window",drinkWindow],!wine.wishlist&&["Price / Bottle",pricePerBottle?`$${pricePerBottle.toFixed(2)}`:null],!wine.wishlist&&["Bottles",wine.bottles],!wine.wishlist&&["Location",wine.location?(wine.location+(wine.locationSlot?` · ${wine.locationSlot}`:"")):null],["Purchased",fmt(wine.datePurchased)]].filter(x=>x&&x[1]).map(([l,v])=>(
           <div key={l} style={{background:"var(--inputBg)",borderRadius:12,padding:"11px 13px"}}>
             <div style={{fontSize:10,color:"var(--sub)",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:3,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{l}</div>
             <div style={{fontSize:14,color:"var(--text)",fontWeight:500,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{v}</div>
@@ -351,8 +453,8 @@ const WineDetail=({wine,onEdit,onDelete,onMove})=>{
 
 /* ── WINE FORM ────────────────────────────────────────────────── */
 const WineForm=({initial,onSave,onClose,isWishlist})=>{
-  const blank={name:"",origin:"",grape:"",wineType:"Red",alcohol:"",vintage:"",bottles:"1",rating:0,notes:"",review:"",tastingNotes:"",datePurchased:"",wishlist:!!isWishlist,photo:null,location:"Rack A",locationSlot:""};
-  const [f,setF]=useState(initial?{...blank,...initial,alcohol:initial.alcohol?.toString()||"",vintage:initial.vintage?.toString()||"",bottles:initial.bottles?.toString()||"",locationSlot:initial.locationSlot||"",wineType:initial.wineType||guessWineType(initial.grape||"",initial.name||"")}:blank);
+  const blank={name:"",origin:"",grape:"",wineType:"Red",alcohol:"",vintage:"",bottles:"1",rating:0,notes:"",review:"",tastingNotes:"",datePurchased:"",wishlist:!!isWishlist,photo:null,location:"Rack A",locationSlot:"",drinkStart:"",drinkEnd:"",pricePerBottle:"",rrp:"",totalPaid:"",insuranceValue:"",supplier:""};
+  const [f,setF]=useState(initial?{...blank,...initial,alcohol:initial.alcohol?.toString()||"",vintage:initial.vintage?.toString()||"",bottles:initial.bottles?.toString()||"",locationSlot:initial.locationSlot||"",wineType:initial.wineType||guessWineType(initial.grape||"",initial.name||""),drinkStart:initial.cellarMeta?.drinkStart?.toString()||"",drinkEnd:initial.cellarMeta?.drinkEnd?.toString()||"",pricePerBottle:initial.cellarMeta?.pricePerBottle?.toString()||"",rrp:initial.cellarMeta?.rrp?.toString()||"",totalPaid:initial.cellarMeta?.totalPaid?.toString()||"",insuranceValue:initial.cellarMeta?.insuranceValue?.toString()||"",supplier:initial.cellarMeta?.supplier||""}:blank);
   const set=(k,v)=>setF(p=>({...p,[k]:v}));
   const [q,setQ]=useState(initial?.name||"");
   const [sugs,setSugs]=useState([]);
@@ -363,7 +465,7 @@ const WineForm=({initial,onSave,onClose,isWishlist})=>{
     if(!f.name)return;
     const wt=f.wineType||guessWineType(f.grape,f.name);
     const tc=WINE_TYPE_COLORS[wt]||WINE_TYPE_COLORS.Other;
-    onSave({...f,id:f.id||uid(),alcohol:parseFloat(f.alcohol)||0,vintage:parseInt(f.vintage)||null,bottles:parseInt(f.bottles)||0,locationSlot:f.locationSlot||null,wineType:wt,color:tc.dot});
+    onSave({...f,id:f.id||uid(),alcohol:parseFloat(f.alcohol)||0,vintage:parseInt(f.vintage)||null,bottles:parseInt(f.bottles)||0,locationSlot:f.locationSlot||null,wineType:wt,color:tc.dot,cellarMeta:{...(initial?.cellarMeta||{}),drinkStart:parseInt(f.drinkStart)||null,drinkEnd:parseInt(f.drinkEnd)||null,pricePerBottle:parseFloat(f.pricePerBottle)||null,rrp:parseFloat(f.rrp)||null,totalPaid:parseFloat(f.totalPaid)||null,insuranceValue:parseFloat(f.insuranceValue)||null,supplier:f.supplier||""}});
     onClose();
   };
   return(
@@ -414,9 +516,24 @@ const WineForm=({initial,onSave,onClose,isWishlist})=>{
           {!isWishlist&&(
             <div style={{display:"grid",gridTemplateColumns:"1fr 2fr 1fr",gap:10}}>
               <Field label="Bottles" value={f.bottles} onChange={v=>set("bottles",v)} type="number" placeholder="1" optional/>
-              <SelField label="Location" value={f.location} onChange={v=>set("location",v)} options={LOCATIONS}/>
+              <SelField label="Location" value={f.location} onChange={v=>set("location",v)} options={[...new Set([...LOCATIONS,f.location].filter(Boolean))]}/>
               <Field label="Slot" value={f.locationSlot} onChange={v=>set("locationSlot",v)} placeholder="A3" optional/>
             </div>
+          )}
+          {!isWishlist&&(
+            <>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+                <Field label="Drink From" value={f.drinkStart} onChange={v=>set("drinkStart",v)} type="number" placeholder="2026" optional/>
+                <Field label="Drink By" value={f.drinkEnd} onChange={v=>set("drinkEnd",v)} type="number" placeholder="2034" optional/>
+                <Field label="Supplier" value={f.supplier} onChange={v=>set("supplier",v)} placeholder="WS / Local shop" optional/>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:10}}>
+                <Field label="Price / Bottle" value={f.pricePerBottle} onChange={v=>set("pricePerBottle",v)} type="number" placeholder="29.9" optional/>
+                <Field label="RRP" value={f.rrp} onChange={v=>set("rrp",v)} type="number" placeholder="40" optional/>
+                <Field label="Total Paid" value={f.totalPaid} onChange={v=>set("totalPaid",v)} type="number" placeholder="179.5" optional/>
+                <Field label="Insurance Value" value={f.insuranceValue} onChange={v=>set("insuranceValue",v)} type="number" placeholder="240" optional/>
+              </div>
+            </>
           )}
           <Field label="Tasting Notes" value={f.tastingNotes} onChange={v=>set("tastingNotes",v)} placeholder="Dark plum, cedar…" optional/>
           <Field label="Personal Notes" value={f.notes} onChange={v=>set("notes",v)} placeholder="Pairings, memories…" rows={2} optional/>
@@ -750,7 +867,7 @@ const TYPE_STYLES={
 };
 const TYPE_EMOJI={Red:"🍷",White:"🥂",Rosé:"🌸",Sparkling:"✨",Dessert:"🍯",Fortified:"🏰",Other:"🍾"};
 
-const exportToExcel=async(wines,wishlist)=>{
+const exportToExcel=async(wines,wishlist,notes,{includeWishlist=true,includeNotes=false}={})=>{
   // Load SheetJS
   if(!window.XLSX){
     await new Promise((res,rej)=>{
@@ -763,7 +880,7 @@ const exportToExcel=async(wines,wishlist)=>{
   const X=window.XLSX;
   const wb=X.utils.book_new();
   const col=wines.filter(w=>!w.wishlist);
-  const wish=wishlist;
+  const wish=includeWishlist?wishlist:[];
   const today=new Date().toLocaleDateString("en-AU",{day:"numeric",month:"long",year:"numeric"});
   const totalBottles=col.reduce((s,w)=>s+(w.bottles||0),0);
   const rated=col.filter(w=>w.rating>0);
@@ -793,12 +910,12 @@ const exportToExcel=async(wines,wishlist)=>{
 
   // ── SHEET 1: My Collection ────────────────────────────────────
   const ws1={};
-  const COL_W=[{wch:34},{wch:24},{wch:22},{wch:10},{wch:9},{wch:8},{wch:9},{wch:9},{wch:14},{wch:8},{wch:16},{wch:38}];
+  const COL_W=[{wch:34},{wch:24},{wch:22},{wch:10},{wch:9},{wch:8},{wch:9},{wch:9},{wch:10},{wch:10},{wch:12},{wch:10},{wch:11},{wch:11},{wch:14},{wch:8},{wch:16},{wch:38}];
   ws1["!cols"]=COL_W;
   let r=0;
 
   // Title row
-  const NCOLS=11;
+  const NCOLS=17;
   for(let c=0;c<=NCOLS;c++){
     const addr=X.utils.encode_cell({r,c});
     ws1[addr]={t:"s",v:c===0?`My Wine Cellar — ${col.length} wines · ${totalBottles} bottles`:"",
@@ -837,7 +954,7 @@ const exportToExcel=async(wines,wishlist)=>{
     r++;
 
     // Column headers
-    const HDRS=["Wine Name","Grape / Blend","Origin / Region","Type","Vintage","Bottles","Rating","Alc %","Location","Slot","Date Purchased","Tasting Notes"];
+    const HDRS=["Wine Name","Grape / Blend","Origin / Region","Type","Vintage","Bottles","Rating","Alc %","Drink From","Drink By","Price/Btl","RRP","Total Paid","Insured","Supplier","Location","Slot","Tasting Notes"];
     HDRS.forEach((h,ci)=>{
       const addr=X.utils.encode_cell({r,c:ci});
       ws1[addr]={t:"s",v:h,s:{
@@ -854,8 +971,8 @@ const exportToExcel=async(wines,wishlist)=>{
     sorted.forEach((w,idx)=>{
       const bg=idx%2===0?tc.row:tc.alt;
       const bs=cellStyle(bg);
-      const dateFmt=w.datePurchased?new Date(w.datePurchased).toLocaleDateString("en-AU",{day:"numeric",month:"short",year:"numeric"}):"-";
       const stars="★".repeat(w.rating||0)+"☆".repeat(5-(w.rating||0));
+      const m=w.cellarMeta||{};
       const vals=[
         w.name||"",
         w.grape||"-",
@@ -865,15 +982,21 @@ const exportToExcel=async(wines,wishlist)=>{
         w.bottles||0,
         stars,
         w.alcohol?`${w.alcohol}%`:"-",
+        m.drinkStart||"-",
+        m.drinkEnd||"-",
+        m.pricePerBottle!=null?m.pricePerBottle:"-",
+        m.rrp!=null?m.rrp:"-",
+        m.totalPaid!=null?m.totalPaid:"-",
+        m.insuranceValue!=null?m.insuranceValue:"-",
+        m.supplier||"-",
         w.location||"-",
         w.locationSlot||"-",
-        dateFmt,
         w.tastingNotes||"-",
       ];
       vals.forEach((val,ci)=>{
         const addr=X.utils.encode_cell({r,c:ci});
         const isNum=typeof val==="number";
-        let s={...cellStyle(bg,ci===0?"1A1210":ci===4?tc.hdr:"4A4040",ci===0,ci===0?10.5:9,ci>=5&&ci<=7?"center":"left",ci===11)};
+        let s={...cellStyle(bg,ci===0?"1A1210":ci===4?tc.hdr:"4A4040",ci===0,ci===0?10.5:9,[5,6,7,8,9,10,11,12,13].includes(ci)?"center":"left",ci===17)};
         if(ci===4&&val!=="-")s.font={...s.font,bold:true,color:{rgb:tc.hdr}};
         if(ci===6)s.font={...s.font,color:{rgb:"C08010"}};
         ws1[addr]={t:isNum?"n":"s",v:val,s};
@@ -895,10 +1018,11 @@ const exportToExcel=async(wines,wishlist)=>{
   X.utils.book_append_sheet(wb,ws1,"My Collection");
 
   // ── SHEET 2: Wishlist ─────────────────────────────────────────
-  const ws2={};
-  ws2["!cols"]=[{wch:34},{wch:24},{wch:22},{wch:12},{wch:9},{wch:9},{wch:40}];
-  ws2["!merges"]=[];
-  let r2=0;
+  if(includeWishlist){
+    const ws2={};
+    ws2["!cols"]=[{wch:34},{wch:24},{wch:22},{wch:12},{wch:9},{wch:9},{wch:40}];
+    ws2["!merges"]=[];
+    let r2=0;
 
   for(let c=0;c<=6;c++){
     const addr=X.utils.encode_cell({r:r2,c});
@@ -948,8 +1072,9 @@ const exportToExcel=async(wines,wishlist)=>{
     });
   });
 
-  ws2["!ref"]=X.utils.encode_range({r:0,c:0},{r:r2,c:6});
-  X.utils.book_append_sheet(wb,ws2,"Wishlist");
+    ws2["!ref"]=X.utils.encode_range({r:0,c:0},{r:r2,c:6});
+    X.utils.book_append_sheet(wb,ws2,"Wishlist");
+  }
 
   // ── SHEET 3: Summary ──────────────────────────────────────────
   const ws3={};
@@ -1017,6 +1142,37 @@ const exportToExcel=async(wines,wishlist)=>{
   ws3["!ref"]=X.utils.encode_range({r:0,c:0},{r:r3,c:5});
   X.utils.book_append_sheet(wb,ws3,"Summary");
 
+  // ── SHEET 4: Notes (optional) ────────────────────────────────
+  if(includeNotes){
+    const ws4={};
+    const notesRows=(notes||[]).slice().sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+    ws4["!cols"]=[{wch:16},{wch:36},{wch:26},{wch:90}];
+    ws4["!merges"]=[];
+    let r4=0;
+    for(let c=0;c<=3;c++){
+      const addr=X.utils.encode_cell({r:r4,c});
+      ws4[addr]={t:"s",v:c===0?`Tasting Journal — ${notesRows.length} notes`:"",s:cellStyle("213547","FFFFFF",true,15)};
+    }
+    ws4["!merges"].push({s:{r:r4,c:0},e:{r:r4,c:3}});
+    r4++;
+    ["Date","Title","Wine","Note"].forEach((h,ci)=>{
+      const addr=X.utils.encode_cell({r:r4,c:ci});
+      ws4[addr]={t:"s",v:h,s:cellStyle("EAF0F6","213547",true,10,"center")};
+    });
+    r4++;
+    notesRows.forEach((n,idx)=>{
+      const wineName=(col.find(w=>w.id===n.wineId)?.name)||"-";
+      const bg=idx%2===0?"FFFFFF":"F7F9FC";
+      [n.date||"-",n.title||"-",wineName,n.content||""].forEach((v,ci)=>{
+        const addr=X.utils.encode_cell({r:r4,c:ci});
+        ws4[addr]={t:"s",v,s:cellStyle(bg,"1F2937",false,9,"left",ci===3)};
+      });
+      r4++;
+    });
+    ws4["!ref"]=X.utils.encode_range({r:0,c:0},{r:r4,c:3});
+    X.utils.book_append_sheet(wb,ws4,"Notes");
+  }
+
   // Download
   X.writeFile(wb,`vino-cellar-${new Date().toISOString().slice(0,10)}.xlsx`,{bookSST:false,cellStyles:true});
 };
@@ -1027,7 +1183,7 @@ const WineBottleViz=({types,total})=>{
   const segments=ORDER.map(t=>({type:t,count:types[t]||0,pct:total?Math.round(((types[t]||0)/total)*100):0,color:WINE_TYPE_COLORS[t]?.dot||"#888"})).filter(s=>s.count>0);
   if(!segments.length)return null;
   // Build SVG bottle with stacked fill
-  const H=180,W=70;
+  const H=220,W=110;
   let cumY=0;
   const fills=segments.map(s=>{
     const h=(s.pct/100)*H;
@@ -1038,25 +1194,28 @@ const WineBottleViz=({types,total})=>{
   return(
     <div style={{display:"flex",gap:20,alignItems:"flex-start"}}>
       <div style={{flexShrink:0}}>
-        <svg width={W} height={H+60} viewBox={`0 0 ${W} ${H+60}`}>
+        <svg width={W} height={H+70} viewBox={`0 0 ${W} ${H+70}`}>
           <defs>
+            <linearGradient id="glassShine" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor="rgba(255,255,255,0.55)"/>
+              <stop offset="40%" stopColor="rgba(255,255,255,0.12)"/>
+              <stop offset="100%" stopColor="rgba(255,255,255,0.02)"/>
+            </linearGradient>
             <clipPath id="bottle">
-              {/* bottle shape: neck then body */}
-              <path d={`M28 0 L28 20 Q20 25 18 38 L14 50 Q10 55 10 62 L10 ${H+45} Q10 ${H+55} 20 ${H+55} L50 ${H+55} Q60 ${H+55} 60 ${H+45} L60 62 Q60 55 56 50 L52 38 Q50 25 42 20 L42 0 Z`}/>
+              <path d={`M43 4 L67 4 L67 40 C67 49 73 57 80 66 C86 74 90 82 90 96 L90 ${H+35} C90 ${H+50} 78 ${H+60} 64 ${H+60} L46 ${H+60} C32 ${H+60} 20 ${H+50} 20 ${H+35} L20 96 C20 82 24 74 30 66 C37 57 43 49 43 40 Z`}/>
             </clipPath>
           </defs>
-          {/* Fills clipped to bottle shape */}
           <g clipPath="url(#bottle)">
-            <rect x="0" y="0" width={W} height={H+60} fill="var(--inputBg)"/>
+            <rect x="0" y="0" width={W} height={H+70} fill="rgba(120,90,70,0.12)"/>
             {fills.map((s,i)=>(
-              <rect key={i} x="0" y={H+55-s.y-s.h} width={W} height={s.h+1} fill={s.color} opacity="0.9"/>
+              <rect key={i} x="0" y={H+60-s.y-s.h} width={W} height={s.h+1} fill={s.color} opacity="0.92"/>
             ))}
+            <rect x="22" y="8" width="14" height={H+48} fill="url(#glassShine)" opacity="0.45"/>
           </g>
-          {/* Bottle outline */}
-          <path d={`M28 0 L28 20 Q20 25 18 38 L14 50 Q10 55 10 62 L10 ${H+45} Q10 ${H+55} 20 ${H+55} L50 ${H+55} Q60 ${H+55} 60 ${H+45} L60 62 Q60 55 56 50 L52 38 Q50 25 42 20 L42 0 Z`}
-            fill="none" stroke="var(--border)" strokeWidth="1.5"/>
-          {/* Cork */}
-          <rect x="26" y="0" width="18" height="6" rx="2" fill="#C4944A" opacity="0.8"/>
+          <path d={`M43 4 L67 4 L67 40 C67 49 73 57 80 66 C86 74 90 82 90 96 L90 ${H+35} C90 ${H+50} 78 ${H+60} 64 ${H+60} L46 ${H+60} C32 ${H+60} 20 ${H+50} 20 ${H+35} L20 96 C20 82 24 74 30 66 C37 57 43 49 43 40 Z`}
+            fill="none" stroke="rgba(70,55,45,0.55)" strokeWidth="2"/>
+          <rect x="46" y="0" width="18" height="8" rx="2" fill="#B7894C" opacity="0.95"/>
+          <rect x="44" y="8" width="22" height="7" rx="2" fill="#6A4A33" opacity="0.8"/>
         </svg>
       </div>
       <div style={{flex:1,paddingTop:8}}>
@@ -1289,6 +1448,9 @@ const SettingsPanel=({onBack,profile,setProfile,theme,setTheme})=>{
 /* ── PROFILE ──────────────────────────────────────────────────── */
 const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>{
   const [view,setView]=useState("main"); // main | settings | explore
+  const [exportOpen,setExportOpen]=useState(false);
+  const [includeWishlistExport,setIncludeWishlistExport]=useState(true);
+  const [includeNotesExport,setIncludeNotesExport]=useState(false);
   const col=wines.filter(w=>!w.wishlist);
   const bottles=col.reduce((s,w)=>s+(w.bottles||0),0);
   const topWine=[...col].sort((a,b)=>(b.rating||0)-(a.rating||0))[0];
@@ -1375,13 +1537,31 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
       </div>
 
       {/* Export */}
-      <div onClick={()=>exportToExcel(wines,wishlist)}
+      <div onClick={()=>setExportOpen(true)}
         style={{background:"var(--card)",borderRadius:16,border:"1px solid var(--border)",padding:"14px 16px",marginBottom:24,display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer",transition:"opacity 0.18s"}}
         onMouseEnter={e=>e.currentTarget.style.opacity="0.7"} onMouseLeave={e=>e.currentTarget.style.opacity="1"}>
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
       <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vino v6.1 · {displayName}</div>
+      <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
+        <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
+        <div style={{display:"grid",gap:10,marginBottom:16}}>
+          <button onClick={()=>setIncludeWishlistExport(v=>!v)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"10px 12px",borderRadius:12,border:`1.5px solid ${includeWishlistExport?"#9B2335":"var(--border)"}`,background:includeWishlistExport?"rgba(155,35,53,0.08)":"var(--inputBg)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:14,color:"var(--text)",fontWeight:600}}>
+            <span>Include wishlist sheet</span><span style={{fontSize:16,color:includeWishlistExport?"#9B2335":"var(--sub)"}}>{includeWishlistExport?"✓":"○"}</span>
+          </button>
+          <button onClick={()=>setIncludeNotesExport(v=>!v)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"10px 12px",borderRadius:12,border:`1.5px solid ${includeNotesExport?"#9B2335":"var(--border)"}`,background:includeNotesExport?"rgba(155,35,53,0.08)":"var(--inputBg)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:14,color:"var(--text)",fontWeight:600}}>
+            <span>Include tasting notes sheet</span><span style={{fontSize:16,color:includeNotesExport?"#9B2335":"var(--sub)"}}>{includeNotesExport?"✓":"○"}</span>
+          </button>
+          <div style={{fontSize:12,color:"var(--sub)",lineHeight:1.6,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+            Export always includes your full cellar with detailed wine fields and clean summary formatting.
+          </div>
+        </div>
+        <div style={{display:"flex",gap:8}}>
+          <Btn variant="secondary" onClick={()=>setExportOpen(false)} full>Cancel</Btn>
+          <Btn onClick={()=>{exportToExcel(wines,wishlist,notes,{includeWishlist:includeWishlistExport,includeNotes:includeNotesExport});setExportOpen(false);}} full icon="export">Export</Btn>
+        </div>
+      </Modal>
     </div>
   );
 };
@@ -1427,9 +1607,20 @@ export default function App(){
           await Promise.all([...SEED_WINES,...SEED_WISHLIST].map(w=>db.upsert("wines",toDb.wine(w))));
           await Promise.all(SEED_NOTES.map(n=>db.upsert("tasting_notes",toDb.note(n))));
           setWines(SEED_WINES);setWishlist(SEED_WISHLIST);setNotes(SEED_NOTES);
+          try{localStorage.setItem(EXCEL_IMPORT_FLAG,"1");}catch{}
           setIsNewUser(true);
         }else{
-          const all=wineRows.map(fromDb.wine);
+          let all=wineRows.map(fromDb.wine);
+          const importedOnce=(()=>{try{return localStorage.getItem(EXCEL_IMPORT_FLAG)==="1";}catch{return false;}})();
+          if(!importedOnce){
+            const ids=new Set(all.map(w=>w.id));
+            const toImport=SEED_WINES.filter(w=>!ids.has(w.id));
+            if(toImport.length){
+              await Promise.all(toImport.map(w=>db.upsert("wines",toDb.wine(w))));
+              all=[...all,...toImport];
+            }
+            try{localStorage.setItem(EXCEL_IMPORT_FLAG,"1");}catch{}
+          }
           setWines(all.filter(w=>!w.wishlist));
           setWishlist(all.filter(w=>w.wishlist));
           setNotes(noteRows.map(fromDb.note));
