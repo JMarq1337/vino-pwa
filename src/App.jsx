@@ -27,14 +27,24 @@ const db = {
   },
   async saveProfile(p) {
     try {
-      const payload={id:1,name:p.name,description:p.description,avatar:p.avatar,surname:p.surname||"",cellar_name:p.cellarName||"",bio:p.bio||"",country:p.country||"",profile_bg:p.profileBg||""};
-      // Upsert is safer than PATCH for first-run profile creation.
-      const r=await fetch(`${supa("profile")}?on_conflict=id`,{method:"POST",headers:UH,body:JSON.stringify(payload)});
-      if(!r.ok){
-        const r2=await fetch(`${supa("profile")}?id=eq.1`,{method:"PATCH",headers:UH,body:JSON.stringify(payload)});
-        if(!r2.ok)console.error("saveProfile failed",await r2.text());
+      const payload={name:p.name,description:p.description,avatar:p.avatar,surname:p.surname||"",cellar_name:p.cellarName||"",bio:p.bio||"",country:p.country||"",profile_bg:p.profileBg||""};
+      const patchHeaders={...BH,"Prefer":"return=representation"};
+      const rPatch=await fetch(`${supa("profile")}?id=eq.1`,{method:"PATCH",headers:patchHeaders,body:JSON.stringify(payload)});
+      if(rPatch.ok){
+        const rows=await rPatch.json().catch(()=>[]);
+        if(Array.isArray(rows)&&rows.length>0) return true;
+      }else{
+        console.error("saveProfile patch failed",await rPatch.text());
       }
-    }catch(e){console.error("saveProfile err",e);}
+
+      // Fallback insert/upsert if id=1 row does not exist.
+      const rPost=await fetch(`${supa("profile")}?on_conflict=id`,{method:"POST",headers:UH,body:JSON.stringify({id:1,...payload})});
+      if(!rPost.ok){
+        console.error("saveProfile post failed",await rPost.text());
+        return false;
+      }
+      return true;
+    }catch(e){console.error("saveProfile err",e);return false;}
   },
   async getProfile() {
     try {
@@ -1822,7 +1832,14 @@ export default function App(){
           setNotes(noteRows.length?noteRows.map(fromDb.note):(cache?.notes||[]));
           if(prof){
             // Remote profile should be source of truth for cross-device sync.
-            setProfileState({name:prof.name,description:prof.description,avatar:prof.avatar||null,cellarName:prof.cellarName||"",bio:prof.bio||"",country:prof.country||"",surname:prof.surname||"",profileBg:prof.profileBg||"",accent:cache?.profile?.accent||DEFAULT_PROFILE.accent});
+            const remoteProfile={name:prof.name,description:prof.description,avatar:prof.avatar||null,cellarName:prof.cellarName||"",bio:prof.bio||"",country:prof.country||"",surname:prof.surname||"",profileBg:prof.profileBg||"",accent:cache?.profile?.accent||DEFAULT_PROFILE.accent};
+            // If local cache has a different profile (recent in-session edit), retry sync to remote and keep local view.
+            if(cache?.profile && JSON.stringify({...cache.profile,accent:cache.profile.accent||DEFAULT_PROFILE.accent})!==JSON.stringify(remoteProfile)){
+              setProfileState({...cache.profile,accent:cache.profile.accent||DEFAULT_PROFILE.accent});
+              db.saveProfile({...cache.profile,accent:cache.profile.accent||DEFAULT_PROFILE.accent});
+            }else{
+              setProfileState(remoteProfile);
+            }
             // New user = profile name still matches the seed default or is empty
             setIsNewUser(!prof.name||(prof.name===DEFAULT_PROFILE.name&&!prof.cellarName));
           }else if(cache?.profile){
