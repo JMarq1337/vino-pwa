@@ -1457,51 +1457,59 @@ const WineBottleViz=({types,total})=>{
   const ORDER=["Red","White","Rosé","Sparkling","Dessert","Fortified","Other"];
   const segments=ORDER.map(t=>({type:t,count:types[t]||0,pct:total?Math.round(((types[t]||0)/total)*100):0,color:WINE_TYPE_COLORS[t]?.dot||"#888"})).filter(s=>s.count>0);
   if(!segments.length)return null;
-  const BODY_X=42;
-  const BODY_W=298;
-  const BODY_Y=24;
-  const BODY_H=56;
-  let cumX=0;
+  const H=232,W=126;
+  let cumY=0;
   const fills=segments.map(s=>{
-    const w=Math.max(2,(s.pct/100)*BODY_W);
-    const seg={...s,x:cumX,w};
-    cumX+=w;
+    const h=Math.max(3,(s.pct/100)*H);
+    const seg={...s,h,y:cumY};
+    cumY+=h;
     return seg;
   });
   return(
-    <div>
-      <svg width="100%" height="108" viewBox="0 0 384 108" role="img" aria-label="Collection breakdown bottle">
-        <defs>
-          <linearGradient id="hz-glass" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="rgba(255,255,255,.72)"/>
-            <stop offset="45%" stopColor="rgba(255,255,255,.16)"/>
-            <stop offset="100%" stopColor="rgba(255,255,255,0)"/>
-          </linearGradient>
-          <clipPath id="hz-bottle-clip">
-            <path d="M35 52c0-8 6-14 14-14h10V28c0-5 4-9 9-9h246c4 0 8 2 10 6l9 13h8c9 0 16 7 16 16s-7 16-16 16h-8l-9 13c-2 4-6 6-10 6H68c-5 0-9-4-9-9V70H49c-8 0-14-6-14-14z"/>
-          </clipPath>
-        </defs>
-        <ellipse cx="192" cy="94" rx="126" ry="7" fill="rgba(0,0,0,.08)"/>
-        <g clipPath="url(#hz-bottle-clip)">
-          <rect x="35" y="16" width="330" height="76" fill="rgba(50,38,32,.16)"/>
-          {fills.map((s,i)=><rect key={i} x={BODY_X+s.x} y={BODY_Y} width={s.w} height={BODY_H} fill={s.color} opacity="0.94"/>)}
-          <rect x="64" y="22" width="20" height="62" rx="10" fill="url(#hz-glass)" opacity="0.58"/>
-          <rect x="286" y="22" width="26" height="62" rx="13" fill="rgba(0,0,0,.14)" opacity="0.45"/>
-        </g>
-        <path d="M35 52c0-8 6-14 14-14h10V28c0-5 4-9 9-9h246c4 0 8 2 10 6l9 13h8c9 0 16 7 16 16s-7 16-16 16h-8l-9 13c-2 4-6 6-10 6H68c-5 0-9-4-9-9V70H49c-8 0-14-6-14-14z" fill="none" stroke="rgba(60,44,34,.68)" strokeWidth="2"/>
-        <rect x="335" y="45" width="18" height="18" rx="3" fill="#C7A067"/>
-        <rect x="352" y="47" width="7" height="14" rx="2" fill="#8B6A43"/>
-        <rect x="154" y="38" width="74" height="30" rx="6" fill="rgba(248,241,233,.72)" stroke="rgba(90,72,52,.24)" strokeWidth="1.2"/>
-        <path d="M160 53h62" stroke="rgba(90,72,52,.32)" strokeWidth="1"/>
-      </svg>
-      <div style={{marginTop:10,display:"grid",gap:8}}>
+    <div style={{display:"flex",gap:18,alignItems:"flex-start",flexWrap:"wrap"}}>
+      <div style={{flexShrink:0}}>
+        <svg width={W} height={H+82} viewBox={`0 0 ${W} ${H+82}`} role="img" aria-label="Collection breakdown bottle">
+          <defs>
+            <clipPath id="winery-bottle-clip">
+              <path d={`M49 6h28v21c0 6 2 11 6 16 8 9 12 18 12 31v${H-8}c0 9-7 16-16 16H47c-9 0-16-7-16-16V74c0-13 4-22 12-31 4-5 6-10 6-16V6z`}/>
+            </clipPath>
+            <linearGradient id="winery-gloss" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor="rgba(255,255,255,.8)"/>
+              <stop offset="55%" stopColor="rgba(255,255,255,.12)"/>
+              <stop offset="100%" stopColor="rgba(255,255,255,0)"/>
+            </linearGradient>
+            <linearGradient id="winery-shadow" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="rgba(32,24,20,.12)"/>
+              <stop offset="100%" stopColor="rgba(32,24,20,.48)"/>
+            </linearGradient>
+          </defs>
+          <g clipPath="url(#winery-bottle-clip)">
+            <rect x="0" y="0" width={W} height={H+82} fill="rgba(110,88,72,0.15)"/>
+            {fills.map((s,i)=><rect key={i} x="0" y={H+37-s.y-s.h} width={W} height={s.h} fill={s.color} opacity="0.95"/>)}
+            <rect x="38" y="16" width="11" height={H+26} rx="5" fill="url(#winery-gloss)" opacity="0.56"/>
+            <rect x="75" y="12" width="18" height={H+28} rx="9" fill="url(#winery-shadow)" opacity="0.35"/>
+          </g>
+          <path d={`M49 6h28v21c0 6 2 11 6 16 8 9 12 18 12 31v${H-8}c0 9-7 16-16 16H47c-9 0-16-7-16-16V74c0-13 4-22 12-31 4-5 6-10 6-16V6z`} fill="none" stroke="rgba(68,50,38,.72)" strokeWidth="2.4"/>
+          <rect x="52" y="0" width="22" height="8" rx="2" fill="#C79D64"/>
+          <rect x="50" y="8" width="26" height="8" rx="2" fill="#7B5B3A"/>
+          <rect x="44" y="93" width="38" height="26" rx="4" fill="rgba(247,241,234,.78)" stroke="rgba(102,82,64,.3)" strokeWidth="1.2"/>
+          <path d="M50 106h26" stroke="rgba(102,82,64,.34)" strokeWidth="1"/>
+          <ellipse cx="63" cy={H+74} rx="22" ry="5.5" fill="rgba(0,0,0,.13)"/>
+        </svg>
+      </div>
+      <div style={{flex:1,minWidth:220,paddingTop:8}}>
         {segments.map(s=>(
-          <div key={s.type} style={{display:"grid",gridTemplateColumns:"96px 1fr auto",gap:10,alignItems:"center"}}>
-            <span style={{fontSize:13,fontWeight:700,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{s.type}</span>
-            <div style={{height:6,background:"var(--inputBg)",borderRadius:10,overflow:"hidden"}}>
-              <div style={{height:"100%",width:`${s.pct}%`,background:s.color,borderRadius:10}}/>
+          <div key={s.type} style={{display:"flex",alignItems:"center",gap:9,marginBottom:10}}>
+            <div style={{width:10,height:10,borderRadius:"50%",background:s.color,flexShrink:0}}/>
+            <div style={{flex:1}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+                <span style={{fontSize:13,fontWeight:700,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{s.type}</span>
+                <span style={{fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{s.count} · {s.pct}%</span>
+              </div>
+              <div style={{height:4,background:"var(--inputBg)",borderRadius:4}}>
+                <div style={{height:"100%",width:`${s.pct}%`,background:s.color,borderRadius:4}}/>
+              </div>
             </div>
-            <span style={{fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{s.count} · {s.pct}%</span>
           </div>
         ))}
       </div>
@@ -2222,7 +2230,7 @@ export default function App(){
   if(isDesktop) return(
     <div style={{...cssVars,background:"radial-gradient(circle at 10% -10%,rgba(var(--accentRgb),.09),transparent 35%), var(--bg)",height:"100vh",display:"flex",overflow:"hidden",fontFamily:"'Plus Jakarta Sans',sans-serif",color:"var(--text)"}}>
       <style>{CSS}</style>
-      <div style={{width:236,flexShrink:0,background:dark?"linear-gradient(180deg,rgba(var(--accentRgb),0.32),rgba(10,10,12,0.9) 78%)":"linear-gradient(180deg,rgba(var(--accentRgb),0.42),rgba(var(--accentRgb),0.18) 65%,rgba(255,255,255,0.88) 100%)",display:"flex",flexDirection:"column",padding:"30px 14px 24px",borderRight:"1px solid rgba(255,255,255,.08)"}}>
+      <div style={{width:236,flexShrink:0,background:dark?"linear-gradient(180deg,rgba(var(--accentRgb),0.5) 0%,rgba(22,14,15,0.96) 66%)":"linear-gradient(180deg,rgba(var(--accentRgb),0.72) 0%,rgba(31,16,18,0.98) 72%)",display:"flex",flexDirection:"column",padding:"30px 14px 24px",borderRight:"1px solid rgba(255,255,255,.12)"}}>
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:36,paddingLeft:8}}>
           <BrandLogo size={28}/>
           <span style={{fontSize:20,fontWeight:800,color:"#EDE6E0",letterSpacing:"-0.5px"}}>Vinology</span>
@@ -2231,10 +2239,10 @@ export default function App(){
           {TABS.map(tb=>{
             const active=tab===tb.id;
             return(
-              <button key={tb.id} onClick={()=>setTab(tb.id)} style={{display:"flex",alignItems:"center",gap:11,padding:"11px 12px",borderRadius:11,border:"none",background:active?"rgba(var(--accentRgb),0.22)":"transparent",color:active?(dark?"var(--accentLight)":"rgba(255,255,255,0.96)"):(dark?"rgba(237,230,224,0.58)":"rgba(255,255,255,0.74)"),fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:active?700:500,fontSize:14,cursor:"pointer",transition:"all 0.15s",textAlign:"left",width:"100%"}}>
-                <Icon n={tb.ic} size={17} color={active?(dark?"var(--accentLight)":"rgba(255,255,255,0.96)"):(dark?"rgba(237,230,224,0.42)":"rgba(255,255,255,0.68)")}/>
+              <button key={tb.id} onClick={()=>setTab(tb.id)} style={{display:"flex",alignItems:"center",gap:11,padding:"11px 12px",borderRadius:11,border:"none",background:active?"rgba(255,255,255,0.14)":"transparent",color:active?"#FFFFFF":"rgba(255,255,255,0.82)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:active?700:500,fontSize:14,cursor:"pointer",transition:"all 0.15s",textAlign:"left",width:"100%"}}>
+                <Icon n={tb.ic} size={17} color={active?"#FFFFFF":"rgba(255,255,255,0.78)"}/>
                 {tb.label}
-                {active&&<div style={{marginLeft:"auto",width:5,height:5,borderRadius:"50%",background:"var(--accent)",flexShrink:0}}/>}
+                {active&&<div style={{marginLeft:"auto",width:5,height:5,borderRadius:"50%",background:"#FFFFFF",flexShrink:0}}/>}
               </button>
             );
           })}
@@ -2244,8 +2252,8 @@ export default function App(){
             {profile.avatar?<img src={profile.avatar} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<Icon n="user" size={15} color="var(--accentLight)"/>}
           </div>
           <div style={{minWidth:0}}>
-            <div style={{fontSize:13,fontWeight:700,color:"rgba(255,255,255,0.95)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{displayName}</div>
-            <div style={{fontSize:11,color:"rgba(255,255,255,0.62)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{profile.cellarName||profile.description||"My Cellar"}</div>
+            <div style={{fontSize:13,fontWeight:700,color:"#FFFFFF",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",textShadow:"0 1px 8px rgba(0,0,0,.35)"}}>{displayName}</div>
+            <div style={{fontSize:11,color:"rgba(255,255,255,0.78)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{profile.cellarName||profile.description||"My Cellar"}</div>
           </div>
         </div>
       </div>
@@ -2263,15 +2271,15 @@ export default function App(){
       <div data-scroll="main" style={{flex:1,overflowY:"auto",overflowX:"hidden",padding:"20px 20px 96px",WebkitOverflowScrolling:"touch"}}>
         {screens}
       </div>
-      <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:480,background:dark?"linear-gradient(180deg,rgba(var(--accentRgb),0.16),rgba(10,10,10,0.94) 52%)":"linear-gradient(180deg,rgba(var(--accentRgb),0.16),rgba(247,244,242,0.95) 58%)",backdropFilter:"blur(24px)",WebkitBackdropFilter:"blur(24px)",borderTop:`1px solid ${dark?"rgba(255,255,255,0.08)":"rgba(var(--accentRgb),0.2)"}`,padding:"10px 0 22px",zIndex:100}}>
+      <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:480,background:dark?"linear-gradient(180deg,rgba(var(--accentRgb),0.35) 0%,rgba(12,10,10,0.97) 52%)":"linear-gradient(180deg,rgba(var(--accentRgb),0.48) 0%,rgba(22,12,14,0.97) 58%)",backdropFilter:"blur(24px)",WebkitBackdropFilter:"blur(24px)",borderTop:"1px solid rgba(255,255,255,0.14)",padding:"10px 0 22px",zIndex:100}}>
         <div style={{display:"flex",justifyContent:"space-around"}}>
           {TABS.map(tb=>{
             const active=tab===tb.id;
             return(
-              <button key={tb.id} onClick={()=>setTab(tb.id)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,background:"none",border:"none",padding:"4px 12px",color:active?"var(--accent)":"var(--sub)",transition:"color 0.18s",fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:"pointer"}}>
-                <div style={{transform:active?"scale(1.1)":"scale(1)",transition:"transform 0.18s"}}><Icon n={tb.ic} size={22} color={active?"var(--accent)":"var(--sub)"}/></div>
+              <button key={tb.id} onClick={()=>setTab(tb.id)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,background:"none",border:"none",padding:"4px 12px",color:active?"#FFFFFF":"rgba(255,255,255,0.78)",transition:"color 0.18s",fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:"pointer"}}>
+                <div style={{transform:active?"scale(1.1)":"scale(1)",transition:"transform 0.18s"}}><Icon n={tb.ic} size={22} color={active?"#FFFFFF":"rgba(255,255,255,0.72)"}/></div>
                 <span style={{fontSize:9.5,fontWeight:active?700:500,letterSpacing:"0.3px"}}>{tb.label}</span>
-                <div style={{width:4,height:4,borderRadius:"50%",background:active?"var(--accent)":"transparent",transition:"background 0.18s"}}/>
+                <div style={{width:4,height:4,borderRadius:"50%",background:active?"#FFFFFF":"transparent",transition:"background 0.18s"}}/>
               </button>
             );
           })}
