@@ -562,22 +562,20 @@ const PhotoPicker=({value,onChange,size=80,round})=>{
   );
 };
 
-const BottleGlyph=({color="#8B1A1A"})=>{
+const BottleGlyph=()=>{
   return(
     <svg width="56" height="72" viewBox="0 0 56 72" aria-hidden="true">
-      <defs>
-        <clipPath id="b-outline-card">
-          <path d="M22 3c3-1 9-1 12 0v2c0 1 0 2 1 3v16c0 3 2 6 4 9 3 4 5 9 5 14v17c0 3-3 5-6 5H18c-3 0-6-2-6-5V47c0-5 2-10 5-14 2-3 4-6 4-9V8c1-1 1-2 1-3V3z"/>
-        </clipPath>
-      </defs>
-      <g clipPath="url(#b-outline-card)">
-        <rect x="0" y="0" width="56" height="72" fill="rgba(255,255,255,.75)"/>
-        <rect x="0" y="38" width="56" height="31" fill={color} opacity="0.2"/>
-      </g>
-      <path d="M22 3c3-1 9-1 12 0v2c0 1 0 2 1 3v16c0 3 2 6 4 9 3 4 5 9 5 14v17c0 3-3 5-6 5H18c-3 0-6-2-6-5V47c0-5 2-10 5-14 2-3 4-6 4-9V8c1-1 1-2 1-3V3z" fill="none" stroke="rgba(18,18,22,.9)" strokeWidth="1.7"/>
-      <path d="M18 37c7 1 13 1 20 0" stroke="rgba(18,18,22,.85)" strokeWidth="1.4" fill="none"/>
-      <path d="M18 54c7 1 13 1 20 0" stroke="rgba(18,18,22,.85)" strokeWidth="1.4" fill="none"/>
-      <path d="M22 13h12" stroke="rgba(18,18,22,.82)" strokeWidth="1.2"/>
+      <path
+        d="M20 4c4-2 12-2 16 0v3c0 1 0 2 1 3v13c0 3 2 6 4 9 4 5 6 10 6 16v16c0 5-5 7-19 7S9 69 9 64V48c0-6 2-11 6-16 2-3 4-6 4-9V10c1-1 1-2 1-3V4z"
+        fill="none"
+        stroke="#121216"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M19 30.5c6 1 12 1 18 0" stroke="#121216" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
+      <path d="M19 48c6 1 12 1 18 0" stroke="#121216" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
+      <path d="M20 14h16" stroke="#121216" strokeWidth="1.4" strokeLinecap="round"/>
     </svg>
   );
 };
@@ -1471,28 +1469,21 @@ const WineBottleViz=({types,total})=>{
   const ORDER=["Red","White","Rosé","Sparkling","Dessert","Fortified","Other"];
   const segments=ORDER.map(t=>({type:t,count:types[t]||0,pct:total?Math.round(((types[t]||0)/total)*100):0,color:WINE_TYPE_COLORS[t]?.dot||"#888"})).filter(s=>s.count>0);
   if(!segments.length)return null;
-  const H=176,W=88;
-  let cum=0;
-  const fills=segments.map(s=>{const h=Math.max(3,(s.pct/100)*H);const seg={...s,h,y:cum};cum+=h;return seg;});
   return(
     <div style={{display:"flex",gap:12,alignItems:"flex-start",flexWrap:"wrap"}}>
       <div style={{flexShrink:0}}>
-        <svg width={W} height={H+42} viewBox={`0 0 ${W} ${H+42}`} role="img" aria-label="Collection breakdown bottle">
-          <defs>
-            <clipPath id="winery-bottle-clip">
-              <path d={`M31 4c3-1 23-1 26 0v4c0 1 1 2 2 4v17c0 5 3 10 6 15 5 8 8 16 8 24v106c0 5-4 9-9 10-10 3-26 3-36 0-5-1-9-5-9-10V68c0-8 3-16 8-24 3-5 6-10 6-15V12c1-2 2-3 2-4V4z`}/>
-            </clipPath>
-          </defs>
-          <g clipPath="url(#winery-bottle-clip)">
-            <rect x="0" y="0" width={W} height={H+42} fill="rgba(255,255,255,.9)"/>
-            {fills.map((s,i)=><rect key={i} x="0" y={H+16-s.y-s.h} width={W} height={s.h} fill={s.color} opacity="0.84"/>)}
-          </g>
-          <path d={`M31 4c3-1 23-1 26 0v4c0 1 1 2 2 4v17c0 5 3 10 6 15 5 8 8 16 8 24v106c0 5-4 9-9 10-10 3-26 3-36 0-5-1-9-5-9-10V68c0-8 3-16 8-24 3-5 6-10 6-15V12c1-2 2-3 2-4V4z`} fill="none" stroke="#101116" strokeWidth="2.2"/>
-          <path d={`M27 ${H+8}c10 2 24 2 34 0`} stroke="#101116" strokeWidth="1.8" fill="none"/>
-          <path d={`M27 ${H-36}c10 2 24 2 34 0`} stroke="#101116" strokeWidth="1.8" fill="none"/>
-          <path d="M33 28h22" stroke="#101116" strokeWidth="1.6"/>
-          <ellipse cx="44" cy={H+17} rx="16" ry="4.2" fill="none" stroke="#101116" strokeWidth="1.9"/>
-          <ellipse cx="44" cy={H+37} rx="16" ry="3.6" fill="rgba(0,0,0,.1)"/>
+        <svg width="108" height="216" viewBox="0 0 108 216" role="img" aria-label="Collection breakdown bottle">
+          <path
+            d="M41 6c6-3 20-3 26 0v4c0 1 0 2 1 3v27c0 5 3 10 7 16 6 8 9 18 9 28v112c0 7-7 11-30 11s-30-4-30-11V84c0-10 3-20 9-28 4-6 7-11 7-16V13c1-1 1-2 1-3V6z"
+            fill="none"
+            stroke="#121216"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path d="M25 88c17 3 41 3 58 0" stroke="#121216" strokeWidth="2" fill="none" strokeLinecap="round"/>
+          <path d="M25 149c17 3 41 3 58 0" stroke="#121216" strokeWidth="2" fill="none" strokeLinecap="round"/>
+          <path d="M40 34h28" stroke="#121216" strokeWidth="2" strokeLinecap="round"/>
         </svg>
       </div>
       <div style={{flex:1,minWidth:170,paddingTop:2}}>
@@ -1685,8 +1676,24 @@ const SettingsPanel=({onBack,profile,setProfile,theme,setTheme})=>{
         <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8}}>
           {BG_PRESETS.map(bg=>(
             <button key={bg.value} onClick={()=>setColorTheme(bg.accentId,bg.value)}
-              style={{height:44,borderRadius:12,background:bg.value,border:form.profileBg===bg.value?"2.5px solid var(--accent)":"1.5px solid var(--border)",cursor:"pointer",position:"relative",outline:"none",boxShadow:"none",overflow:"hidden",padding:0,display:"block"}}>
-              {form.profileBg===bg.value&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{width:8,height:8,borderRadius:"50%",background:"white"}}/></div>}
+              style={{
+                height:44,
+                borderRadius:12,
+                background:"var(--inputBg)",
+                border:form.profileBg===bg.value?"2px solid var(--accent)":"1.5px solid var(--border)",
+                cursor:"pointer",
+                position:"relative",
+                outline:"none",
+                boxShadow:"none",
+                overflow:"hidden",
+                padding:2,
+                display:"block",
+                appearance:"none",
+                WebkitAppearance:"none",
+                MozAppearance:"none"
+              }}>
+              <div style={{width:"100%",height:"100%",borderRadius:9,background:bg.value}}/>
+              {form.profileBg===bg.value&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{width:9,height:9,borderRadius:"50%",background:"#fff",boxShadow:"0 0 0 1.5px rgba(0,0,0,.22)"}}/></div>}
             </button>
           ))}
         </div>
@@ -1832,7 +1839,7 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.10 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.12 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
