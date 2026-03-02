@@ -1831,15 +1831,9 @@ export default function App(){
           setWishlist(all.filter(w=>w.wishlist));
           setNotes(noteRows.length?noteRows.map(fromDb.note):(cache?.notes||[]));
           if(prof){
-            // Remote profile should be source of truth for cross-device sync.
+            // Remote profile is authoritative for cross-device sync.
             const remoteProfile={name:prof.name,description:prof.description,avatar:prof.avatar||null,cellarName:prof.cellarName||"",bio:prof.bio||"",country:prof.country||"",surname:prof.surname||"",profileBg:prof.profileBg||"",accent:cache?.profile?.accent||DEFAULT_PROFILE.accent};
-            // If local cache has a different profile (recent in-session edit), retry sync to remote and keep local view.
-            if(cache?.profile && JSON.stringify({...cache.profile,accent:cache.profile.accent||DEFAULT_PROFILE.accent})!==JSON.stringify(remoteProfile)){
-              setProfileState({...cache.profile,accent:cache.profile.accent||DEFAULT_PROFILE.accent});
-              db.saveProfile({...cache.profile,accent:cache.profile.accent||DEFAULT_PROFILE.accent});
-            }else{
-              setProfileState(remoteProfile);
-            }
+            setProfileState(remoteProfile);
             // New user = profile name still matches the seed default or is empty
             setIsNewUser(!prof.name||(prof.name===DEFAULT_PROFILE.name&&!prof.cellarName));
           }else if(cache?.profile){
