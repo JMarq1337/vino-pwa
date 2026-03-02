@@ -197,17 +197,35 @@ const WINE_TYPE_COLORS = {
   Other:     { bg:"#F5F5F5", dot:"#888",    text:"#555" },
 };
 
+const normalizeWineText = (text="") => (text||"")
+  .normalize("NFD")
+  .replace(/[\u0300-\u036f]/g,"")
+  .toLowerCase()
+  .replace(/[^a-z0-9]+/g," ")
+  .trim();
+const hasAnyHint = (text,hints=[]) => hints.some(h => text.includes(h));
 const guessWineType = (grape="",name="") => {
-  const g=(grape+name).toLowerCase();
-  if(g.includes("champagne")||g.includes("sparkling")||g.includes("prosecco")||g.includes("cava"))return"Sparkling";
-  if(g.includes("ros"))return"Rosé";
-  if(g.includes("port")||g.includes("sherry")||g.includes("madeira"))return"Fortified";
-  if(g.includes("sauternes")||g.includes("tba")||g.includes("dessert"))return"Dessert";
-  if(g.includes("chardonnay")||g.includes("sauvignon blanc")||g.includes("riesling")||g.includes("pinot gris")||g.includes("pinot grigio")||g.includes("viognier")||g.includes("chenin")||g.includes("gruner veltliner")||g.includes("gruener veltliner")||g.includes("welschriesling")||g.includes("gewurztraminer")||g.includes("traminer")||g.includes("fiano")||g.includes("federspiel"))return"White";
-  if(g.includes("pinot noir")||g.includes("cabernet")||g.includes("merlot")||g.includes("shiraz")||g.includes("syrah")||g.includes("malbec")||g.includes("tempranillo")||g.includes("nebbiolo")||g.includes("sangiovese")||g.includes("grenache")||g.includes("zinfandel"))return"Red";
-  if(g.includes("wachau"))return"White";
+  const g=normalizeWineText(`${grape} ${name}`);
+  if(!g)return"Other";
+  const sparklingHints=["champagne","sparkling","prosecco","cava","cremant","blanc de blancs","blanc de noirs"];
+  const roseHints=[" rose "," rosee ","rosato","rosado"];
+  const fortifiedHints=[" port ","vintage port","tawny","sherry","madeira","pedro ximinez","pedro ximenez","px"];
+  const dessertHints=["sauternes","dessert","ice wine","late harvest","botrytis","tba","tokaji","muscat de beaumes de venise"];
+  const whiteHints=["chardonnay","sauvignon blanc","riesling","pinot gris","pinot grigio","viognier","chenin","gruner veltliner","gruener veltliner","welschriesling","gewurztraminer","traminer","fiano","federspiel","wachau","semillon","albarino","albariño","soave","garganega","marsanne","roussanne","vermentino","arneis","picpoul"];
+  const redHints=["pinot noir","cabernet","merlot","shiraz","syrah","malbec","tempranillo","nebbiolo","sangiovese","grenache","zinfandel","barolo","beaujolais","morgon","fronsac","petit verdot","primitivo","saint joseph","st joseph","chateauneuf du pape","chateau neuf du pape","gsm","red blend","hermitage","cotes du rousillon","cotes du roussillon","mangan","maclura","mont redon"];
+  if(hasAnyHint(g,sparklingHints))return"Sparkling";
+  if(hasAnyHint(` ${g} `,roseHints))return"Rosé";
+  if(hasAnyHint(` ${g} `,fortifiedHints))return"Fortified";
+  if(hasAnyHint(g,dessertHints))return"Dessert";
+  if(hasAnyHint(g,whiteHints))return"White";
+  if(hasAnyHint(g,redHints))return"Red";
+  if(g.includes("muscat"))return"Dessert";
+  if(g.includes("amber"))return"White";
   return"Other";
 };
+const resolveWineType = wine => (wine?.wineType && wine.wineType!=="Other")
+  ? wine.wineType
+  : guessWineType(wine?.grape||"",wine?.name||"");
 
 /* ── HELPERS ──────────────────────────────────────────────────── */
 const uid = ()=>Math.random().toString(36).slice(2,9);
@@ -256,7 +274,14 @@ const deriveRegionCountry = (input="") => {
 
 /* ── SEED DATA ────────────────────────────────────────────────── */
 const STORAGE_CODE_MAP = Object.fromEntries((wineHoldings2021.storageLocations||[]).map(r=>[r[0],r[1]]));
-const SEED_WINES=(wineHoldings2021.cellar||[]).map((r,i)=>{
+const SOURCE_CELLAR_ROWS=(wineHoldings2021.cellar||[]).filter(r=>{
+  const winery=(r.winery||"").trim();
+  const label=(r.label||"").trim();
+  const varietal=(r.varietal||"").trim();
+  const remaining=Math.max(0,safeNum(r.remaining_num??r.remaining)||0);
+  return !!(winery||label||varietal||remaining>0);
+});
+const SEED_WINES=SOURCE_CELLAR_ROWS.map((r,i)=>{
   const winery=(r.winery||"").trim();
   const label=(r.label||"").trim();
   const varietal=(r.varietal||"").trim();
@@ -521,7 +546,7 @@ const BottleGlyph=({color="#8B1A1A"})=>(
 
 /* ── WINE CARD ────────────────────────────────────────────────── */
 const WineCard=({wine,onClick})=>{
-  const type=wine.wineType||guessWineType(wine.grape,wine.name);
+  const type=resolveWineType(wine);
   const tc=WINE_TYPE_COLORS[type]||WINE_TYPE_COLORS.Other;
   const ready=wineReadiness(wine);
   const geo=deriveRegionCountry(wine.origin||"");
@@ -562,7 +587,7 @@ const WineCard=({wine,onClick})=>{
 
 /* ── WINE DETAIL ──────────────────────────────────────────────── */
 const WineDetail=({wine,onEdit,onDelete,onMove})=>{
-  const type=wine.wineType||guessWineType(wine.grape,wine.name);
+  const type=resolveWineType(wine);
   const tc=WINE_TYPE_COLORS[type]||WINE_TYPE_COLORS.Other;
   const ready=wineReadiness(wine);
   const m=wine.cellarMeta||{};
@@ -605,13 +630,13 @@ const WineDetail=({wine,onEdit,onDelete,onMove})=>{
 /* ── WINE FORM ────────────────────────────────────────────────── */
 const WineForm=({initial,onSave,onClose,isWishlist})=>{
   const blank={name:"",origin:"",grape:"",wineType:"Red",alcohol:"",vintage:"",bottles:"1",rating:0,notes:"",review:"",tastingNotes:"",datePurchased:"",wishlist:!!isWishlist,photo:null,location:"Rack A",locationSlot:"",drinkStart:"",drinkEnd:"",pricePerBottle:"",rrp:"",totalPaid:"",insuranceValue:"",supplier:""};
-  const [f,setF]=useState(initial?{...blank,...initial,alcohol:initial.alcohol?.toString()||"",vintage:initial.vintage?.toString()||"",bottles:initial.bottles?.toString()||"",locationSlot:initial.locationSlot||"",wineType:initial.wineType||guessWineType(initial.grape||"",initial.name||""),drinkStart:initial.cellarMeta?.drinkStart?.toString()||"",drinkEnd:initial.cellarMeta?.drinkEnd?.toString()||"",pricePerBottle:initial.cellarMeta?.pricePerBottle?.toString()||"",rrp:initial.cellarMeta?.rrp?.toString()||"",totalPaid:initial.cellarMeta?.totalPaid?.toString()||"",insuranceValue:initial.cellarMeta?.insuranceValue?.toString()||"",supplier:initial.cellarMeta?.supplier||""}:blank);
+  const [f,setF]=useState(initial?{...blank,...initial,alcohol:initial.alcohol?.toString()||"",vintage:initial.vintage?.toString()||"",bottles:initial.bottles?.toString()||"",locationSlot:initial.locationSlot||"",wineType:resolveWineType(initial),drinkStart:initial.cellarMeta?.drinkStart?.toString()||"",drinkEnd:initial.cellarMeta?.drinkEnd?.toString()||"",pricePerBottle:initial.cellarMeta?.pricePerBottle?.toString()||"",rrp:initial.cellarMeta?.rrp?.toString()||"",totalPaid:initial.cellarMeta?.totalPaid?.toString()||"",insuranceValue:initial.cellarMeta?.insuranceValue?.toString()||"",supplier:initial.cellarMeta?.supplier||""}:blank);
   const set=(k,v)=>setF(p=>({...p,[k]:v}));
   const [q,setQ]=useState(initial?.name||"");
   const [sugs,setSugs]=useState([]);
   const [showFields,setShowFields]=useState(!!initial);
   const handleQ=v=>{setQ(v);set("name",v);setSugs(v.length>=2?fuzzySearch(v):[]);};
-  const pickSug=w=>{setF(p=>({...p,name:w.name,origin:w.origin||"",grape:w.grape||"",alcohol:w.alcohol?.toString()||"",tastingNotes:w.tastingNotes||"",wineType:w.wineType||guessWineType(w.grape||"",w.name)}));setQ(w.name);setSugs([]);setShowFields(true);};
+  const pickSug=w=>{setF(p=>({...p,name:w.name,origin:w.origin||"",grape:w.grape||"",alcohol:w.alcohol?.toString()||"",tastingNotes:w.tastingNotes||"",wineType:resolveWineType(w)}));setQ(w.name);setSugs([]);setShowFields(true);};
   const save=()=>{
     if(!f.name)return;
     const wt=f.wineType||guessWineType(f.grape,f.name);
@@ -724,7 +749,7 @@ const applyFilters=(wines,f,s)=>{
   let r=wines.filter(w=>!w.wishlist);
   if(s)r=r.filter(w=>`${w.name} ${w.grape} ${w.origin} ${w.location}`.toLowerCase().includes(s.toLowerCase()));
   if(f.minRating>0)r=r.filter(w=>(w.rating||0)>=f.minRating);
-  if(f.type)r=r.filter(w=>(w.wineType||guessWineType(w.grape,w.name))===f.type);
+  if(f.type)r=r.filter(w=>(resolveWineType(w))===f.type);
   if(f.location)r=r.filter(w=>w.location===f.location);
   if(f.region)r=r.filter(w=>deriveRegionCountry(w.origin||"").region===f.region);
   if(f.country)r=r.filter(w=>deriveRegionCountry(w.origin||"").country===f.country);
@@ -1022,7 +1047,7 @@ const NotesScreen=({wines,notes,onAdd,onDelete})=>{
         ? <Empty icon="note" text="Capture your tasting memories."/>
         : notes.map(n=>{
             const w=getW(n.wineId);
-            const type=w?(w.wineType||guessWineType(w.grape,w.name)):"Other";
+            const type=w?(resolveWineType(w)):"Other";
             const tc=WINE_TYPE_COLORS[type]||WINE_TYPE_COLORS.Other;
             return(
               <div key={n.id} onClick={()=>setSel(n)} style={{background:"var(--card)",borderRadius:18,padding:"16px",cursor:"pointer",border:"1px solid var(--border)",marginBottom:10,transition:"transform 0.15s,box-shadow 0.15s",boxShadow:"0 2px 8px var(--shadow)"}}
@@ -1148,7 +1173,7 @@ const exportToExcel=async(wines,wishlist,notes,{includeWishlist=true,includeNote
 
   // By type
   TYPE_ORDER.forEach(type=>{
-    const tw=col.filter(w=>(w.wineType||"Other")===type);
+    const tw=col.filter(w=>resolveWineType(w)===type);
     if(!tw.length)return;
     const tc=TYPE_STYLES[type]||TYPE_STYLES.Other;
     const em=TYPE_EMOJI[type]||"🍾";
@@ -1190,7 +1215,7 @@ const exportToExcel=async(wines,wishlist,notes,{includeWishlist=true,includeNote
         w.name||"",
         w.grape||"-",
         w.origin||"-",
-        w.wineType||"-",
+        resolveWineType(w)||"-",
         w.vintage||"-",
         w.bottles||0,
         stars,
@@ -1253,7 +1278,7 @@ const exportToExcel=async(wines,wishlist,notes,{includeWishlist=true,includeNote
   r2++;
 
   const wishByType={};
-  TYPE_ORDER.forEach(t=>{wishByType[t]=wish.filter(w=>(w.wineType||"Other")===t);});
+  TYPE_ORDER.forEach(t=>{wishByType[t]=wish.filter(w=>resolveWineType(w)===t);});
 
   TYPE_ORDER.forEach(type=>{
     const tw=wishByType[type];
@@ -1276,7 +1301,7 @@ const exportToExcel=async(wines,wishlist,notes,{includeWishlist=true,includeNote
 
     tw.forEach((w,idx)=>{
       const bg=idx%2===0?tc.row:tc.alt;
-      [w.name||"",w.grape||"-",w.origin||"-",w.wineType||"-",w.vintage||"-",w.alcohol?`${w.alcohol}%`:"-",w.notes||"-"].forEach((val,ci)=>{
+      [w.name||"",w.grape||"-",w.origin||"-",resolveWineType(w)||"-",w.vintage||"-",w.alcohol?`${w.alcohol}%`:"-",w.notes||"-"].forEach((val,ci)=>{
         const addr=X.utils.encode_cell({r:r2,c:ci});
         let s=cellStyle(bg,ci===4?tc.hdr:"4A4040",ci===4,9,ci>=4&&ci<=5?"center":"left",ci===6);
         ws2[addr]={t:"s",v:val,s};
@@ -1331,7 +1356,7 @@ const exportToExcel=async(wines,wishlist,notes,{includeWishlist=true,includeNote
   });
   r3++;
   TYPE_ORDER.forEach((type,idx)=>{
-    const tw=col.filter(w=>(w.wineType||"Other")===type);
+    const tw=col.filter(w=>resolveWineType(w)===type);
     if(!tw.length)return;
     const tc=TYPE_STYLES[type]||TYPE_STYLES.Other;
     const bg=idx%2===0?tc.row:tc.alt;
@@ -1692,7 +1717,7 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
   const col=wines.filter(w=>!w.wishlist);
   const bottles=col.reduce((s,w)=>s+(w.bottles||0),0);
   const topWine=[...col].sort((a,b)=>(b.rating||0)-(a.rating||0))[0];
-  const types=col.reduce((acc,w)=>{const t=w.wineType||guessWineType(w.grape,w.name);acc[t]=(acc[t]||0)+1;return acc;},{});
+  const types=col.reduce((acc,w)=>{const t=resolveWineType(w);acc[t]=(acc[t]||0)+1;return acc;},{});
   const wineryValue=col.reduce((s,w)=>s+((safeNum(w.cellarMeta?.pricePerBottle)||0)*(safeNum(w.bottles)||0)),0);
   const readyCount=col.filter(w=>wineReadiness(w).key==="ready").length;
   const regionStats=col.reduce((acc,w)=>{
@@ -1803,7 +1828,7 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.1 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.2 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
@@ -1889,6 +1914,28 @@ export default function App(){
               all=[...all,...toImport];
             }
             try{localStorage.setItem(EXCEL_IMPORT_FLAG,"1");}catch{}
+          }
+          // Repair older imports:
+          // 1) Remove empty placeholder rows from the old spreadsheet conversion.
+          // 2) Reclassify wines that were previously persisted as "Other".
+          const stalePlaceholders=all.filter(w=>
+            String(w.id||"").startsWith("xl-") &&
+            /^Wine \d+$/i.test((w.name||"").trim()) &&
+            !(w.grape||"").trim() &&
+            !(w.origin||"").trim() &&
+            (safeNum(w.bottles)||0)===0
+          );
+          if(stalePlaceholders.length){
+            await Promise.all(stalePlaceholders.map(w=>db.del("wines",w.id)));
+            const staleIds=new Set(stalePlaceholders.map(w=>w.id));
+            all=all.filter(w=>!staleIds.has(w.id));
+          }
+          const toReclassify=all.filter(w=>(w.wineType||"Other")==="Other");
+          if(toReclassify.length){
+            const repaired=toReclassify.map(w=>({...w,wineType:resolveWineType(w)}));
+            await Promise.all(repaired.map(w=>db.upsert("wines",toDb.wine(w))));
+            const repairedById=Object.fromEntries(repaired.map(w=>[w.id,w.wineType]));
+            all=all.map(w=>repairedById[w.id]?{...w,wineType:repairedById[w.id]}:w);
           }
           setWines(all.filter(w=>!w.wishlist));
           setWishlist(all.filter(w=>w.wishlist));
