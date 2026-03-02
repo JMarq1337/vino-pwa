@@ -537,33 +537,21 @@ const PhotoPicker=({value,onChange,size=80,round})=>{
 };
 
 const BottleGlyph=({color="#8B1A1A"})=>{
-  const id=color.replace("#","");
   return(
     <svg width="56" height="72" viewBox="0 0 56 72" aria-hidden="true">
       <defs>
-        <linearGradient id={`bottle-main-${id}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.95"/>
-          <stop offset="70%" stopColor={color} stopOpacity="0.62"/>
-          <stop offset="100%" stopColor="#1a1616" stopOpacity="0.8"/>
-        </linearGradient>
-        <linearGradient id={`bottle-neck-${id}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#D7B277"/>
-          <stop offset="100%" stopColor="#9E7744"/>
-        </linearGradient>
-        <linearGradient id={`bottle-reflect-${id}`} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="rgba(255,255,255,.75)"/>
-          <stop offset="100%" stopColor="rgba(255,255,255,0)"/>
-        </linearGradient>
+        <clipPath id="b-outline-card">
+          <path d="M22 3c3-1 9-1 12 0v2c0 1 0 2 1 3v16c0 3 2 6 4 9 3 4 5 9 5 14v17c0 3-3 5-6 5H18c-3 0-6-2-6-5V47c0-5 2-10 5-14 2-3 4-6 4-9V8c1-1 1-2 1-3V3z"/>
+        </clipPath>
       </defs>
-      <path d="M23 3h10v7c0 2 1 4 2.8 6.2 4.8 5.7 7.2 10.9 7.2 18.8v24.5c0 5.3-4.3 9.5-9.5 9.5h-11C17.2 69 13 64.8 13 59.5V35c0-7.8 2.4-13.1 7.2-18.8C22 14 23 12 23 10V3z" fill={`url(#bottle-main-${id})`}/>
-      <rect x="23" y="1.8" width="10" height="3.5" rx="1.1" fill="#7A5A33"/>
-      <rect x="22.4" y="5" width="11.2" height="5.1" rx="1.3" fill={`url(#bottle-neck-${id})`}/>
-      <path d="M16 36.5c3.2 1.7 20.8 1.7 24 0v17.8c0 4.6-3.7 8.3-8.3 8.3h-7.4c-4.6 0-8.3-3.7-8.3-8.3V36.5z" fill="rgba(18,18,18,.18)"/>
-      <rect x="18.3" y="14" width="4.1" height="41" rx="2.05" fill={`url(#bottle-reflect-${id})`} opacity="0.58"/>
-      <rect x="24" y="29.5" width="8" height="10.5" rx="1.9" fill="rgba(248,240,232,.74)" stroke="rgba(96,80,62,.24)" strokeWidth="0.8"/>
-      <path d="M24 34.8h8" stroke="rgba(96,80,62,.33)" strokeWidth="0.8"/>
-      <path d="M17.4 27c4.7 1.5 16.5 1.5 21.2 0" stroke="rgba(255,255,255,.2)" strokeWidth="1"/>
-      <ellipse cx="28" cy="69.2" rx="11.5" ry="2.2" fill="rgba(0,0,0,.14)"/>
+      <g clipPath="url(#b-outline-card)">
+        <rect x="0" y="0" width="56" height="72" fill="rgba(255,255,255,.75)"/>
+        <rect x="0" y="38" width="56" height="31" fill={color} opacity="0.2"/>
+      </g>
+      <path d="M22 3c3-1 9-1 12 0v2c0 1 0 2 1 3v16c0 3 2 6 4 9 3 4 5 9 5 14v17c0 3-3 5-6 5H18c-3 0-6-2-6-5V47c0-5 2-10 5-14 2-3 4-6 4-9V8c1-1 1-2 1-3V3z" fill="none" stroke="rgba(18,18,22,.9)" strokeWidth="1.7"/>
+      <path d="M18 37c7 1 13 1 20 0" stroke="rgba(18,18,22,.85)" strokeWidth="1.4" fill="none"/>
+      <path d="M18 54c7 1 13 1 20 0" stroke="rgba(18,18,22,.85)" strokeWidth="1.4" fill="none"/>
+      <path d="M22 13h12" stroke="rgba(18,18,22,.82)" strokeWidth="1.2"/>
     </svg>
   );
 };
@@ -1457,7 +1445,7 @@ const WineBottleViz=({types,total})=>{
   const ORDER=["Red","White","Rosé","Sparkling","Dessert","Fortified","Other"];
   const segments=ORDER.map(t=>({type:t,count:types[t]||0,pct:total?Math.round(((types[t]||0)/total)*100):0,color:WINE_TYPE_COLORS[t]?.dot||"#888"})).filter(s=>s.count>0);
   if(!segments.length)return null;
-  const H=232,W=126;
+  const H=236,W=130;
   let cumY=0;
   const fills=segments.map(s=>{
     const h=Math.max(3,(s.pct/100)*H);
@@ -1471,30 +1459,22 @@ const WineBottleViz=({types,total})=>{
         <svg width={W} height={H+82} viewBox={`0 0 ${W} ${H+82}`} role="img" aria-label="Collection breakdown bottle">
           <defs>
             <clipPath id="winery-bottle-clip">
-              <path d={`M49 6h28v21c0 6 2 11 6 16 8 9 12 18 12 31v${H-8}c0 9-7 16-16 16H47c-9 0-16-7-16-16V74c0-13 4-22 12-31 4-5 6-10 6-16V6z`}/>
+              <path d={`M50 7c4-2 26-2 30 0v5c0 2 1 4 2 5v30c0 6 3 12 7 18 8 12 12 24 12 37v${H-20}c0 9-8 15-17 15H46c-9 0-17-6-17-15V102c0-13 4-25 12-37 4-6 7-12 7-18V17c1-1 2-3 2-5V7z`}/>
             </clipPath>
-            <linearGradient id="winery-gloss" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stopColor="rgba(255,255,255,.8)"/>
-              <stop offset="55%" stopColor="rgba(255,255,255,.12)"/>
-              <stop offset="100%" stopColor="rgba(255,255,255,0)"/>
-            </linearGradient>
-            <linearGradient id="winery-shadow" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="rgba(32,24,20,.12)"/>
-              <stop offset="100%" stopColor="rgba(32,24,20,.48)"/>
+            <linearGradient id="outlineFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="rgba(255,255,255,.76)"/>
+              <stop offset="100%" stopColor="rgba(255,255,255,.55)"/>
             </linearGradient>
           </defs>
           <g clipPath="url(#winery-bottle-clip)">
-            <rect x="0" y="0" width={W} height={H+82} fill="rgba(110,88,72,0.15)"/>
-            {fills.map((s,i)=><rect key={i} x="0" y={H+37-s.y-s.h} width={W} height={s.h} fill={s.color} opacity="0.95"/>)}
-            <rect x="38" y="16" width="11" height={H+26} rx="5" fill="url(#winery-gloss)" opacity="0.56"/>
-            <rect x="75" y="12" width="18" height={H+28} rx="9" fill="url(#winery-shadow)" opacity="0.35"/>
+            <rect x="0" y="0" width={W} height={H+82} fill="url(#outlineFill)"/>
+            {fills.map((s,i)=><rect key={i} x="0" y={H+55-s.y-s.h} width={W} height={s.h} fill={s.color} opacity="0.22"/>)}
           </g>
-          <path d={`M49 6h28v21c0 6 2 11 6 16 8 9 12 18 12 31v${H-8}c0 9-7 16-16 16H47c-9 0-16-7-16-16V74c0-13 4-22 12-31 4-5 6-10 6-16V6z`} fill="none" stroke="rgba(68,50,38,.72)" strokeWidth="2.4"/>
-          <rect x="52" y="0" width="22" height="8" rx="2" fill="#C79D64"/>
-          <rect x="50" y="8" width="26" height="8" rx="2" fill="#7B5B3A"/>
-          <rect x="44" y="93" width="38" height="26" rx="4" fill="rgba(247,241,234,.78)" stroke="rgba(102,82,64,.3)" strokeWidth="1.2"/>
-          <path d="M50 106h26" stroke="rgba(102,82,64,.34)" strokeWidth="1"/>
-          <ellipse cx="63" cy={H+74} rx="22" ry="5.5" fill="rgba(0,0,0,.13)"/>
+          <path d={`M50 7c4-2 26-2 30 0v5c0 2 1 4 2 5v30c0 6 3 12 7 18 8 12 12 24 12 37v${H-20}c0 9-8 15-17 15H46c-9 0-17-6-17-15V102c0-13 4-25 12-37 4-6 7-12 7-18V17c1-1 2-3 2-5V7z`} fill="none" stroke="rgba(14,14,18,.92)" strokeWidth="2.8"/>
+          <path d={`M44 ${H-10}c13 2 29 2 42 0`} stroke="rgba(14,14,18,.88)" strokeWidth="2" fill="none"/>
+          <path d={`M44 ${H-66}c13 2 29 2 42 0`} stroke="rgba(14,14,18,.88)" strokeWidth="2" fill="none"/>
+          <path d="M50 41h30" stroke="rgba(14,14,18,.88)" strokeWidth="1.8"/>
+          <ellipse cx="64" cy={H+74} rx="22" ry="5.5" fill="rgba(0,0,0,.12)"/>
         </svg>
       </div>
       <div style={{flex:1,minWidth:220,paddingTop:8}}>
@@ -1836,7 +1816,7 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.5 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.6 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
@@ -2209,7 +2189,7 @@ export default function App(){
   if(isDesktop) return(
     <div style={{...cssVars,background:"radial-gradient(circle at 10% -10%,rgba(var(--accentRgb),.09),transparent 35%), var(--bg)",height:"100vh",display:"flex",overflow:"hidden",fontFamily:"'Plus Jakarta Sans',sans-serif",color:"var(--text)"}}>
       <style>{CSS}</style>
-      <div style={{width:236,flexShrink:0,background:dark?"linear-gradient(180deg,rgba(var(--accentRgb),0.5) 0%,rgba(22,14,15,0.96) 66%)":"linear-gradient(180deg,rgba(var(--accentRgb),0.72) 0%,rgba(31,16,18,0.98) 72%)",display:"flex",flexDirection:"column",padding:"30px 14px 24px",borderRight:"1px solid rgba(255,255,255,.12)"}}>
+      <div style={{width:236,flexShrink:0,background:"linear-gradient(180deg,#2A1114,#1D0C10)",display:"flex",flexDirection:"column",padding:"30px 14px 24px",borderRight:"1px solid rgba(255,255,255,.08)"}}>
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:36,paddingLeft:8}}>
           <BrandLogo size={28}/>
           <span style={{fontSize:20,fontWeight:800,color:"#EDE6E0",letterSpacing:"-0.5px"}}>Vinology</span>
@@ -2250,7 +2230,7 @@ export default function App(){
       <div data-scroll="main" style={{flex:1,overflowY:"auto",overflowX:"hidden",padding:"20px 20px 96px",WebkitOverflowScrolling:"touch"}}>
         {screens}
       </div>
-      <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:480,background:dark?"linear-gradient(180deg,rgba(var(--accentRgb),0.35) 0%,rgba(12,10,10,0.97) 52%)":"linear-gradient(180deg,rgba(var(--accentRgb),0.48) 0%,rgba(22,12,14,0.97) 58%)",backdropFilter:"blur(24px)",WebkitBackdropFilter:"blur(24px)",borderTop:"1px solid rgba(255,255,255,0.14)",padding:"10px 0 22px",zIndex:100}}>
+      <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:480,background:"linear-gradient(180deg,#2A1114,#1D0C10)",backdropFilter:"blur(24px)",WebkitBackdropFilter:"blur(24px)",borderTop:"1px solid rgba(255,255,255,0.12)",padding:"10px 0 22px",zIndex:100}}>
         <div style={{display:"flex",justifyContent:"space-around"}}>
           {TABS.map(tb=>{
             const active=tab===tb.id;
