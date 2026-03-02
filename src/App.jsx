@@ -404,35 +404,37 @@ const Icon=({n,size=20,color="currentColor",fill="none",sw=1.5})=>{
 
 const BrandLogo=({size=42})=>(
   <svg width={size} height={size} viewBox="0 0 72 72" aria-hidden="true">
-    <rect x="7" y="7" width="58" height="58" rx="18" fill="rgba(255,255,255,.05)" stroke="rgba(255,255,255,.13)"/>
-    <path d="M20 18c6-7 26-7 32 0" fill="none" stroke="#4E7A3A" strokeWidth="2.2" strokeLinecap="round"/>
-    <path d="M36 18c0-4 2-7 6-8" fill="none" stroke="#4E7A3A" strokeWidth="1.8" strokeLinecap="round"/>
-    <path d="M27 15c2 0 4 1 5 3-2 1-4 1-6 0-1-1 0-3 1-3z" fill="#6FA44A"/>
-    <path d="M44 15c2 0 4 1 5 3-2 1-4 1-6 0-1-1 0-3 1-3z" fill="#6FA44A"/>
-    <path d="M52 18c3 1 4 4 3 7-2-1-4-2-5-4-1-1 0-2 2-3z" fill="#6FA44A"/>
-
-    <g fill="#6B2452" stroke="#3B1730" strokeWidth="1.2">
-      <circle cx="23" cy="26" r="5"/>
-      <circle cx="25" cy="33" r="5"/>
-      <circle cx="27" cy="40" r="5"/>
-      <circle cx="29" cy="47" r="5"/>
-      <circle cx="31" cy="54" r="5"/>
-      <circle cx="49" cy="26" r="5"/>
-      <circle cx="47" cy="33" r="5"/>
-      <circle cx="45" cy="40" r="5"/>
-      <circle cx="43" cy="47" r="5"/>
-      <circle cx="41" cy="54" r="5"/>
-      <circle cx="36" cy="58" r="5.3"/>
+    <defs>
+      <linearGradient id="gLogoFill" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stopColor="#1A1D21"/>
+        <stop offset="100%" stopColor="#090A0C"/>
+      </linearGradient>
+    </defs>
+    <g fill="url(#gLogoFill)" stroke="#07080A" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M35.6 18.2c.9-4.5 2.5-7.4 5.5-9.4-1.3 4.7-1.9 8.8-1.9 12.3 4.2-5.6 8.4-9.7 13.3-12.4-5.2 5.2-9.2 11-11.6 17.6h-.8c-1.4-4.8-4.1-9.1-8.2-12.9 1.7 1 3.1 2.7 3.7 4.8z"/>
+      <path d="M18.2 22.3c4.2 0 8.9 2.2 13 5.8-4.5-1.1-8.7-.8-12.8 1.3 2.9-3 2.8-4.9-.2-7.1z"/>
+      <path d="M53.8 22.3c-4.2 0-8.9 2.2-13 5.8 4.5-1.1 8.7-.8 12.8 1.3-2.9-3-2.8-4.9.2-7.1z"/>
+      <path d="M36 20.1c4.8 2.8 7.6 6.8 8.8 11.8-3.1-3.6-6.1-7.2-8.8-11.8z"/>
+      <path d="M22 20.8c5.9 2.4 10.8 5.8 14.6 10.6-6.1-3.7-10.9-7.2-14.6-10.6z"/>
+      <path d="M50 20.8c-5.9 2.4-10.8 5.8-14.6 10.6 6.1-3.7 10.9-7.2 14.6-10.6z"/>
+      <path d="M14.1 24.2c-1.7 1.5-2.8 3.4-2.9 5.9 2.4-.4 4.3-1.7 5.7-3.8" fill="none"/>
+      <path d="M57.9 24.2c1.7 1.5 2.8 3.4 2.9 5.9-2.4-.4-4.3-1.7-5.7-3.8" fill="none"/>
     </g>
-
-    <g fill="rgba(255,255,255,.35)">
-      <circle cx="21.8" cy="24.6" r="1.1"/>
-      <circle cx="23.8" cy="31.8" r="1.1"/>
-      <circle cx="25.8" cy="38.8" r="1.1"/>
-      <circle cx="47.8" cy="24.6" r="1.1"/>
-      <circle cx="45.8" cy="31.8" r="1.1"/>
-      <circle cx="43.8" cy="38.8" r="1.1"/>
-      <circle cx="34.8" cy="56.6" r="1.1"/>
+    <g fill="url(#gLogoFill)" stroke="#07080A" strokeWidth="1">
+      <circle cx="22.8" cy="31.6" r="4.4"/><circle cx="28.8" cy="31.6" r="4.4"/>
+      <circle cx="25.5" cy="37.1" r="4.6"/><circle cx="31.3" cy="37.5" r="4.2"/>
+      <circle cx="28.2" cy="43.4" r="4.6"/><circle cx="33.8" cy="44.4" r="4.2"/>
+      <circle cx="31.3" cy="49.8" r="4.6"/><circle cx="36.1" cy="51.8" r="4.2"/>
+      <circle cx="49.2" cy="31.6" r="4.4"/><circle cx="43.2" cy="31.6" r="4.4"/>
+      <circle cx="46.5" cy="37.1" r="4.6"/><circle cx="40.7" cy="37.5" r="4.2"/>
+      <circle cx="43.8" cy="43.4" r="4.6"/><circle cx="38.2" cy="44.4" r="4.2"/>
+      <circle cx="40.7" cy="49.8" r="4.6"/><circle cx="35.9" cy="51.8" r="4.2"/>
+      <circle cx="36" cy="58.5" r="4.7"/>
+    </g>
+    <g fill="rgba(255,255,255,.14)">
+      <circle cx="21.7" cy="30.3" r="1"/><circle cx="27.6" cy="30.2" r="1"/>
+      <circle cx="48.3" cy="30.3" r="1"/><circle cx="42.4" cy="30.2" r="1"/>
+      <circle cx="35.1" cy="57.2" r="1"/>
     </g>
   </svg>
 );
@@ -1469,45 +1471,41 @@ const WineBottleViz=({types,total})=>{
   const ORDER=["Red","White","Rosé","Sparkling","Dessert","Fortified","Other"];
   const segments=ORDER.map(t=>({type:t,count:types[t]||0,pct:total?Math.round(((types[t]||0)/total)*100):0,color:WINE_TYPE_COLORS[t]?.dot||"#888"})).filter(s=>s.count>0);
   if(!segments.length)return null;
-  const H=250,W=128;
+  const H=176,W=88;
   let cum=0;
-  const fills=segments.map(s=>{const h=Math.max(4,(s.pct/100)*H);const seg={...s,h,y:cum};cum+=h;return seg;});
+  const fills=segments.map(s=>{const h=Math.max(3,(s.pct/100)*H);const seg={...s,h,y:cum};cum+=h;return seg;});
   return(
-    <div style={{display:"flex",gap:18,alignItems:"flex-start",flexWrap:"wrap"}}>
+    <div style={{display:"flex",gap:12,alignItems:"flex-start",flexWrap:"wrap"}}>
       <div style={{flexShrink:0}}>
-        <svg width={W} height={H+82} viewBox={`0 0 ${W} ${H+82}`} role="img" aria-label="Collection breakdown bottle">
+        <svg width={W} height={H+42} viewBox={`0 0 ${W} ${H+42}`} role="img" aria-label="Collection breakdown bottle">
           <defs>
             <clipPath id="winery-bottle-clip">
-              <path d={`M49 8c4-2 26-2 30 0v5c0 2 1 4 2 6v28c0 7 4 14 9 21 7 10 11 21 11 34v158c0 8-5 14-13 16-14 4-34 4-48 0-8-2-13-8-13-16V102c0-13 4-24 11-34 5-7 9-14 9-21V19c1-2 2-4 2-6V8z`}/>
+              <path d={`M31 4c3-1 23-1 26 0v4c0 1 1 2 2 4v17c0 5 3 10 6 15 5 8 8 16 8 24v106c0 5-4 9-9 10-10 3-26 3-36 0-5-1-9-5-9-10V68c0-8 3-16 8-24 3-5 6-10 6-15V12c1-2 2-3 2-4V4z`}/>
             </clipPath>
-            <linearGradient id="glassBody" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="rgba(255,255,255,.96)"/>
-              <stop offset="100%" stopColor="rgba(255,255,255,.86)"/>
-            </linearGradient>
           </defs>
           <g clipPath="url(#winery-bottle-clip)">
-            <rect x="0" y="0" width={W} height={H+82} fill="url(#glassBody)"/>
-            {fills.map((s,i)=><rect key={i} x="0" y={H+30-s.y-s.h} width={W} height={s.h} fill={s.color} opacity="0.78"/>)}
+            <rect x="0" y="0" width={W} height={H+42} fill="rgba(255,255,255,.9)"/>
+            {fills.map((s,i)=><rect key={i} x="0" y={H+16-s.y-s.h} width={W} height={s.h} fill={s.color} opacity="0.84"/>)}
           </g>
-          <path d={`M49 8c4-2 26-2 30 0v5c0 2 1 4 2 6v28c0 7 4 14 9 21 7 10 11 21 11 34v158c0 8-5 14-13 16-14 4-34 4-48 0-8-2-13-8-13-16V102c0-13 4-24 11-34 5-7 9-14 9-21V19c1-2 2-4 2-6V8z`} fill="none" stroke="#101116" strokeWidth="2.9"/>
-          <path d={`M41 ${H+18}c14 3 32 3 46 0`} stroke="#101116" strokeWidth="2.4" fill="none"/>
-          <path d={`M41 ${H-44}c14 3 32 3 46 0`} stroke="#101116" strokeWidth="2.4" fill="none"/>
-          <path d="M49 43h30" stroke="#101116" strokeWidth="2"/>
-          <ellipse cx="64" cy={H+30} rx="22" ry="5.2" fill="none" stroke="#101116" strokeWidth="2.6"/>
-          <ellipse cx="64" cy={H+73} rx="24" ry="5.5" fill="rgba(0,0,0,.11)"/>
+          <path d={`M31 4c3-1 23-1 26 0v4c0 1 1 2 2 4v17c0 5 3 10 6 15 5 8 8 16 8 24v106c0 5-4 9-9 10-10 3-26 3-36 0-5-1-9-5-9-10V68c0-8 3-16 8-24 3-5 6-10 6-15V12c1-2 2-3 2-4V4z`} fill="none" stroke="#101116" strokeWidth="2.2"/>
+          <path d={`M27 ${H+8}c10 2 24 2 34 0`} stroke="#101116" strokeWidth="1.8" fill="none"/>
+          <path d={`M27 ${H-36}c10 2 24 2 34 0`} stroke="#101116" strokeWidth="1.8" fill="none"/>
+          <path d="M33 28h22" stroke="#101116" strokeWidth="1.6"/>
+          <ellipse cx="44" cy={H+17} rx="16" ry="4.2" fill="none" stroke="#101116" strokeWidth="1.9"/>
+          <ellipse cx="44" cy={H+37} rx="16" ry="3.6" fill="rgba(0,0,0,.1)"/>
         </svg>
       </div>
-      <div style={{flex:1,minWidth:220,paddingTop:8}}>
+      <div style={{flex:1,minWidth:170,paddingTop:2}}>
         {segments.map(s=>(
-          <div key={s.type} style={{display:"flex",alignItems:"center",gap:9,marginBottom:10}}>
-            <div style={{width:10,height:10,borderRadius:"50%",background:s.color,flexShrink:0}}/>
+          <div key={s.type} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+            <div style={{width:9,height:9,borderRadius:"50%",background:s.color,flexShrink:0}}/>
             <div style={{flex:1}}>
-              <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
-                <span style={{fontSize:13,fontWeight:700,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{s.type}</span>
-                <span style={{fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{s.count} · {s.pct}%</span>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
+                <span style={{fontSize:12,fontWeight:700,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{s.type}</span>
+                <span style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{s.count} · {s.pct}%</span>
               </div>
-              <div style={{height:4,background:"var(--inputBg)",borderRadius:4}}>
-                <div style={{height:"100%",width:`${s.pct}%`,background:s.color,borderRadius:4}}/>
+              <div style={{height:3,background:"var(--inputBg)",borderRadius:3}}>
+                <div style={{height:"100%",width:`${s.pct}%`,background:s.color,borderRadius:3}}/>
               </div>
             </div>
           </div>
@@ -1834,7 +1832,7 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.9 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.10 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
