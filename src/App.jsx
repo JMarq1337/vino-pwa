@@ -203,8 +203,9 @@ const guessWineType = (grape="",name="") => {
   if(g.includes("ros"))return"Rosé";
   if(g.includes("port")||g.includes("sherry")||g.includes("madeira"))return"Fortified";
   if(g.includes("sauternes")||g.includes("tba")||g.includes("dessert"))return"Dessert";
-  if(g.includes("chardonnay")||g.includes("sauvignon blanc")||g.includes("riesling")||g.includes("pinot gris")||g.includes("pinot grigio")||g.includes("viognier")||g.includes("chenin"))return"White";
+  if(g.includes("chardonnay")||g.includes("sauvignon blanc")||g.includes("riesling")||g.includes("pinot gris")||g.includes("pinot grigio")||g.includes("viognier")||g.includes("chenin")||g.includes("gruner veltliner")||g.includes("gruener veltliner")||g.includes("welschriesling")||g.includes("gewurztraminer")||g.includes("traminer")||g.includes("fiano")||g.includes("federspiel"))return"White";
   if(g.includes("pinot noir")||g.includes("cabernet")||g.includes("merlot")||g.includes("shiraz")||g.includes("syrah")||g.includes("malbec")||g.includes("tempranillo")||g.includes("nebbiolo")||g.includes("sangiovese")||g.includes("grenache")||g.includes("zinfandel"))return"Red";
+  if(g.includes("wachau"))return"White";
   return"Other";
 };
 
@@ -217,6 +218,41 @@ const fuzzySearch = q=>{
 };
 const LOCATIONS=["Rack A","Rack B","Rack C","Fridge Top","Fridge Bottom","Cellar Row 1","Cellar Row 2","Cellar Row 3","Living Room","Custom"];
 const fmt=d=>d?new Date(d).toLocaleDateString("en-AU",{month:"short",year:"numeric"}):null;
+const COUNTRY_SET=new Set(["Australia","Austria","France","Germany","Italy","Spain","Portugal","New Zealand","USA","Argentina","Chile","South Africa"]);
+const REGION_ALIAS_MAP={
+  "Coonwarra":"Coonawarra",
+  "Langhorne Creet":"Langhorne Creek",
+  "Mornington":"Mornington Peninsula",
+  "Bellarine":"Geelong",
+  "Cotes du Rhone":"Cotes du Rhone",
+};
+const REGION_COUNTRY_MAP={
+  "Adelaide Hills":"Australia","Barossa":"Australia","Clare Valley":"Australia","Coonawarra":"Australia","Eden Valley":"Australia","Geelong":"Australia","Gippsland":"Australia","Grampians":"Australia","Great Southern":"Australia","Heathcote":"Australia","Hunter Valley":"Australia","Kangaroo Island":"Australia","King Valley":"Australia","Langhorne Creek":"Australia","Macedon Ranges":"Australia","Margaret River":"Australia","McLaren Vale":"Australia","Mornington Peninsula":"Australia","Mudgee":"Australia","Tasmania":"Australia","Yarra Valley":"Australia","3608":"Australia",
+  "Bordeaux":"France","Champagne":"France","Cotes du Rhone":"France","Pessac-Leognan":"France","Provence":"France",
+  "Marlborough":"New Zealand","Martinborough":"New Zealand",
+  "Wachau":"Austria",
+};
+const normalizeRegionName = (value="") => REGION_ALIAS_MAP[(value||"").trim()] || (value||"").trim();
+const splitOrigin = (origin="") => (origin||"").split(",").map(s=>s.trim()).filter(Boolean);
+const deriveRegionCountry = (input="") => {
+  const parts = splitOrigin(input);
+  if(parts.length===0) return { region:"", country:"", origin:"" };
+  if(parts.length===1){
+    const one = normalizeRegionName(parts[0]);
+    if(COUNTRY_SET.has(one)) return { region:"", country:one, origin:one };
+    const mappedCountry = REGION_COUNTRY_MAP[one] || "";
+    return { region:one, country:mappedCountry, origin:[one,mappedCountry].filter(Boolean).join(", ") };
+  }
+  let region = normalizeRegionName(parts[0]);
+  let country = parts[parts.length-1];
+  if(COUNTRY_SET.has(region) && COUNTRY_SET.has(country) && region!==country){
+    country = region;
+    region = "";
+  } else if(!COUNTRY_SET.has(country)){
+    country = REGION_COUNTRY_MAP[region] || "";
+  }
+  return { region, country, origin:[region,country].filter(Boolean).join(", ") };
+};
 
 /* ── SEED DATA ────────────────────────────────────────────────── */
 const STORAGE_CODE_MAP = Object.fromEntries((wineHoldings2021.storageLocations||[]).map(r=>[r[0],r[1]]));
@@ -251,10 +287,11 @@ const SEED_WINES=(wineHoldings2021.cellar||[]).map((r,i)=>{
     r.other_review_3||"",
   ].filter(Boolean).join("\n\n");
   const purchaseDate = r.p_date ? excelSerialToIso(r.p_date) : (r.acquired_date_iso||"");
+  const geo = deriveRegionCountry(r.region||"");
   return{
     id:`xl-${r.row_index||i+1}`,
     name,
-    origin:r.region?`${r.region}, Australia`:r.region||"",
+    origin:geo.origin,
     grape,
     alcohol:0,
     vintage:year||null,
@@ -460,18 +497,25 @@ const PhotoPicker=({value,onChange,size=80,round})=>{
 };
 
 const BottleGlyph=({color="#8B1A1A"})=>(
-  <svg width="46" height="58" viewBox="0 0 46 58" aria-hidden="true">
+  <svg width="48" height="60" viewBox="0 0 48 60" aria-hidden="true">
     <defs>
-      <linearGradient id={`g-${color.replace("#","")}`} x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0%" stopColor={color} stopOpacity="0.95"/>
-        <stop offset="100%" stopColor={color} stopOpacity="0.6"/>
+      <linearGradient id={`g-body-${color.replace("#","")}`} x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stopColor={color} stopOpacity="0.96"/>
+        <stop offset="100%" stopColor={color} stopOpacity="0.5"/>
+      </linearGradient>
+      <linearGradient id={`g-glass-${color.replace("#","")}`} x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stopColor="rgba(255,255,255,.78)"/>
+        <stop offset="60%" stopColor="rgba(255,255,255,.18)"/>
+        <stop offset="100%" stopColor="rgba(255,255,255,.02)"/>
       </linearGradient>
     </defs>
-    <path d="M18 2h10v10c0 2 1 4 3 6 3 3 5 6 5 11v18c0 5-4 9-9 9h-8c-5 0-9-4-9-9V29c0-5 2-8 5-11 2-2 3-4 3-6V2z" fill={`url(#g-${color.replace("#","")})`} />
-    <path d="M20 2h6v6h-6z" fill="#D6A970" opacity="0.9"/>
-    <path d="M14 12h18" stroke="rgba(255,255,255,.35)" strokeWidth="1.2" />
-    <path d="M15 19c4 2 12 2 16 0" stroke="rgba(255,255,255,.22)" strokeWidth="1"/>
-    <rect x="15" y="8" width="4" height="38" rx="2" fill="rgba(255,255,255,.22)"/>
+    <path d="M19 3h10v9c0 2 1 4 3 6 4 3 6 8 6 13v17c0 6-5 10-10 10h-8c-6 0-10-4-10-10V31c0-5 2-10 6-13 2-2 3-4 3-6V3z" fill={`url(#g-body-${color.replace("#","")})`} />
+    <path d="M20 3h8v5h-8z" fill="#D0A36A" opacity="0.95"/>
+    <path d="M11 33c3 2 23 2 26 0v15c0 5-4 9-9 9h-8c-5 0-9-4-9-9V33z" fill="rgba(18,18,18,.18)" />
+    <rect x="14" y="12" width="4.2" height="35" rx="2.1" fill={`url(#g-glass-${color.replace("#","")})`} opacity="0.6"/>
+    <path d="M13 20c6 2 16 2 22 0" stroke="rgba(255,255,255,.22)" strokeWidth="1" />
+    <path d="M15 28c5 1.6 13 1.6 18 0" stroke="rgba(255,255,255,.16)" strokeWidth="0.9" />
+    <ellipse cx="24" cy="58" rx="10" ry="1.8" fill="rgba(0,0,0,.14)"/>
   </svg>
 );
 
@@ -480,6 +524,7 @@ const WineCard=({wine,onClick})=>{
   const type=wine.wineType||guessWineType(wine.grape,wine.name);
   const tc=WINE_TYPE_COLORS[type]||WINE_TYPE_COLORS.Other;
   const ready=wineReadiness(wine);
+  const geo=deriveRegionCountry(wine.origin||"");
   const yearTag=wine.vintage?String(wine.vintage):null;
   const locationTag=wine.location?(wine.location+(wine.locationSlot?` · ${wine.locationSlot}`:"")):null;
   const priceTag=safeNum(wine.cellarMeta?.pricePerBottle);
@@ -487,7 +532,7 @@ const WineCard=({wine,onClick})=>{
     <div onClick={onClick} style={{background:"linear-gradient(180deg,var(--card),var(--inputBg))",borderRadius:20,padding:"16px",cursor:"pointer",border:"1px solid var(--border)",marginBottom:10,display:"flex",gap:14,alignItems:"flex-start",transition:"transform 0.15s,box-shadow 0.15s",boxShadow:"0 2px 10px var(--shadow)"}}
       onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 8px 28px var(--shadow)";}}
       onMouseLeave={e=>{e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="0 2px 8px var(--shadow)";}}>
-      <div style={{width:60,height:76,borderRadius:14,background:`radial-gradient(circle at 20% 15%,rgba(255,255,255,.4),${tc.bg})`,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",border:"1px solid rgba(255,255,255,.35)"}}>
+      <div style={{width:60,height:76,borderRadius:14,background:`radial-gradient(circle at 25% 15%,rgba(255,255,255,.55),${tc.bg})`,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",border:"1px solid rgba(255,255,255,.5)",boxShadow:"inset 0 1px 8px rgba(255,255,255,.35)"}}>
         {wine.photo?<img src={wine.photo} alt={wine.name} style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<BottleGlyph color={tc.dot}/>}
       </div>
       <div style={{flex:1,minWidth:0}}>
@@ -495,7 +540,7 @@ const WineCard=({wine,onClick})=>{
           <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:15,fontWeight:700,color:"var(--text)",lineHeight:1.25,flex:1,paddingRight:8}}>{wine.name}</div>
           {!wine.wishlist&&wine.bottles>0&&<div style={{fontSize:12,color:"var(--sub)",fontWeight:500,flexShrink:0,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{wine.bottles} {wine.bottles===1?"btl":"btls"}</div>}
         </div>
-        {wine.origin&&<div style={{fontSize:13,color:"var(--sub)",marginBottom:7,fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{wine.origin.split(",")[0]}</div>}
+        {(geo.region||geo.country)&&<div style={{fontSize:13,color:"var(--sub)",marginBottom:7,fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{geo.region||geo.country}</div>}
         <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:6}}>
           <WineTypePill type={type}/>
           {yearTag&&<span style={{padding:"3px 8px",borderRadius:20,fontSize:11,fontWeight:700,color:"var(--text)",background:"var(--inputBg)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{yearTag}</span>}
@@ -505,7 +550,7 @@ const WineCard=({wine,onClick})=>{
         </div>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            {wine.origin&&<span style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",display:"flex",alignItems:"center",gap:3}}><Icon n="location" size={11} color="var(--sub)"/>{wine.origin.split(",").pop()?.trim()}</span>}
+            {geo.country&&<span style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",display:"flex",alignItems:"center",gap:3}}><Icon n="location" size={11} color="var(--sub)"/>{geo.country}</span>}
             {wine.grape&&<span style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>· {wine.grape.split("/")[0].trim()}</span>}
           </div>
           {wine.rating>0&&<Stars value={wine.rating} size={12}/>}
@@ -673,15 +718,16 @@ const SORTS=[
   {value:"costAsc",label:"Least Expensive"},
   {value:"recent",label:"Recently Added"},
 ];
-const DEFAULT_FILTERS={sort:"name",type:"",minRating:0,location:"",readiness:"",region:"",priceBand:""};
-const hasFilters=f=>f.sort!=="name"||f.type||f.minRating>0||f.location||f.readiness||f.region||f.priceBand;
+const DEFAULT_FILTERS={sort:"name",type:"",minRating:0,location:"",readiness:"",region:"",country:"",priceBand:""};
+const hasFilters=f=>f.sort!=="name"||f.type||f.minRating>0||f.location||f.readiness||f.region||f.country||f.priceBand;
 const applyFilters=(wines,f,s)=>{
   let r=wines.filter(w=>!w.wishlist);
   if(s)r=r.filter(w=>`${w.name} ${w.grape} ${w.origin} ${w.location}`.toLowerCase().includes(s.toLowerCase()));
   if(f.minRating>0)r=r.filter(w=>(w.rating||0)>=f.minRating);
   if(f.type)r=r.filter(w=>(w.wineType||guessWineType(w.grape,w.name))===f.type);
   if(f.location)r=r.filter(w=>w.location===f.location);
-  if(f.region)r=r.filter(w=>(w.origin||"").toLowerCase().includes(f.region.toLowerCase()));
+  if(f.region)r=r.filter(w=>deriveRegionCountry(w.origin||"").region===f.region);
+  if(f.country)r=r.filter(w=>deriveRegionCountry(w.origin||"").country===f.country);
   if(f.readiness){
     r=r.filter(w=>{
       const st=wineReadiness(w).key;
@@ -716,7 +762,8 @@ const applyFilters=(wines,f,s)=>{
 const FilterPanel=({filters,setFilters,wines,onClose})=>{
   const col=wines.filter(w=>!w.wishlist);
   const locs=[...new Set(col.map(w=>w.location).filter(Boolean))].sort();
-  const regions=[...new Set(col.map(w=>((w.origin||"").split(",")[0]||"").trim()).filter(Boolean))].sort();
+  const regions=[...new Set(col.map(w=>deriveRegionCountry(w.origin||"").region).filter(Boolean))].sort();
+  const countries=[...new Set(col.map(w=>deriveRegionCountry(w.origin||"").country).filter(Boolean))].sort();
   const [local,setLocal]=useState({...filters});
   const chip=(active)=>({padding:"7px 13px",borderRadius:20,border:active?"1.5px solid var(--accent)":"1.5px solid var(--border)",background:active?"rgba(var(--accentRgb),0.1)":"var(--inputBg)",color:active?"var(--accent)":"var(--text)",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',sans-serif",transition:"all 0.15s"});
   return(
@@ -747,6 +794,14 @@ const FilterPanel=({filters,setFilters,wines,onClose})=>{
           <div style={{fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Origin Region</div>
           <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:18}}>
             {regions.map(rg=><button key={rg} onClick={()=>setLocal(p=>({...p,region:p.region===rg?"":rg}))} style={chip(local.region===rg)}>{rg}</button>)}
+          </div>
+        </div>
+      )}
+      {countries.length>0&&(
+        <div>
+          <div style={{fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Country</div>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:18}}>
+            {countries.map(c=><button key={c} onClick={()=>setLocal(p=>({...p,country:p.country===c?"":c}))} style={chip(local.country===c)}>{c}</button>)}
           </div>
         </div>
       )}
@@ -804,7 +859,7 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,desktop})=>{
       </div>
       <div style={{display:"flex",gap:8,marginBottom:16,alignItems:"center"}}>
         <div style={{position:"relative",flex:1}}>
-          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search wines, regions…" style={{paddingLeft:38,borderRadius:14}}/>
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search wines, regions, countries…" style={{paddingLeft:38,borderRadius:14}}/>
           <div style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"var(--sub)",pointerEvents:"none"}}><Icon n="search" size={16}/></div>
         </div>
         <button onClick={()=>setFilterOpen(true)} style={{width:44,height:44,borderRadius:14,background:active?"rgba(var(--accentRgb),0.12)":"var(--card)",border:active?"1.5px solid var(--accent)":"1.5px solid var(--border)",display:"flex",alignItems:"center",justifyContent:"center",color:active?"var(--accent)":"var(--sub)",flexShrink:0,position:"relative",cursor:"pointer"}}>
@@ -823,6 +878,7 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,desktop})=>{
           {filters.readiness&&<Chip label={{ready:"Ready",notReady:"Not Ready",past:"Past Peak",noWindow:"No Window"}[filters.readiness]||filters.readiness} onX={()=>setFilters(p=>({...p,readiness:""}))}/>}
           {filters.priceBand&&<Chip label={{budget:"<$25",mid:"$25-$59",premium:"$60-$119",luxury:"$120+"}[filters.priceBand]||filters.priceBand} onX={()=>setFilters(p=>({...p,priceBand:""}))}/>}
           {filters.region&&<Chip label={filters.region} onX={()=>setFilters(p=>({...p,region:""}))}/>}
+          {filters.country&&<Chip label={filters.country} onX={()=>setFilters(p=>({...p,country:""}))}/>}
           {filters.location&&<Chip label={filters.location} onX={()=>setFilters(p=>({...p,location:""}))}/>}
           <button onClick={()=>setFilters(DEFAULT_FILTERS)} style={{padding:"4px 10px",borderRadius:20,border:"none",background:"none",color:"var(--sub)",fontSize:12,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',sans-serif",textDecoration:"underline"}}>Clear all</button>
         </div>
@@ -1639,7 +1695,12 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
   const types=col.reduce((acc,w)=>{const t=w.wineType||guessWineType(w.grape,w.name);acc[t]=(acc[t]||0)+1;return acc;},{});
   const wineryValue=col.reduce((s,w)=>s+((safeNum(w.cellarMeta?.pricePerBottle)||0)*(safeNum(w.bottles)||0)),0);
   const readyCount=col.filter(w=>wineReadiness(w).key==="ready").length;
-  const regionStats=col.reduce((acc,w)=>{const r=(w.origin||"").split(",")[0]?.trim();if(r)acc[r]=(acc[r]||0)+1;return acc;},{});
+  const regionStats=col.reduce((acc,w)=>{
+    const geo=deriveRegionCountry(w.origin||"");
+    const key=geo.region||geo.country;
+    if(key)acc[key]=(acc[key]||0)+1;
+    return acc;
+  },{});
   const topRegion=Object.entries(regionStats).sort((a,b)=>b[1]-a[1])[0]?.[0]||"—";
   const avgBottle=bottles?wineryValue/bottles:0;
   const profileBg=profile.profileBg||"linear-gradient(135deg,#6B0A0A 0%,var(--accent) 60%,#6B0A0A 100%)";
