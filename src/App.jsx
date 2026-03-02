@@ -1820,13 +1820,16 @@ export default function App(){
           setWines(all.filter(w=>!w.wishlist));
           setWishlist(all.filter(w=>w.wishlist));
           setNotes(noteRows.length?noteRows.map(fromDb.note):(cache?.notes||[]));
-          if(prof){
-            setProfileState({name:prof.name,description:prof.description,avatar:prof.avatar||null,cellarName:prof.cellarName||"",bio:prof.bio||"",country:prof.country||"",surname:prof.surname||"",profileBg:prof.profileBg||"",accent:cache?.profile?.accent||DEFAULT_PROFILE.accent});
+          if(cache?.profile){
+            // Prefer latest local profile to avoid stale remote profile overwriting user edits on refresh.
+            setProfileState(cache.profile);
+            setIsNewUser(!(cache.profile?.name));
+          }else if(prof){
+            setProfileState({name:prof.name,description:prof.description,avatar:prof.avatar||null,cellarName:prof.cellarName||"",bio:prof.bio||"",country:prof.country||"",surname:prof.surname||"",profileBg:prof.profileBg||"",accent:DEFAULT_PROFILE.accent});
             // New user = profile name still matches the seed default or is empty
             setIsNewUser(!prof.name||(prof.name===DEFAULT_PROFILE.name&&!prof.cellarName));
           }else{
-            if(cache?.profile){setProfileState(cache.profile);setIsNewUser(!(cache.profile?.name));}
-            else setIsNewUser(true);
+            setIsNewUser(true);
           }
         }
       }catch(e){
