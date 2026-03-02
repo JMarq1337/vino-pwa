@@ -27,16 +27,22 @@ const db = {
   },
   async saveProfile(p) {
     try {
-      const payload={name:p.name,description:p.description,avatar:p.avatar,surname:p.surname||"",cellar_name:p.cellarName||"",bio:p.bio||"",country:p.country||"",profile_bg:p.profileBg||""};
-      const rPatch=await fetch(`${supa("profile")}?id=eq.1`,{method:"PATCH",headers:UH,body:JSON.stringify(payload)});
-      if(rPatch.ok) return true;
-      // Fallback insert/upsert for id=1 row.
-      const rPost=await fetch(`${supa("profile")}?on_conflict=id`,{method:"POST",headers:UH,body:JSON.stringify({id:1,...payload})});
-      if(!rPost.ok){
-        console.error("saveProfile post failed",await rPost.text());
+      // Try full payload first (for extended schema), then fall back to base schema.
+      const fullPayload={name:p.name,description:p.description,avatar:p.avatar,surname:p.surname||"",cellar_name:p.cellarName||"",bio:p.bio||"",country:p.country||"",profile_bg:p.profileBg||""};
+      const basePayload={name:p.name,description:p.description,avatar:p.avatar};
+      const tryWrite = async payload => {
+        const rPatch=await fetch(`${supa("profile")}?id=eq.1`,{method:"PATCH",headers:UH,body:JSON.stringify(payload)});
+        if(rPatch.ok) return true;
+        const patchErr=await rPatch.text();
+        const rPost=await fetch(`${supa("profile")}?on_conflict=id`,{method:"POST",headers:UH,body:JSON.stringify({id:1,...payload})});
+        if(rPost.ok) return true;
+        const postErr=await rPost.text();
+        console.error("saveProfile failed", { patchErr, postErr });
         return false;
-      }
-      return true;
+      };
+
+      if(await tryWrite(fullPayload)) return true;
+      return await tryWrite(basePayload);
     }catch(e){console.error("saveProfile err",e);return false;}
   },
   async getProfile() {
