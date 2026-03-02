@@ -1921,7 +1921,7 @@ export default function App(){
         {splashPhase==="greet"&&ready&&(
           <div style={{animation:"floatUp 0.8s 0.1s ease both"}}>
             <div style={{marginTop:32,fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:18,fontWeight:400,color:"rgba(237,230,224,0.55)",lineHeight:1.5}}>
-              Good {new Date().getHours()<12?"morning":new Date().getHours()<18?"afternoon":"evening"}{profile.name&&profile.name!==DEFAULT_PROFILE.name?`, ${profile.name}`:""}
+              Good {new Date().getHours()<12?"morning":new Date().getHours()<18?"afternoon":"evening"}{profile.name?`, ${profile.name}`:""}
             </div>
             <div style={{marginTop:36}}>
               <button
