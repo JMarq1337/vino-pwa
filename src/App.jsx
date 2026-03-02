@@ -70,9 +70,23 @@ const ACCENTS = {
   amber:{id:"amber",label:"Amber Gold",accent:"#A86A12",accentLight:"#E7B86A"},
   plum:{id:"plum",label:"Plum",accent:"#6A2E8D",accentLight:"#C29AE8"},
 };
+const COLOR_THEMES = [
+  { id:"wine", label:"Wine Red", profileBg:"linear-gradient(135deg,#3A0813 0%,#9B2335 52%,#E05F77 100%)" },
+  { id:"ocean", label:"Ocean Blue", profileBg:"linear-gradient(135deg,#0A1E4A 0%,#1E5BB8 52%,#77AFFF 100%)" },
+  { id:"emerald", label:"Emerald", profileBg:"linear-gradient(135deg,#0C2E20 0%,#1F7A55 52%,#63C49A 100%)" },
+  { id:"amber", label:"Amber Gold", profileBg:"linear-gradient(135deg,#3A2209 0%,#A86A12 52%,#E6B05A 100%)" },
+  { id:"plum", label:"Plum", profileBg:"linear-gradient(135deg,#2D0F46 0%,#6A2E8D 52%,#B888DF 100%)" },
+];
+const THEME_BY_ID = Object.fromEntries(COLOR_THEMES.map(t=>[t.id,t]));
+const detectAccentFromProfileBg = bg => COLOR_THEMES.find(t=>t.profileBg===bg)?.id || null;
 const safeNum = v => {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
+};
+const normalizeLocation = value => {
+  const cleaned=(value||"").trim().replace(/\s+/g," ");
+  if(!cleaned)return "";
+  return cleaned.length===1?cleaned.toUpperCase():cleaned;
 };
 const excelSerialToIso = serial => {
   const n=safeNum(serial);
@@ -138,12 +152,12 @@ const readCache=()=>{
 const fromDb = {
   wine: r=>{
     const parsed=parseWineMetaFromNotes(r.notes);
-    return ({ id:r.id,name:r.name,origin:r.origin,grape:r.grape,alcohol:r.alcohol,vintage:r.vintage,bottles:r.bottles,rating:r.rating,notes:parsed.plain,cellarMeta:parsed.meta,review:r.review,tastingNotes:r.tasting_notes,datePurchased:r.date_purchased,wishlist:r.wishlist,color:r.color,photo:r.photo,location:r.location,locationSlot:r.location_slot,wineType:r.wine_type });
+    return ({ id:r.id,name:r.name,origin:r.origin,grape:r.grape,alcohol:r.alcohol,vintage:r.vintage,bottles:r.bottles,rating:r.rating,notes:parsed.plain,cellarMeta:parsed.meta,review:r.review,tastingNotes:r.tasting_notes,datePurchased:r.date_purchased,wishlist:r.wishlist,color:r.color,photo:r.photo,location:normalizeLocation(r.location),locationSlot:r.location_slot,wineType:r.wine_type });
   },
   note: r=>({ id:r.id,wineId:r.wine_id,title:r.title,content:r.content,date:r.date })
 };
 const toDb = {
-  wine: w=>({ id:w.id,name:w.name,origin:w.origin,grape:w.grape,alcohol:w.alcohol,vintage:w.vintage,bottles:w.bottles,rating:w.rating,notes:encodeWineNotes(w.notes,w.cellarMeta),review:w.review,tasting_notes:w.tastingNotes,date_purchased:w.datePurchased,wishlist:w.wishlist||false,color:w.color,photo:w.photo,location:w.location,location_slot:w.locationSlot,wine_type:w.wineType }),
+  wine: w=>({ id:w.id,name:w.name,origin:w.origin,grape:w.grape,alcohol:w.alcohol,vintage:w.vintage,bottles:w.bottles,rating:w.rating,notes:encodeWineNotes(w.notes,w.cellarMeta),review:w.review,tasting_notes:w.tastingNotes,date_purchased:w.datePurchased,wishlist:w.wishlist||false,color:w.color,photo:w.photo,location:normalizeLocation(w.location),location_slot:w.locationSlot,wine_type:w.wineType }),
   note: n=>({ id:n.id,wine_id:n.wineId,title:n.title,content:n.content,date:n.date })
 };
 
@@ -330,7 +344,7 @@ const SEED_WINES=SOURCE_CELLAR_ROWS.map((r,i)=>{
     wishlist:false,
     color:typeColor,
     photo:null,
-    location:STORAGE_CODE_MAP[r.where_stored]||r.where_stored||"Cellar",
+    location:normalizeLocation(STORAGE_CODE_MAP[r.where_stored]||r.where_stored||"Cellar"),
     locationSlot:r.box_no||null,
     wineType,
   };
@@ -521,31 +535,40 @@ const PhotoPicker=({value,onChange,size=80,round})=>{
   );
 };
 
-const BottleGlyph=({color="#8B1A1A"})=>(
-  <svg width="48" height="60" viewBox="0 0 48 60" aria-hidden="true">
-    <defs>
-      <linearGradient id={`g-body-${color.replace("#","")}`} x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stopColor={color} stopOpacity="0.96"/>
-        <stop offset="100%" stopColor={color} stopOpacity="0.5"/>
-      </linearGradient>
-      <linearGradient id={`g-glass-${color.replace("#","")}`} x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0%" stopColor="rgba(255,255,255,.78)"/>
-        <stop offset="60%" stopColor="rgba(255,255,255,.18)"/>
-        <stop offset="100%" stopColor="rgba(255,255,255,.02)"/>
-      </linearGradient>
-    </defs>
-    <path d="M19 3h10v9c0 2 1 4 3 6 4 3 6 8 6 13v17c0 6-5 10-10 10h-8c-6 0-10-4-10-10V31c0-5 2-10 6-13 2-2 3-4 3-6V3z" fill={`url(#g-body-${color.replace("#","")})`} />
-    <path d="M20 3h8v5h-8z" fill="#D0A36A" opacity="0.95"/>
-    <path d="M11 33c3 2 23 2 26 0v15c0 5-4 9-9 9h-8c-5 0-9-4-9-9V33z" fill="rgba(18,18,18,.18)" />
-    <rect x="14" y="12" width="4.2" height="35" rx="2.1" fill={`url(#g-glass-${color.replace("#","")})`} opacity="0.6"/>
-    <path d="M13 20c6 2 16 2 22 0" stroke="rgba(255,255,255,.22)" strokeWidth="1" />
-    <path d="M15 28c5 1.6 13 1.6 18 0" stroke="rgba(255,255,255,.16)" strokeWidth="0.9" />
-    <ellipse cx="24" cy="58" rx="10" ry="1.8" fill="rgba(0,0,0,.14)"/>
-  </svg>
-);
+const BottleGlyph=({color="#8B1A1A"})=>{
+  const id=color.replace("#","");
+  return(
+    <svg width="56" height="72" viewBox="0 0 56 72" aria-hidden="true">
+      <defs>
+        <linearGradient id={`bottle-main-${id}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.95"/>
+          <stop offset="70%" stopColor={color} stopOpacity="0.62"/>
+          <stop offset="100%" stopColor="#1a1616" stopOpacity="0.8"/>
+        </linearGradient>
+        <linearGradient id={`bottle-neck-${id}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#D7B277"/>
+          <stop offset="100%" stopColor="#9E7744"/>
+        </linearGradient>
+        <linearGradient id={`bottle-reflect-${id}`} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="rgba(255,255,255,.75)"/>
+          <stop offset="100%" stopColor="rgba(255,255,255,0)"/>
+        </linearGradient>
+      </defs>
+      <path d="M23 3h10v7c0 2 1 4 2.8 6.2 4.8 5.7 7.2 10.9 7.2 18.8v24.5c0 5.3-4.3 9.5-9.5 9.5h-11C17.2 69 13 64.8 13 59.5V35c0-7.8 2.4-13.1 7.2-18.8C22 14 23 12 23 10V3z" fill={`url(#bottle-main-${id})`}/>
+      <rect x="23" y="1.8" width="10" height="3.5" rx="1.1" fill="#7A5A33"/>
+      <rect x="22.4" y="5" width="11.2" height="5.1" rx="1.3" fill={`url(#bottle-neck-${id})`}/>
+      <path d="M16 36.5c3.2 1.7 20.8 1.7 24 0v17.8c0 4.6-3.7 8.3-8.3 8.3h-7.4c-4.6 0-8.3-3.7-8.3-8.3V36.5z" fill="rgba(18,18,18,.18)"/>
+      <rect x="18.3" y="14" width="4.1" height="41" rx="2.05" fill={`url(#bottle-reflect-${id})`} opacity="0.58"/>
+      <rect x="24" y="29.5" width="8" height="10.5" rx="1.9" fill="rgba(248,240,232,.74)" stroke="rgba(96,80,62,.24)" strokeWidth="0.8"/>
+      <path d="M24 34.8h8" stroke="rgba(96,80,62,.33)" strokeWidth="0.8"/>
+      <path d="M17.4 27c4.7 1.5 16.5 1.5 21.2 0" stroke="rgba(255,255,255,.2)" strokeWidth="1"/>
+      <ellipse cx="28" cy="69.2" rx="11.5" ry="2.2" fill="rgba(0,0,0,.14)"/>
+    </svg>
+  );
+};
 
 /* ── WINE CARD ────────────────────────────────────────────────── */
-const WineCard=({wine,onClick})=>{
+const WineCard=({wine,onClick,onDrinkOne,onMarkDrank,onQuickNote})=>{
   const type=resolveWineType(wine);
   const tc=WINE_TYPE_COLORS[type]||WINE_TYPE_COLORS.Other;
   const ready=wineReadiness(wine);
@@ -580,6 +603,13 @@ const WineCard=({wine,onClick})=>{
           </div>
           {wine.rating>0&&<Stars value={wine.rating} size={12}/>}
         </div>
+        {!wine.wishlist&&(
+          <div style={{display:"flex",gap:6,marginTop:8}}>
+            <button onClick={e=>{e.stopPropagation();onDrinkOne?.(wine);}} style={{padding:"5px 9px",borderRadius:9,border:"1px solid var(--border)",background:"var(--inputBg)",color:"var(--text)",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Drink 1</button>
+            <button onClick={e=>{e.stopPropagation();onMarkDrank?.(wine);}} style={{padding:"5px 9px",borderRadius:9,border:"1px solid rgba(var(--accentRgb),0.35)",background:"rgba(var(--accentRgb),0.1)",color:"var(--accent)",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Mark Drank</button>
+            <button onClick={e=>{e.stopPropagation();onQuickNote?.(wine);}} style={{padding:"5px 9px",borderRadius:9,border:"1px solid var(--border)",background:"var(--card)",color:"var(--sub)",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>+ Note</button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -590,16 +620,19 @@ const WineDetail=({wine,onEdit,onDelete,onMove})=>{
   const type=resolveWineType(wine);
   const tc=WINE_TYPE_COLORS[type]||WINE_TYPE_COLORS.Other;
   const ready=wineReadiness(wine);
+  const geo=deriveRegionCountry(wine.origin||"");
   const m=wine.cellarMeta||{};
   const drinkWindow=(m.drinkStart||m.drinkEnd)?`${m.drinkStart||"?"} - ${m.drinkEnd||"?"}`:null;
   const pricePerBottle=safeNum(m.pricePerBottle);
   return(
     <div>
-      <div style={{borderRadius:16,background:tc.bg,padding:"20px",marginBottom:16,position:"relative",overflow:"hidden",minHeight:100}}>
-        <div style={{position:"absolute",right:-8,bottom:-12,opacity:0.12,pointerEvents:"none"}}><Icon n="wine" size={100} color={tc.dot}/></div>
-        <WineTypePill type={type}/>
-        <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:22,fontWeight:800,color:"var(--text)",marginTop:8,lineHeight:1.2}}>{wine.name}</div>
-        {wine.vintage&&<div style={{fontSize:14,color:"var(--sub)",marginTop:2,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{wine.vintage} · {wine.origin}</div>}
+      <div style={{borderRadius:16,background:`linear-gradient(140deg,${tc.dot} 0%,rgba(0,0,0,.24) 90%)`,padding:"20px",marginBottom:16,position:"relative",overflow:"hidden",minHeight:108,boxShadow:"inset 0 1px 0 rgba(255,255,255,.2)"}}>
+        <div style={{position:"absolute",right:-18,bottom:-18,opacity:0.12,pointerEvents:"none"}}><BrandLogo size={120}/></div>
+        <div style={{position:"relative",zIndex:1}}>
+          <WineTypePill type={type}/>
+        </div>
+        <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:22,fontWeight:800,color:"#fff",marginTop:8,lineHeight:1.2,position:"relative",zIndex:1,textShadow:"0 2px 10px rgba(0,0,0,.28)"}}>{wine.name}</div>
+        {(wine.vintage||geo.region||geo.country)&&<div style={{fontSize:14,color:"rgba(255,255,255,.86)",marginTop:2,fontFamily:"'Plus Jakarta Sans',sans-serif",position:"relative",zIndex:1}}>{[wine.vintage,geo.region||geo.country,geo.country&&geo.region?geo.country:null].filter(Boolean).join(" · ")}</div>}
         {wine.rating>0&&<div style={{marginTop:10}}><Stars value={wine.rating} size={16}/></div>}
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
@@ -630,7 +663,7 @@ const WineDetail=({wine,onEdit,onDelete,onMove})=>{
 /* ── WINE FORM ────────────────────────────────────────────────── */
 const WineForm=({initial,onSave,onClose,isWishlist})=>{
   const blank={name:"",origin:"",grape:"",wineType:"Red",alcohol:"",vintage:"",bottles:"1",rating:0,notes:"",review:"",tastingNotes:"",datePurchased:"",wishlist:!!isWishlist,photo:null,location:"Rack A",locationSlot:"",drinkStart:"",drinkEnd:"",pricePerBottle:"",rrp:"",totalPaid:"",insuranceValue:"",supplier:""};
-  const [f,setF]=useState(initial?{...blank,...initial,alcohol:initial.alcohol?.toString()||"",vintage:initial.vintage?.toString()||"",bottles:initial.bottles?.toString()||"",locationSlot:initial.locationSlot||"",wineType:resolveWineType(initial),drinkStart:initial.cellarMeta?.drinkStart?.toString()||"",drinkEnd:initial.cellarMeta?.drinkEnd?.toString()||"",pricePerBottle:initial.cellarMeta?.pricePerBottle?.toString()||"",rrp:initial.cellarMeta?.rrp?.toString()||"",totalPaid:initial.cellarMeta?.totalPaid?.toString()||"",insuranceValue:initial.cellarMeta?.insuranceValue?.toString()||"",supplier:initial.cellarMeta?.supplier||""}:blank);
+  const [f,setF]=useState(initial?{...blank,...initial,location:normalizeLocation(initial.location)||"Rack A",alcohol:initial.alcohol?.toString()||"",vintage:initial.vintage?.toString()||"",bottles:initial.bottles?.toString()||"",locationSlot:initial.locationSlot||"",wineType:resolveWineType(initial),drinkStart:initial.cellarMeta?.drinkStart?.toString()||"",drinkEnd:initial.cellarMeta?.drinkEnd?.toString()||"",pricePerBottle:initial.cellarMeta?.pricePerBottle?.toString()||"",rrp:initial.cellarMeta?.rrp?.toString()||"",totalPaid:initial.cellarMeta?.totalPaid?.toString()||"",insuranceValue:initial.cellarMeta?.insuranceValue?.toString()||"",supplier:initial.cellarMeta?.supplier||""}:blank);
   const set=(k,v)=>setF(p=>({...p,[k]:v}));
   const [q,setQ]=useState(initial?.name||"");
   const [sugs,setSugs]=useState([]);
@@ -641,7 +674,7 @@ const WineForm=({initial,onSave,onClose,isWishlist})=>{
     if(!f.name)return;
     const wt=f.wineType||guessWineType(f.grape,f.name);
     const tc=WINE_TYPE_COLORS[wt]||WINE_TYPE_COLORS.Other;
-    onSave({...f,id:f.id||uid(),alcohol:parseFloat(f.alcohol)||0,vintage:parseInt(f.vintage)||null,bottles:parseInt(f.bottles)||0,locationSlot:f.locationSlot||null,wineType:wt,color:tc.dot,cellarMeta:{...(initial?.cellarMeta||{}),drinkStart:parseInt(f.drinkStart)||null,drinkEnd:parseInt(f.drinkEnd)||null,pricePerBottle:parseFloat(f.pricePerBottle)||null,rrp:parseFloat(f.rrp)||null,totalPaid:parseFloat(f.totalPaid)||null,insuranceValue:parseFloat(f.insuranceValue)||null,supplier:f.supplier||""}});
+    onSave({...f,id:f.id||uid(),alcohol:parseFloat(f.alcohol)||0,vintage:parseInt(f.vintage)||null,bottles:parseInt(f.bottles)||0,location:normalizeLocation(f.location)||"Cellar",locationSlot:f.locationSlot||null,wineType:wt,color:tc.dot,cellarMeta:{...(initial?.cellarMeta||{}),drinkStart:parseInt(f.drinkStart)||null,drinkEnd:parseInt(f.drinkEnd)||null,pricePerBottle:parseFloat(f.pricePerBottle)||null,rrp:parseFloat(f.rrp)||null,totalPaid:parseFloat(f.totalPaid)||null,insuranceValue:parseFloat(f.insuranceValue)||null,supplier:f.supplier||""}});
     onClose();
   };
   return(
@@ -657,7 +690,8 @@ const WineForm=({initial,onSave,onClose,isWishlist})=>{
           <div style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"var(--sub)",pointerEvents:"none"}}><Icon n="search" size={16}/></div>
         </div>
         {sugs.length>0&&(
-          <div style={{position:"absolute",top:"100%",left:0,right:0,background:"var(--surface)",borderRadius:14,border:"1px solid var(--border)",zIndex:99,maxHeight:220,overflowY:"auto",boxShadow:"0 12px 40px rgba(0,0,0,0.2)",marginTop:4}}>
+          <div style={{position:"absolute",top:"100%",left:0,right:0,background:"var(--surface)",borderRadius:14,border:"1px solid var(--border)",zIndex:99,maxHeight:300,overflowY:"auto",overscrollBehavior:"contain",boxShadow:"0 12px 40px rgba(0,0,0,0.2)",marginTop:4}}
+            onWheel={e=>e.stopPropagation()}>
             {sugs.map((w,i)=>(
               <div key={i} onMouseDown={()=>pickSug(w)} style={{padding:"10px 14px",cursor:"pointer",borderBottom:i<sugs.length-1?"1px solid var(--border)":"none"}}
                 onMouseEnter={e=>e.currentTarget.style.background="var(--inputBg)"}
@@ -692,7 +726,7 @@ const WineForm=({initial,onSave,onClose,isWishlist})=>{
           {!isWishlist&&(
             <div style={{display:"grid",gridTemplateColumns:"1fr 2fr 1fr",gap:10}}>
               <Field label="Bottles" value={f.bottles} onChange={v=>set("bottles",v)} type="number" placeholder="1" optional/>
-              <SelField label="Location" value={f.location} onChange={v=>set("location",v)} options={[...new Set([...LOCATIONS,f.location].filter(Boolean))]}/>
+              <SelField label="Location" value={f.location} onChange={v=>set("location",normalizeLocation(v))} options={[...new Set([...LOCATIONS,normalizeLocation(f.location)].filter(Boolean))]}/>
               <Field label="Slot" value={f.locationSlot} onChange={v=>set("locationSlot",v)} placeholder="A3" optional/>
             </div>
           )}
@@ -741,6 +775,7 @@ const SORTS=[
   {value:"bottles",label:"Bottles"},
   {value:"costDesc",label:"Most Expensive"},
   {value:"costAsc",label:"Least Expensive"},
+  {value:"drinkSoon",label:"Drink Soonest"},
   {value:"recent",label:"Recently Added"},
 ];
 const DEFAULT_FILTERS={sort:"name",type:"",minRating:0,location:"",readiness:"",region:"",country:"",priceBand:""};
@@ -750,7 +785,7 @@ const applyFilters=(wines,f,s)=>{
   if(s)r=r.filter(w=>`${w.name} ${w.grape} ${w.origin} ${w.location}`.toLowerCase().includes(s.toLowerCase()));
   if(f.minRating>0)r=r.filter(w=>(w.rating||0)>=f.minRating);
   if(f.type)r=r.filter(w=>(resolveWineType(w))===f.type);
-  if(f.location)r=r.filter(w=>w.location===f.location);
+  if(f.location)r=r.filter(w=>normalizeLocation(w.location)===f.location);
   if(f.region)r=r.filter(w=>deriveRegionCountry(w.origin||"").region===f.region);
   if(f.country)r=r.filter(w=>deriveRegionCountry(w.origin||"").country===f.country);
   if(f.readiness){
@@ -779,14 +814,26 @@ const applyFilters=(wines,f,s)=>{
     if(f.sort==="bottles")return(b.bottles||0)-(a.bottles||0);
     if(f.sort==="costDesc")return (safeNum(b.cellarMeta?.pricePerBottle)||0)-(safeNum(a.cellarMeta?.pricePerBottle)||0);
     if(f.sort==="costAsc")return (safeNum(a.cellarMeta?.pricePerBottle)||0)-(safeNum(b.cellarMeta?.pricePerBottle)||0);
+    if(f.sort==="drinkSoon"){
+      const ay=safeNum(a.cellarMeta?.drinkEnd)||9999;
+      const by=safeNum(b.cellarMeta?.drinkEnd)||9999;
+      return ay-by;
+    }
     if(f.sort==="recent")return b.id.localeCompare(a.id);
     return a.name.localeCompare(b.name);
   });
 };
 
+const SMART_BUNDLES=[
+  {id:"tonight",label:"Tonight Ready",desc:"Ready to drink now",apply:f=>({...f,readiness:"ready",sort:"rating",minRating:0})},
+  {id:"soon",label:"Drink Soon",desc:"Closing windows first",apply:f=>({...f,sort:"drinkSoon",readiness:"",minRating:0})},
+  {id:"value",label:"High Value",desc:"Most expensive first",apply:f=>({...f,sort:"costDesc",priceBand:"luxury"})},
+  {id:"topRated",label:"Top Rated",desc:"4+ stars",apply:f=>({...f,sort:"rating",minRating:4})},
+];
+
 const FilterPanel=({filters,setFilters,wines,onClose})=>{
   const col=wines.filter(w=>!w.wishlist);
-  const locs=[...new Set(col.map(w=>w.location).filter(Boolean))].sort();
+  const locs=[...new Set(col.map(w=>normalizeLocation(w.location)).filter(Boolean))].sort();
   const regions=[...new Set(col.map(w=>deriveRegionCountry(w.origin||"").region).filter(Boolean))].sort();
   const countries=[...new Set(col.map(w=>deriveRegionCountry(w.origin||"").country).filter(Boolean))].sort();
   const [local,setLocal]=useState({...filters});
@@ -859,18 +906,97 @@ const Chip=({label,onX})=>(
   </div>
 );
 
+const CellarHeatmap=({wines})=>{
+  const col=wines.filter(w=>!w.wishlist);
+  const map=col.reduce((acc,w)=>{
+    const loc=normalizeLocation(w.location)||"Unassigned";
+    if(!acc[loc])acc[loc]={location:loc,wines:0,bottles:0,slots:new Set()};
+    acc[loc].wines+=1;
+    acc[loc].bottles+=safeNum(w.bottles)||0;
+    if(w.locationSlot)acc[loc].slots.add(String(w.locationSlot));
+    return acc;
+  },{});
+  const rows=Object.values(map).sort((a,b)=>b.bottles-a.bottles||a.location.localeCompare(b.location));
+  if(!rows.length)return null;
+  const max=Math.max(...rows.map(r=>r.bottles),1);
+  return(
+    <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:16,padding:"12px 14px",marginBottom:12}}>
+      <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:10,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Cellar Heatmap</div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:8}}>
+        {rows.map(r=>{
+          const level=Math.min(0.42,(r.bottles/max)*0.42);
+          const slots=[...r.slots].slice(0,3).join(" · ");
+          return(
+            <div key={r.location} style={{borderRadius:12,padding:"10px 11px",background:`linear-gradient(135deg,rgba(var(--accentRgb),${0.08+level}) 0%,var(--inputBg) 100%)`,border:"1px solid var(--border)"}}>
+              <div style={{display:"flex",justifyContent:"space-between",gap:8}}>
+                <div style={{fontSize:13,fontWeight:700,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r.location}</div>
+                <div style={{fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{r.bottles} btl</div>
+              </div>
+              <div style={{marginTop:4,fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{r.wines} wines{slots?` · ${slots}`:""}</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+const DrinkWindowTimeline=({wines})=>{
+  const col=wines.filter(w=>!w.wishlist);
+  const start=YEAR_NOW-1;
+  const years=Array.from({length:10},(_,i)=>start+i);
+  const points=years.map(y=>{
+    const count=col.filter(w=>{
+      const s=safeNum(w.cellarMeta?.drinkStart);
+      const e=safeNum(w.cellarMeta?.drinkEnd);
+      if(!s&&!e)return false;
+      if(s&&e)return y>=s&&y<=e;
+      if(s&&!e)return y>=s;
+      return y<=e;
+    }).length;
+    return {year:y,count};
+  });
+  const max=Math.max(...points.map(p=>p.count),1);
+  return(
+    <div style={{background:"var(--card)",borderRadius:16,border:"1px solid var(--border)",padding:"14px 16px",marginBottom:10}}>
+      <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:10,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Drink Window Timeline</div>
+      <div style={{display:"grid",gap:7}}>
+        {points.map(p=>(
+          <div key={p.year} style={{display:"grid",gridTemplateColumns:"40px 1fr 28px",alignItems:"center",gap:8}}>
+            <span style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{p.year}</span>
+            <div style={{height:6,background:"var(--inputBg)",borderRadius:8,overflow:"hidden"}}>
+              <div style={{height:"100%",width:`${(p.count/max)*100}%`,background:"linear-gradient(90deg,var(--accent),var(--accentLight))",borderRadius:8}}/>
+            </div>
+            <span style={{fontSize:11,color:"var(--sub)",textAlign:"right",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{p.count}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 /* ── COLLECTION ───────────────────────────────────────────────── */
-const CollectionScreen=({wines,onAdd,onUpdate,onDelete,desktop})=>{
+const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAddNote,desktop})=>{
   const [sel,setSel]=useState(null);
   const [editing,setEditing]=useState(false);
   const [adding,setAdding]=useState(false);
   const [search,setSearch]=useState("");
   const [filters,setFilters]=useState(DEFAULT_FILTERS);
   const [filterOpen,setFilterOpen]=useState(false);
+  const [quickNoteWine,setQuickNoteWine]=useState(null);
+  const [quickNote,setQuickNote]=useState("");
   const col=wines.filter(w=>!w.wishlist);
   const filt=applyFilters(wines,filters,search);
   const bottles=col.reduce((s,w)=>s+(w.bottles||0),0);
   const active=hasFilters(filters);
+  const drinkOne=wine=>{
+    if(!wine||!wine.bottles)return;
+    onUpdate({...wine,bottles:Math.max(0,(safeNum(wine.bottles)||0)-1)});
+  };
+  const markDrank=wine=>{
+    if(!wine)return;
+    onUpdate({...wine,bottles:0});
+  };
   return(
     <div>
       <div style={{marginBottom:24}}>
@@ -882,6 +1008,7 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,desktop})=>{
           <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:13,color:"var(--sub)"}}>{bottles} bottles</div>
         </div>
       </div>
+      <CellarHeatmap wines={wines}/>
       <div style={{display:"flex",gap:8,marginBottom:16,alignItems:"center"}}>
         <div style={{position:"relative",flex:1}}>
           <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search wines, regions, countries…" style={{paddingLeft:38,borderRadius:14}}/>
@@ -894,6 +1021,15 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,desktop})=>{
         <button onClick={()=>setAdding(true)} style={{width:44,height:44,borderRadius:14,background:"var(--accent)",border:"none",display:"flex",alignItems:"center",justifyContent:"center",color:"white",flexShrink:0,boxShadow:"0 4px 16px rgba(var(--accentRgb),0.35)",cursor:"pointer"}}>
           <Icon n="plus" size={20}/>
         </button>
+      </div>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
+        {SMART_BUNDLES.map(b=>(
+          <button key={b.id} onClick={()=>setFilters(p=>b.apply({...p}))}
+            title={b.desc}
+            style={{padding:"6px 10px",borderRadius:999,border:"1px solid rgba(var(--accentRgb),0.25)",background:"rgba(var(--accentRgb),0.08)",color:"var(--accent)",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+            {b.label}
+          </button>
+        ))}
       </div>
       {active&&(
         <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
@@ -911,7 +1047,7 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,desktop})=>{
       {filt.length===0
         ? <Empty icon="wine" text={search||active?"No wines match your filters.":"Your cellar is empty. Add your first wine."}/>
         : <div style={{display:desktop?"grid":"block",gridTemplateColumns:desktop?"repeat(auto-fill,minmax(290px,1fr))":"none",gap:desktop?12:0}}>
-            {filt.map(w=><WineCard key={w.id} wine={w} onClick={()=>{setSel(w);setEditing(false);}}/>)}
+            {filt.map(w=><WineCard key={w.id} wine={w} onClick={()=>{setSel(w);setEditing(false);}} onDrinkOne={drinkOne} onMarkDrank={markDrank} onQuickNote={setQuickNoteWine}/>)}
           </div>
       }
       <Modal show={!!sel&&!editing} onClose={()=>setSel(null)} wide>
@@ -925,6 +1061,19 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,desktop})=>{
       </Modal>
       <Modal show={filterOpen} onClose={()=>setFilterOpen(false)}>
         <FilterPanel filters={filters} setFilters={setFilters} wines={wines} onClose={()=>setFilterOpen(false)}/>
+      </Modal>
+      <Modal show={!!quickNoteWine} onClose={()=>{setQuickNoteWine(null);setQuickNote("");}}>
+        <ModalHeader title="Quick Note" onClose={()=>{setQuickNoteWine(null);setQuickNote("");}}/>
+        {quickNoteWine&&<div style={{fontSize:12,color:"var(--sub)",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{quickNoteWine.name}</div>}
+        <Field label="Note" value={quickNote} onChange={setQuickNote} placeholder="Quick tasting note…" rows={4} optional/>
+        <div style={{display:"flex",gap:8}}>
+          <Btn variant="secondary" onClick={()=>{setQuickNoteWine(null);setQuickNote("");}} full>Cancel</Btn>
+          <Btn onClick={()=>{
+            if(!quickNoteWine||!quickNote.trim())return;
+            onAddNote({id:uid(),wineId:quickNoteWine.id,title:`Quick note — ${quickNoteWine.name}`,content:quickNote.trim(),date:new Date().toISOString().split("T")[0]});
+            setQuickNoteWine(null);setQuickNote("");
+          }} full disabled={!quickNote.trim()}>Save</Btn>
+        </div>
       </Modal>
     </div>
   );
@@ -1029,7 +1178,7 @@ const AIScreen=({wines})=>{
 const NotesScreen=({wines,notes,onAdd,onDelete})=>{
   const [adding,setAdding]=useState(false);
   const [sel,setSel]=useState(null);
-  const [form,setForm]=useState({wineId:"",title:"",content:""});
+  const [form,setForm]=useState({wineId:"",title:"",content:"",attachToWine:false});
   const col=wines.filter(w=>!w.wishlist);
   const getW=id=>col.find(w=>w.id===id);
   return(
@@ -1040,7 +1189,7 @@ const NotesScreen=({wines,notes,onAdd,onDelete})=>{
           <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:34,fontWeight:800,color:"var(--text)",lineHeight:1}}>
             {notes.length} <span style={{fontSize:18,color:"var(--sub)",fontWeight:400}}>notes</span>
           </div>
-          <button onClick={()=>{setForm({wineId:col[0]?.id||"",title:"",content:""});setAdding(true);}} style={{width:44,height:44,borderRadius:14,background:"var(--accent)",border:"none",display:"flex",alignItems:"center",justifyContent:"center",color:"white",boxShadow:"0 4px 16px rgba(var(--accentRgb),0.35)",cursor:"pointer"}}><Icon n="plus" size={20}/></button>
+          <button onClick={()=>{setForm({wineId:col[0]?.id||"",title:"",content:"",attachToWine:false});setAdding(true);}} style={{width:44,height:44,borderRadius:14,background:"var(--accent)",border:"none",display:"flex",alignItems:"center",justifyContent:"center",color:"white",boxShadow:"0 4px 16px rgba(var(--accentRgb),0.35)",cursor:"pointer"}}><Icon n="plus" size={20}/></button>
         </div>
       </div>
       {notes.length===0
@@ -1065,12 +1214,21 @@ const NotesScreen=({wines,notes,onAdd,onDelete})=>{
       }
       <Modal show={adding} onClose={()=>setAdding(false)}>
         <ModalHeader title="New Note" onClose={()=>setAdding(false)}/>
-        {col.length>0&&<SelField label="Wine" value={form.wineId} onChange={v=>setForm(p=>({...p,wineId:v}))} options={col.map(w=>({value:w.id,label:w.name}))}/>}
+        {col.length>0&&(
+          <div style={{marginBottom:12}}>
+            <button onClick={()=>setForm(p=>({...p,attachToWine:!p.attachToWine,wineId:!p.attachToWine?(p.wineId||col[0]?.id||""):""}))}
+              style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 12px",borderRadius:12,border:`1.5px solid ${form.attachToWine?"var(--accent)":"var(--border)"}`,background:form.attachToWine?"rgba(var(--accentRgb),0.09)":"var(--inputBg)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:13,fontWeight:600,color:"var(--text)",cursor:"pointer"}}>
+              <span>Link this note to a wine</span>
+              <span style={{fontSize:16,color:form.attachToWine?"var(--accent)":"var(--sub)"}}>{form.attachToWine?"✓":"○"}</span>
+            </button>
+          </div>
+        )}
+        {col.length>0&&form.attachToWine&&<SelField label="Wine" value={form.wineId} onChange={v=>setForm(p=>({...p,wineId:v}))} options={col.map(w=>({value:w.id,label:w.name}))}/>}
         <Field label="Title" value={form.title} onChange={v=>setForm(p=>({...p,title:v}))} placeholder="e.g. Christmas Dinner 2024"/>
         <Field label="Note" value={form.content} onChange={v=>setForm(p=>({...p,content:v}))} placeholder="Impressions, pairings, memories…" rows={4} optional/>
         <div style={{display:"flex",gap:8}}>
           <Btn variant="secondary" onClick={()=>setAdding(false)} full>Cancel</Btn>
-          <Btn onClick={()=>{if(form.title){onAdd({...form,id:uid(),date:new Date().toISOString().split("T")[0]});setAdding(false);}}} full disabled={!form.title}>Save Note</Btn>
+          <Btn onClick={()=>{if(form.title){onAdd({...form,id:uid(),wineId:form.attachToWine?form.wineId:"",date:new Date().toISOString().split("T")[0]});setAdding(false);}}} full disabled={!form.title}>Save Note</Btn>
         </div>
       </Modal>
       <Modal show={!!sel} onClose={()=>setSel(null)} wide>
@@ -1420,61 +1578,51 @@ const WineBottleViz=({types,total})=>{
   const ORDER=["Red","White","Rosé","Sparkling","Dessert","Fortified","Other"];
   const segments=ORDER.map(t=>({type:t,count:types[t]||0,pct:total?Math.round(((types[t]||0)/total)*100):0,color:WINE_TYPE_COLORS[t]?.dot||"#888"})).filter(s=>s.count>0);
   if(!segments.length)return null;
-  // Build SVG bottle with stacked fill
-  const H=230,W=120;
-  let cumY=0;
+  const BODY_X=42;
+  const BODY_W=298;
+  const BODY_Y=24;
+  const BODY_H=56;
+  let cumX=0;
   const fills=segments.map(s=>{
-    const h=(s.pct/100)*H;
-    const seg={...s,y:cumY,h};
-    cumY+=h;
+    const w=Math.max(2,(s.pct/100)*BODY_W);
+    const seg={...s,x:cumX,w};
+    cumX+=w;
     return seg;
   });
   return(
-    <div style={{display:"flex",gap:20,alignItems:"flex-start"}}>
-      <div style={{flexShrink:0}}>
-        <svg width={W} height={H+78} viewBox={`0 0 ${W} ${H+78}`}>
-          <defs>
-            <linearGradient id="glassShine" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stopColor="rgba(255,255,255,0.55)"/>
-              <stop offset="40%" stopColor="rgba(255,255,255,0.12)"/>
-              <stop offset="100%" stopColor="rgba(255,255,255,0.02)"/>
-            </linearGradient>
-            <linearGradient id="bottleDark" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="rgba(35,25,20,.28)"/>
-              <stop offset="100%" stopColor="rgba(35,25,20,.45)"/>
-            </linearGradient>
-            <clipPath id="bottle">
-              <path d={`M46 6 L74 6 L74 41 C74 50 80 58 87 67 C93 75 97 84 97 100 L97 ${H+34} C97 ${H+50} 84 ${H+61} 70 ${H+61} L50 ${H+61} C36 ${H+61} 23 ${H+50} 23 ${H+34} L23 100 C23 84 27 75 33 67 C40 58 46 50 46 41 Z`}/>
-            </clipPath>
-          </defs>
-          <g clipPath="url(#bottle)">
-            <rect x="0" y="0" width={W} height={H+78} fill="rgba(120,90,70,0.12)"/>
-            {fills.map((s,i)=>(
-              <rect key={i} x="0" y={H+61-s.y-s.h} width={W} height={s.h+1} fill={s.color} opacity="0.92"/>
-            ))}
-            <rect x="30" y="10" width="14" height={H+50} fill="url(#glassShine)" opacity="0.44"/>
-            <rect x="48" y="10" width="42" height={H+52} fill="url(#bottleDark)" opacity="0.25"/>
-          </g>
-          <path d={`M46 6 L74 6 L74 41 C74 50 80 58 87 67 C93 75 97 84 97 100 L97 ${H+34} C97 ${H+50} 84 ${H+61} 70 ${H+61} L50 ${H+61} C36 ${H+61} 23 ${H+50} 23 ${H+34} L23 100 C23 84 27 75 33 67 C40 58 46 50 46 41 Z`}
-            fill="none" stroke="rgba(65,48,38,0.7)" strokeWidth="2.2"/>
-          <rect x="50" y="0" width="20" height="8" rx="2" fill="#B98A4E" opacity="0.95"/>
-          <rect x="48" y="8" width="24" height="8" rx="2" fill="#6B4A34" opacity="0.85"/>
-          <ellipse cx="60" cy={H+62} rx="22" ry="5" fill="rgba(0,0,0,.08)"/>
-        </svg>
-      </div>
-      <div style={{flex:1,paddingTop:8}}>
+    <div>
+      <svg width="100%" height="108" viewBox="0 0 384 108" role="img" aria-label="Collection breakdown bottle">
+        <defs>
+          <linearGradient id="hz-glass" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="rgba(255,255,255,.72)"/>
+            <stop offset="45%" stopColor="rgba(255,255,255,.16)"/>
+            <stop offset="100%" stopColor="rgba(255,255,255,0)"/>
+          </linearGradient>
+          <clipPath id="hz-bottle-clip">
+            <path d="M35 52c0-8 6-14 14-14h10V28c0-5 4-9 9-9h246c4 0 8 2 10 6l9 13h8c9 0 16 7 16 16s-7 16-16 16h-8l-9 13c-2 4-6 6-10 6H68c-5 0-9-4-9-9V70H49c-8 0-14-6-14-14z"/>
+          </clipPath>
+        </defs>
+        <ellipse cx="192" cy="94" rx="126" ry="7" fill="rgba(0,0,0,.08)"/>
+        <g clipPath="url(#hz-bottle-clip)">
+          <rect x="35" y="16" width="330" height="76" fill="rgba(50,38,32,.16)"/>
+          {fills.map((s,i)=><rect key={i} x={BODY_X+s.x} y={BODY_Y} width={s.w} height={BODY_H} fill={s.color} opacity="0.94"/>)}
+          <rect x="64" y="22" width="20" height="62" rx="10" fill="url(#hz-glass)" opacity="0.58"/>
+          <rect x="286" y="22" width="26" height="62" rx="13" fill="rgba(0,0,0,.14)" opacity="0.45"/>
+        </g>
+        <path d="M35 52c0-8 6-14 14-14h10V28c0-5 4-9 9-9h246c4 0 8 2 10 6l9 13h8c9 0 16 7 16 16s-7 16-16 16h-8l-9 13c-2 4-6 6-10 6H68c-5 0-9-4-9-9V70H49c-8 0-14-6-14-14z" fill="none" stroke="rgba(60,44,34,.68)" strokeWidth="2"/>
+        <rect x="335" y="45" width="18" height="18" rx="3" fill="#C7A067"/>
+        <rect x="352" y="47" width="7" height="14" rx="2" fill="#8B6A43"/>
+        <rect x="154" y="38" width="74" height="30" rx="6" fill="rgba(248,241,233,.72)" stroke="rgba(90,72,52,.24)" strokeWidth="1.2"/>
+        <path d="M160 53h62" stroke="rgba(90,72,52,.32)" strokeWidth="1"/>
+      </svg>
+      <div style={{marginTop:10,display:"grid",gap:8}}>
         {segments.map(s=>(
-          <div key={s.type} style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-            <div style={{width:10,height:10,borderRadius:"50%",background:s.color,flexShrink:0}}/>
-            <div style={{flex:1}}>
-              <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
-                <span style={{fontSize:13,fontWeight:600,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{s.type}</span>
-                <span style={{fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{s.count} · {s.pct}%</span>
-              </div>
-              <div style={{height:3,background:"var(--inputBg)",borderRadius:2}}>
-                <div style={{height:"100%",width:`${s.pct}%`,background:s.color,borderRadius:2}}/>
-              </div>
+          <div key={s.type} style={{display:"grid",gridTemplateColumns:"96px 1fr auto",gap:10,alignItems:"center"}}>
+            <span style={{fontSize:13,fontWeight:700,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{s.type}</span>
+            <div style={{height:6,background:"var(--inputBg)",borderRadius:10,overflow:"hidden"}}>
+              <div style={{height:"100%",width:`${s.pct}%`,background:s.color,borderRadius:10}}/>
             </div>
+            <span style={{fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{s.count} · {s.pct}%</span>
           </div>
         ))}
       </div>
@@ -1588,16 +1736,7 @@ const ExploreWineries=({onBack})=>{
 };
 
 /* ── SETTINGS PANEL ───────────────────────────────────────────── */
-const BG_PRESETS=[
-  {label:"Deep Wine",value:"linear-gradient(135deg,#4A0010 0%,var(--accent) 100%)"},
-  {label:"Midnight",value:"linear-gradient(135deg,#0D0D1A 0%,#1A1A3E 100%)"},
-  {label:"Forest",value:"linear-gradient(135deg,#0A2A0A 0%,#1A5C2A 100%)"},
-  {label:"Dusk",value:"linear-gradient(135deg,#2A1A0A 0%,#8B4A1A 100%)"},
-  {label:"Slate",value:"linear-gradient(135deg,#0A1A2A 0%,#1A3A5C 100%)"},
-  {label:"Rose",value:"linear-gradient(135deg,#3A0A1A 0%,#8B2A4A 100%)"},
-  {label:"Charcoal",value:"linear-gradient(135deg,#1A1A1A 0%,#3A3A3A 100%)"},
-  {label:"Plum",value:"linear-gradient(135deg,#2A0A3A 0%,#5C1A8B 100%)"},
-];
+const BG_PRESETS = COLOR_THEMES.map(t=>({label:t.label,value:t.profileBg,accentId:t.id}));
 
 const SettingsPanel=({onBack,profile,setProfile,theme,setTheme})=>{
   const THEMES=[{id:"system",label:"System",ic:"monitor"},{id:"light",label:"Light",ic:"sun"},{id:"dark",label:"Dark",ic:"moon"}];
@@ -1610,10 +1749,11 @@ const SettingsPanel=({onBack,profile,setProfile,theme,setTheme})=>{
     bio:profile.bio||"",
     country:profile.country||"Australia",
     avatar:profile.avatar||null,
-    profileBg:profile.profileBg||BG_PRESETS[0].value,
-    accent:profile.accent||DEFAULT_PROFILE.accent,
+    profileBg:profile.profileBg||THEME_BY_ID[(profile.accent||"wine")]?.profileBg||BG_PRESETS[0].value,
+    accent:detectAccentFromProfileBg(profile.profileBg||"")||profile.accent||DEFAULT_PROFILE.accent,
   });
   const set=(k,v)=>setForm(p=>({...p,[k]:v}));
+  const setColorTheme=(accentId,profileBg)=>setForm(p=>({...p,accent:accentId,profileBg}));
   const save=()=>{if(form.name){setProfile({...profile,...form});onBack();}};
   return(
     <div style={{animation:"fadeUp 0.2s ease"}}>
@@ -1657,10 +1797,10 @@ const SettingsPanel=({onBack,profile,setProfile,theme,setTheme})=>{
       {/* Profile card background */}
       <div style={{marginBottom:20}}>
         <div style={{fontSize:11,fontWeight:700,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:10,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Profile Card Background</div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8}}>
           {BG_PRESETS.map(bg=>(
-            <button key={bg.value} onClick={()=>set("profileBg",bg.value)}
-              style={{height:44,borderRadius:12,background:bg.value,border:form.profileBg===bg.value?"2.5px solid var(--accent)":"2px solid transparent",cursor:"pointer",position:"relative",transition:"transform 0.15s"}}
+            <button key={bg.value} onClick={()=>setColorTheme(bg.accentId,bg.value)}
+              style={{height:44,borderRadius:12,background:bg.value,border:form.profileBg===bg.value?"2.5px solid var(--accent)":"1.5px solid rgba(255,255,255,.26)",cursor:"pointer",position:"relative",transition:"transform 0.15s",outline:"none",appearance:"none",WebkitAppearance:"none",boxShadow:"inset 0 0 0 1px rgba(0,0,0,.08)",overflow:"hidden"}}
               onMouseEnter={e=>e.currentTarget.style.transform="scale(1.05)"}
               onMouseLeave={e=>e.currentTarget.style.transform="scale(1)"}>
               {form.profileBg===bg.value&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{width:8,height:8,borderRadius:"50%",background:"white"}}/></div>}
@@ -1674,12 +1814,15 @@ const SettingsPanel=({onBack,profile,setProfile,theme,setTheme})=>{
       </div>
       {/* Theme */}
       <div style={{marginBottom:18}}>
-        <div style={{fontSize:11,fontWeight:700,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:10,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Accent Color</div>
+        <div style={{fontSize:11,fontWeight:700,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:10,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>App Color Theme</div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8}}>
           {Object.values(ACCENTS).map(a=>{
             const active=form.accent===a.id;
             return(
-              <button key={a.id} onClick={()=>set("accent",a.id)} title={a.label} style={{height:38,borderRadius:11,border:active?"2px solid var(--text)":"1px solid var(--border)",background:`linear-gradient(135deg,${a.accent},${a.accentLight})`,position:"relative"}}>
+              <button key={a.id} onClick={()=>{
+                const preset=THEME_BY_ID[a.id];
+                setColorTheme(a.id,preset?.profileBg||form.profileBg);
+              }} title={a.label} style={{height:38,borderRadius:11,border:active?"2px solid var(--text)":"1.5px solid rgba(255,255,255,.26)",background:`linear-gradient(135deg,${a.accent},${a.accentLight})`,position:"relative",outline:"none",appearance:"none",WebkitAppearance:"none",boxShadow:"inset 0 0 0 1px rgba(0,0,0,.1)",overflow:"hidden"}}>
                 {active&&<span style={{position:"absolute",inset:0,display:"grid",placeItems:"center",fontSize:11,color:"#fff",fontWeight:700}}>✓</span>}
               </button>
             );
@@ -1728,7 +1871,7 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
   },{});
   const topRegion=Object.entries(regionStats).sort((a,b)=>b[1]-a[1])[0]?.[0]||"—";
   const avgBottle=bottles?wineryValue/bottles:0;
-  const profileBg=profile.profileBg||"linear-gradient(135deg,#6B0A0A 0%,var(--accent) 60%,#6B0A0A 100%)";
+  const profileBg=profile.profileBg||THEME_BY_ID[(profile.accent||"wine")]?.profileBg||THEME_BY_ID.wine.profileBg;
   const displayName=[profile.name,profile.surname].filter(Boolean).join(" ")||"Winemaker";
 
   if(view==="settings")return <SettingsPanel onBack={()=>setView("main")} profile={profile} setProfile={setProfile} theme={theme} setTheme={setTheme}/>;
@@ -1750,7 +1893,7 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
 
       {/* Profile card */}
       <div style={{background:profileBg,borderRadius:22,padding:"22px",marginBottom:14,position:"relative",overflow:"hidden",backgroundSize:"cover",backgroundPosition:"center"}}>
-        <div style={{position:"absolute",right:-20,top:-20,opacity:0.06,pointerEvents:"none"}}><Icon n="wine" size={160} color="white"/></div>
+        <div style={{position:"absolute",right:-22,top:-20,opacity:0.1,pointerEvents:"none"}}><BrandLogo size={150}/></div>
         <div style={{display:"flex",alignItems:"center",gap:14,position:"relative",zIndex:1}}>
           <div style={{width:66,height:66,borderRadius:"50%",background:"rgba(255,255,255,0.15)",overflow:"hidden",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",border:"2px solid rgba(255,255,255,0.3)"}}>
             {profile.avatar?<img src={profile.avatar} alt="avatar" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<Icon n="user" size={28} color="rgba(255,255,255,0.8)"/>}
@@ -1785,6 +1928,7 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
           ))}
         </div>
       </div>
+      <DrinkWindowTimeline wines={wines}/>
 
       {/* Wine bottle viz */}
       {Object.keys(types).length>0&&(
@@ -1828,7 +1972,7 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.2 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.3 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
@@ -1937,12 +2081,20 @@ export default function App(){
             const repairedById=Object.fromEntries(repaired.map(w=>[w.id,w.wineType]));
             all=all.map(w=>repairedById[w.id]?{...w,wineType:repairedById[w.id]}:w);
           }
+          const toNormalizeLocation=all.filter(w=>normalizeLocation(w.location)!==(w.location||""));
+          if(toNormalizeLocation.length){
+            const repairedLoc=toNormalizeLocation.map(w=>({...w,location:normalizeLocation(w.location)}));
+            await Promise.all(repairedLoc.map(w=>db.upsert("wines",toDb.wine(w))));
+            const locById=Object.fromEntries(repairedLoc.map(w=>[w.id,w.location]));
+            all=all.map(w=>locById[w.id]?{...w,location:locById[w.id]}:w);
+          }
           setWines(all.filter(w=>!w.wishlist));
           setWishlist(all.filter(w=>w.wishlist));
           setNotes(noteRows.length?noteRows.map(fromDb.note):(cache?.notes||[]));
           if(prof){
             // Remote profile is authoritative for cross-device sync.
-            const remoteProfile={name:prof.name,description:prof.description,avatar:prof.avatar||null,cellarName:prof.cellarName||"",bio:prof.bio||"",country:prof.country||"",surname:prof.surname||"",profileBg:prof.profileBg||"",accent:cache?.profile?.accent||DEFAULT_PROFILE.accent};
+            const bgAccent=detectAccentFromProfileBg(prof.profileBg||"");
+            const remoteProfile={name:prof.name,description:prof.description,avatar:prof.avatar||null,cellarName:prof.cellarName||"",bio:prof.bio||"",country:prof.country||"",surname:prof.surname||"",profileBg:prof.profileBg||"",accent:bgAccent||cache?.profile?.accent||DEFAULT_PROFILE.accent};
             setProfileState(remoteProfile);
             // New user = profile name still matches the seed default or is empty
             setIsNewUser(!prof.name||(prof.name===DEFAULT_PROFILE.name&&!prof.cellarName));
@@ -1976,7 +2128,8 @@ export default function App(){
 
   const dark=themeMode==="dark"||(themeMode==="system"&&sysDark);
   const th=T(dark);
-  const accent=ACCENTS[profile.accent]||ACCENTS.wine;
+  const accentFromBg=detectAccentFromProfileBg(profile.profileBg||"");
+  const accent=ACCENTS[accentFromBg||profile.accent]||ACCENTS.wine;
   const cssVars={"--bg":th.bg,"--surface":th.surface,"--card":th.card,"--border":th.border,"--text":th.text,"--sub":th.sub,"--inputBg":th.inputBg,"--shadow":th.shadow,"--accent":accent.accent,"--accentLight":accent.accentLight,"--accentRgb":hexToRgb(accent.accent)};
   useEffect(()=>{
     Object.entries(cssVars).forEach(([k,v])=>document.documentElement.style.setProperty(k,v));
@@ -2003,12 +2156,15 @@ export default function App(){
   const addNote=async n=>{setNotes(p=>[...p,n]);await db.upsert("tasting_notes",toDb.note(n));};
   const delNote=async id=>{setNotes(p=>p.filter(x=>x.id!==id));await db.del("tasting_notes",id);};
   const setProfile=async p=>{
-    setProfileState(p);
-    const ok=await db.saveProfile(p);
+    const syncedAccent=detectAccentFromProfileBg(p.profileBg||"")||p.accent||DEFAULT_PROFILE.accent;
+    const next={...p,accent:syncedAccent};
+    setProfileState(next);
+    const ok=await db.saveProfile(next);
     if(ok){
       const fresh=await db.getProfile();
       if(fresh){
-        setProfileState(prev=>({...prev,...fresh,accent:prev.accent||DEFAULT_PROFILE.accent}));
+        const finalAccent=detectAccentFromProfileBg(fresh.profileBg||"")||next.accent||DEFAULT_PROFILE.accent;
+        setProfileState(prev=>({...prev,...fresh,accent:finalAccent}));
       }
     }
   };
@@ -2127,7 +2283,7 @@ export default function App(){
 
   const screens=(
     <>
-      {tab==="collection"&&<CollectionScreen wines={wines} onAdd={addWine} onUpdate={updWine} onDelete={delWine} desktop={isDesktop}/>}
+      {tab==="collection"&&<CollectionScreen wines={wines} onAdd={addWine} onUpdate={updWine} onDelete={delWine} onAddNote={addNote} desktop={isDesktop}/>}
       {tab==="wishlist"&&<WishlistScreen wishlist={wishlist} onAdd={addWish} onUpdate={updWish} onDelete={delWish} onMove={moveToCol} desktop={isDesktop}/>}
       {tab==="ai"&&<AIScreen wines={wines}/>}
       {tab==="notes"&&<NotesScreen wines={wines} notes={notes} onAdd={addNote} onDelete={delNote}/>}
@@ -2140,7 +2296,7 @@ export default function App(){
   if(isDesktop) return(
     <div style={{...cssVars,background:"radial-gradient(circle at 10% -10%,rgba(var(--accentRgb),.09),transparent 35%), var(--bg)",height:"100vh",display:"flex",overflow:"hidden",fontFamily:"'Plus Jakarta Sans',sans-serif",color:"var(--text)"}}>
       <style>{CSS}</style>
-      <div style={{width:236,flexShrink:0,background:dark?"linear-gradient(180deg,#120D0E,#1A1214)":"linear-gradient(180deg,#2A1114,#1D0C10)",display:"flex",flexDirection:"column",padding:"30px 14px 24px",borderRight:"1px solid rgba(255,255,255,.05)"}}>
+      <div style={{width:236,flexShrink:0,background:dark?"linear-gradient(180deg,rgba(var(--accentRgb),0.32),rgba(10,10,12,0.9) 78%)":"linear-gradient(180deg,rgba(var(--accentRgb),0.42),rgba(var(--accentRgb),0.18) 65%,rgba(255,255,255,0.88) 100%)",display:"flex",flexDirection:"column",padding:"30px 14px 24px",borderRight:"1px solid rgba(255,255,255,.08)"}}>
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:36,paddingLeft:8}}>
           <BrandLogo size={28}/>
           <span style={{fontSize:20,fontWeight:800,color:"#EDE6E0",letterSpacing:"-0.5px"}}>Vinology</span>
@@ -2149,8 +2305,8 @@ export default function App(){
           {TABS.map(tb=>{
             const active=tab===tb.id;
             return(
-              <button key={tb.id} onClick={()=>setTab(tb.id)} style={{display:"flex",alignItems:"center",gap:11,padding:"11px 12px",borderRadius:11,border:"none",background:active?"rgba(var(--accentRgb),0.18)":"transparent",color:active?"var(--accentLight)":"rgba(237,230,224,0.45)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:active?700:500,fontSize:14,cursor:"pointer",transition:"all 0.15s",textAlign:"left",width:"100%"}}>
-                <Icon n={tb.ic} size={17} color={active?"var(--accentLight)":"rgba(237,230,224,0.35)"}/>
+              <button key={tb.id} onClick={()=>setTab(tb.id)} style={{display:"flex",alignItems:"center",gap:11,padding:"11px 12px",borderRadius:11,border:"none",background:active?"rgba(var(--accentRgb),0.22)":"transparent",color:active?(dark?"var(--accentLight)":"rgba(255,255,255,0.96)"):(dark?"rgba(237,230,224,0.58)":"rgba(255,255,255,0.74)"),fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:active?700:500,fontSize:14,cursor:"pointer",transition:"all 0.15s",textAlign:"left",width:"100%"}}>
+                <Icon n={tb.ic} size={17} color={active?(dark?"var(--accentLight)":"rgba(255,255,255,0.96)"):(dark?"rgba(237,230,224,0.42)":"rgba(255,255,255,0.68)")}/>
                 {tb.label}
                 {active&&<div style={{marginLeft:"auto",width:5,height:5,borderRadius:"50%",background:"var(--accent)",flexShrink:0}}/>}
               </button>
@@ -2162,8 +2318,8 @@ export default function App(){
             {profile.avatar?<img src={profile.avatar} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<Icon n="user" size={15} color="var(--accentLight)"/>}
           </div>
           <div style={{minWidth:0}}>
-            <div style={{fontSize:13,fontWeight:700,color:"#EDE6E0",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{displayName}</div>
-            <div style={{fontSize:11,color:"rgba(237,230,224,0.35)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{profile.cellarName||profile.description||"My Cellar"}</div>
+            <div style={{fontSize:13,fontWeight:700,color:"rgba(255,255,255,0.95)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{displayName}</div>
+            <div style={{fontSize:11,color:"rgba(255,255,255,0.62)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{profile.cellarName||profile.description||"My Cellar"}</div>
           </div>
         </div>
       </div>
@@ -2181,7 +2337,7 @@ export default function App(){
       <div data-scroll="main" style={{flex:1,overflowY:"auto",overflowX:"hidden",padding:"20px 20px 96px",WebkitOverflowScrolling:"touch"}}>
         {screens}
       </div>
-      <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:480,background:dark?"rgba(12,10,10,0.94)":"rgba(247,244,242,0.94)",backdropFilter:"blur(24px)",WebkitBackdropFilter:"blur(24px)",borderTop:`1px solid ${dark?"rgba(255,255,255,0.06)":"rgba(0,0,0,0.07)"}`,padding:"10px 0 22px",zIndex:100}}>
+      <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:480,background:dark?"linear-gradient(180deg,rgba(var(--accentRgb),0.16),rgba(10,10,10,0.94) 52%)":"linear-gradient(180deg,rgba(var(--accentRgb),0.16),rgba(247,244,242,0.95) 58%)",backdropFilter:"blur(24px)",WebkitBackdropFilter:"blur(24px)",borderTop:`1px solid ${dark?"rgba(255,255,255,0.08)":"rgba(var(--accentRgb),0.2)"}`,padding:"10px 0 22px",zIndex:100}}>
         <div style={{display:"flex",justifyContent:"space-around"}}>
           {TABS.map(tb=>{
             const active=tab===tb.id;
