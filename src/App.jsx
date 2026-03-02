@@ -31,10 +31,14 @@ const db = {
       const fullPayload={name:p.name,description:p.description,avatar:p.avatar,surname:p.surname||"",cellar_name:p.cellarName||"",bio:p.bio||"",country:p.country||"",profile_bg:p.profileBg||""};
       const basePayload={name:p.name,description:p.description,avatar:p.avatar};
       const tryWrite = async payload => {
-        const rPatch=await fetch(`${supa("profile")}?id=eq.1`,{method:"PATCH",headers:UH,body:JSON.stringify(payload)});
-        if(rPatch.ok) return true;
+        const patchHeaders={...BH,"Prefer":"return=representation"};
+        const rPatch=await fetch(`${supa("profile")}?id=eq.1`,{method:"PATCH",headers:patchHeaders,body:JSON.stringify(payload)});
+        if(rPatch.ok){
+          const rows=await rPatch.json().catch(()=>[]);
+          if(Array.isArray(rows)&&rows.length>0) return true;
+        }
         const patchErr=await rPatch.text();
-        const rPost=await fetch(`${supa("profile")}?on_conflict=id`,{method:"POST",headers:UH,body:JSON.stringify({id:1,...payload})});
+        const rPost=await fetch(`${supa("profile")}?on_conflict=id`,{method:"POST",headers:patchHeaders,body:JSON.stringify({id:1,...payload})});
         if(rPost.ok) return true;
         const postErr=await rPost.text();
         console.error("saveProfile failed", { patchErr, postErr });
@@ -1834,7 +1838,8 @@ export default function App(){
             setProfileState(remoteProfile);
             // New user = profile name still matches the seed default or is empty
             setIsNewUser(!prof.name||(prof.name===DEFAULT_PROFILE.name&&!prof.cellarName));
-          }else if(cache?.profile){
+          }else if(cache?.profile && wineRows.length===0){
+            // Offline-only fallback.
             setProfileState(cache.profile);
             setIsNewUser(!(cache.profile?.name));
           }else{
@@ -1889,7 +1894,16 @@ export default function App(){
   };
   const addNote=async n=>{setNotes(p=>[...p,n]);await db.upsert("tasting_notes",toDb.note(n));};
   const delNote=async id=>{setNotes(p=>p.filter(x=>x.id!==id));await db.del("tasting_notes",id);};
-  const setProfile=async p=>{setProfileState(p);await db.saveProfile(p);};
+  const setProfile=async p=>{
+    setProfileState(p);
+    const ok=await db.saveProfile(p);
+    if(ok){
+      const fresh=await db.getProfile();
+      if(fresh){
+        setProfileState(prev=>({...prev,...fresh,accent:prev.accent||DEFAULT_PROFILE.accent}));
+      }
+    }
+  };
 
   const CSS=makeCSS(dark);
 
