@@ -25,33 +25,39 @@ const db = {
     try { const r=await fetch(`${supa(t)}?id=eq.${encodeURIComponent(id)}`,{method:"DELETE",headers:BH}); if(!r.ok)console.error("del fail",await r.text()); }
     catch(e){console.error(e);}
   },
-  async saveProfile(p) {
+  async saveProfile(p,profileId) {
     try {
       const payload={name:p.name,description:p.description,avatar:p.avatar,surname:p.surname||"",cellar_name:p.cellarName||"",bio:p.bio||"",country:p.country||"",profile_bg:p.profileBg||""};
+      let pid=profileId;
+      if(!pid){
+        const rFind=await fetch(`${supa("profile")}?select=id&order=id.desc&limit=1`,{headers:BH});
+        const rows=rFind.ok?await rFind.json():[];
+        pid=rows?.[0]?.id||null;
+      }
       const patchHeaders={...BH,"Prefer":"return=representation"};
-      const rPatch=await fetch(`${supa("profile")}?id=eq.1`,{method:"PATCH",headers:patchHeaders,body:JSON.stringify(payload)});
+      const rPatch=pid?await fetch(`${supa("profile")}?id=eq.${encodeURIComponent(pid)}`,{method:"PATCH",headers:patchHeaders,body:JSON.stringify(payload)}):null;
       if(rPatch.ok){
         const rows=await rPatch.json().catch(()=>[]);
-        if(Array.isArray(rows)&&rows.length>0) return true;
+        if(Array.isArray(rows)&&rows.length>0) return rows[0]?.id||pid||true;
       }else{
-        console.error("saveProfile patch failed",await rPatch.text());
+        if(rPatch)console.error("saveProfile patch failed",await rPatch.text());
       }
 
-      // Fallback insert/upsert if id=1 row does not exist.
-      const rPost=await fetch(`${supa("profile")}?on_conflict=id`,{method:"POST",headers:UH,body:JSON.stringify({id:1,...payload})});
+      // Fallback insert/upsert if row does not exist.
+      const rPost=await fetch(supa("profile"),{method:"POST",headers:{...BH,"Prefer":"return=representation"},body:JSON.stringify(payload)});
       if(!rPost.ok){
         console.error("saveProfile post failed",await rPost.text());
-        return false;
+        return null;
       }
-      return true;
-    }catch(e){console.error("saveProfile err",e);return false;}
+      const posted=await rPost.json().catch(()=>[]);
+      return posted?.[0]?.id||true;
+    }catch(e){console.error("saveProfile err",e);return null;}
   },
   async getProfile() {
     try {
-      let r=await fetch(`${supa("profile")}?id=eq.1`,{headers:BH});
-      if(!r.ok) r=await fetch(`${supa("profile")}?order=id.asc&limit=1`,{headers:BH});
+      let r=await fetch(`${supa("profile")}?order=id.desc&limit=1`,{headers:BH});
       const d=r.ok?await r.json():[]; const p=d[0]||null; if(!p)return null;
-      return{name:p.name,description:p.description,avatar:p.avatar||null,surname:p.surname||"",cellarName:p.cellar_name||"",bio:p.bio||"",country:p.country||"",profileBg:p.profile_bg||""};
+      return{id:p.id,name:p.name,description:p.description,avatar:p.avatar||null,surname:p.surname||"",cellarName:p.cellar_name||"",bio:p.bio||"",country:p.country||"",profileBg:p.profile_bg||""};
     }
     catch{return null;}
   }
@@ -1775,6 +1781,7 @@ export default function App(){
   const [wishlist,setWishlist]=useState([]);
   const [notes,setNotes]=useState([]);
   const [profile,setProfileState]=useState(DEFAULT_PROFILE);
+  const [profileId,setProfileId]=useState(null);
   const [ready,setReady]=useState(false);
   const [splashPhase,setSplashPhase]=useState("logo"); // logo | greet | onboard | done
   const [isDesktop,setIsDesktop]=useState(()=>window.innerWidth>=768);
@@ -1807,6 +1814,7 @@ export default function App(){
             setWishlist(cache.wishlist||[]);
             setNotes(cache.notes||[]);
             if(cache.profile)setProfileState(cache.profile);
+            if(cache.profileId)setProfileId(cache.profileId);
             setIsNewUser(!(cache.profile?.name));
           }else{
             await Promise.all([...SEED_WINES,...SEED_WISHLIST].map(w=>db.upsert("wines",toDb.wine(w))));
@@ -1834,10 +1842,12 @@ export default function App(){
             // Remote profile is authoritative for cross-device sync.
             const remoteProfile={name:prof.name,description:prof.description,avatar:prof.avatar||null,cellarName:prof.cellarName||"",bio:prof.bio||"",country:prof.country||"",surname:prof.surname||"",profileBg:prof.profileBg||"",accent:cache?.profile?.accent||DEFAULT_PROFILE.accent};
             setProfileState(remoteProfile);
+            setProfileId(prof.id||null);
             // New user = profile name still matches the seed default or is empty
             setIsNewUser(!prof.name||(prof.name===DEFAULT_PROFILE.name&&!prof.cellarName));
           }else if(cache?.profile){
             setProfileState(cache.profile);
+            if(cache.profileId)setProfileId(cache.profileId);
             setIsNewUser(!(cache.profile?.name));
           }else{
             setIsNewUser(true);
@@ -1848,6 +1858,7 @@ export default function App(){
         if(cache?.wines?.length){
           setWines(cache.wines||[]);setWishlist(cache.wishlist||[]);setNotes(cache.notes||[]);
           if(cache.profile)setProfileState(cache.profile);
+          if(cache.profileId)setProfileId(cache.profileId);
         }else{
           setWines(SEED_WINES);setWishlist(SEED_WISHLIST);setNotes(SEED_NOTES);
         }
@@ -1872,9 +1883,9 @@ export default function App(){
   });
   useEffect(()=>{
     try{
-      localStorage.setItem(CACHE_KEY,JSON.stringify({wines,wishlist,notes,profile}));
+      localStorage.setItem(CACHE_KEY,JSON.stringify({wines,wishlist,notes,profile,profileId}));
     }catch{}
-  },[wines,wishlist,notes,profile]);
+  },[wines,wishlist,notes,profile,profileId]);
 
   const addWine=async w=>{setWines(p=>[...p,w]);await db.upsert("wines",toDb.wine(w));};
   const updWine=async w=>{setWines(p=>p.map(x=>x.id===w.id?w:x));await db.upsert("wines",toDb.wine(w));};
@@ -1891,14 +1902,19 @@ export default function App(){
   };
   const addNote=async n=>{setNotes(p=>[...p,n]);await db.upsert("tasting_notes",toDb.note(n));};
   const delNote=async id=>{setNotes(p=>p.filter(x=>x.id!==id));await db.del("tasting_notes",id);};
-  const setProfile=async p=>{setProfileState(p);await db.saveProfile(p);};
+  const setProfile=async p=>{
+    setProfileState(p);
+    const savedId=await db.saveProfile(p,profileId);
+    if(savedId)setProfileId(savedId===true?profileId:savedId);
+  };
 
   const CSS=makeCSS(dark);
 
   const enterApp=async(name,cellar)=>{
     const p={...profile,name:name.trim()||profile.name,cellarName:cellar.trim()||`${name.trim()}'s Cellar`};
     setProfileState(p);
-    await db.saveProfile(p);
+    const savedId=await db.saveProfile(p,profileId);
+    if(savedId)setProfileId(savedId===true?profileId:savedId);
     setSplashPhase("done");
   };
 
