@@ -1472,12 +1472,13 @@ const WineBottleViz=({types,total})=>{
           </defs>
           <g clipPath="url(#winery-bottle-clip)">
             <rect x="0" y="0" width={W} height={H+82} fill="url(#glassBody)"/>
-            {fills.map((s,i)=><rect key={i} x="0" y={H+30-s.y-s.h} width={W} height={s.h} fill={s.color} opacity="0.58"/>)}
+            {fills.map((s,i)=><rect key={i} x="0" y={H+30-s.y-s.h} width={W} height={s.h} fill={s.color} opacity="0.78"/>)}
           </g>
           <path d={`M49 8c4-2 26-2 30 0v5c0 2 1 4 2 6v28c0 7 4 14 9 21 7 10 11 21 11 34v158c0 8-5 14-13 16-14 4-34 4-48 0-8-2-13-8-13-16V102c0-13 4-24 11-34 5-7 9-14 9-21V19c1-2 2-4 2-6V8z`} fill="none" stroke="#101116" strokeWidth="2.9"/>
           <path d={`M41 ${H+18}c14 3 32 3 46 0`} stroke="#101116" strokeWidth="2.4" fill="none"/>
           <path d={`M41 ${H-44}c14 3 32 3 46 0`} stroke="#101116" strokeWidth="2.4" fill="none"/>
           <path d="M49 43h30" stroke="#101116" strokeWidth="2"/>
+          <ellipse cx="64" cy={H+30} rx="22" ry="5.2" fill="none" stroke="#101116" strokeWidth="2.6"/>
           <ellipse cx="64" cy={H+73} rx="24" ry="5.5" fill="rgba(0,0,0,.11)"/>
         </svg>
       </div>
@@ -1671,9 +1672,7 @@ const SettingsPanel=({onBack,profile,setProfile,theme,setTheme})=>{
         <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8}}>
           {BG_PRESETS.map(bg=>(
             <button key={bg.value} onClick={()=>setColorTheme(bg.accentId,bg.value)}
-              style={{height:44,borderRadius:12,background:bg.value,border:form.profileBg===bg.value?"2.5px solid var(--accent)":"1.5px solid var(--border)",cursor:"pointer",position:"relative",transition:"transform 0.15s",outline:"none",boxShadow:"none",overflow:"hidden",padding:0,display:"block"}}
-              onMouseEnter={e=>e.currentTarget.style.transform="scale(1.05)"}
-              onMouseLeave={e=>e.currentTarget.style.transform="scale(1)"}>
+              style={{height:44,borderRadius:12,background:bg.value,border:form.profileBg===bg.value?"2.5px solid var(--accent)":"1.5px solid var(--border)",cursor:"pointer",position:"relative",outline:"none",boxShadow:"none",overflow:"hidden",padding:0,display:"block"}}>
               {form.profileBg===bg.value&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{width:8,height:8,borderRadius:"50%",background:"white"}}/></div>}
             </button>
           ))}
@@ -1820,7 +1819,7 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.7 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.8 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
@@ -2027,7 +2026,7 @@ export default function App(){
   const th=T(dark);
   const accentFromBg=detectAccentFromProfileBg(profile.profileBg||"");
   const accent=ACCENTS[accentFromBg||profile.accent]||ACCENTS.wine;
-  const navSolid=darkenHex(accent.accent,0.58);
+  const navSolid=darkenHex(accent.accent,0.66);
   const cssVars={"--bg":th.bg,"--surface":th.surface,"--card":th.card,"--border":th.border,"--text":th.text,"--sub":th.sub,"--inputBg":th.inputBg,"--shadow":th.shadow,"--accent":accent.accent,"--accentLight":accent.accentLight,"--accentRgb":hexToRgb(accent.accent)};
   useEffect(()=>{
     Object.entries(cssVars).forEach(([k,v])=>document.documentElement.style.setProperty(k,v));
