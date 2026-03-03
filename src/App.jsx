@@ -1478,6 +1478,7 @@ const WineBottleViz=({types,total})=>{
   const ORDER=["Red","White","Rosé","Sparkling","Dessert","Fortified","Other"];
   const segments=ORDER.map(t=>({type:t,count:types[t]||0,pct:total?Math.round(((types[t]||0)/total)*100):0,color:WINE_TYPE_COLORS[t]?.dot||"#888"})).filter(s=>s.count>0);
   if(!segments.length)return null;
+  const bottlePath="M41 6c6-3 20-3 26 0v4c0 1 0 2 1 3v27c0 5 3 10 7 16 6 8 9 18 9 28v112c0 7-7 11-30 11s-30-4-30-11V84c0-10 3-20 9-28 4-6 7-11 7-16V13c1-1 1-2 1-3V6z";
   const fillTop=34;
   const fillBottom=208;
   const fillHeight=fillBottom-fillTop;
@@ -1498,17 +1499,38 @@ const WineBottleViz=({types,total})=>{
         <svg width="108" height="216" viewBox="0 0 108 216" role="img" aria-label="Collection breakdown bottle">
           <defs>
             <clipPath id="winery-bottle-fill">
-              <path d="M41 6c6-3 20-3 26 0v4c0 1 0 2 1 3v27c0 5 3 10 7 16 6 8 9 18 9 28v112c0 7-7 11-30 11s-30-4-30-11V84c0-10 3-20 9-28 4-6 7-11 7-16V13c1-1 1-2 1-3V6z"/>
+              <path d={bottlePath}/>
             </clipPath>
+            <linearGradient id="winery-glass-base" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="rgba(255,255,255,0.98)"/>
+              <stop offset="45%" stopColor="rgba(248,248,250,0.96)"/>
+              <stop offset="100%" stopColor="rgba(238,238,242,0.95)"/>
+            </linearGradient>
+            <linearGradient id="winery-gloss-left" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor="rgba(255,255,255,0.34)"/>
+              <stop offset="100%" stopColor="rgba(255,255,255,0)"/>
+            </linearGradient>
+            <linearGradient id="winery-shade-right" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor="rgba(0,0,0,0)"/>
+              <stop offset="100%" stopColor="rgba(0,0,0,0.14)"/>
+            </linearGradient>
+            {fills.map((s,idx)=>(
+              <linearGradient key={s.type} id={`winery-seg-${idx}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={s.color} stopOpacity="0.98"/>
+                <stop offset="100%" stopColor={s.color} stopOpacity="0.72"/>
+              </linearGradient>
+            ))}
           </defs>
           <g clipPath="url(#winery-bottle-fill)">
-            <rect x="0" y="0" width="108" height="216" fill="rgba(255,255,255,0.96)"/>
-            {fills.map(s=>(
-              <rect key={s.type} x="0" y={s.y} width="108" height={s.h} fill={s.color} opacity="0.84"/>
+            <rect x="0" y="0" width="108" height="216" fill="url(#winery-glass-base)"/>
+            {fills.map((s,idx)=>(
+              <rect key={s.type} x="0" y={s.y} width="108" height={s.h} fill={`url(#winery-seg-${idx})`} opacity="0.9"/>
             ))}
+            <rect x="16" y="8" width="22" height="198" fill="url(#winery-gloss-left)"/>
+            <rect x="64" y="8" width="24" height="198" fill="url(#winery-shade-right)"/>
           </g>
           <path
-            d="M41 6c6-3 20-3 26 0v4c0 1 0 2 1 3v27c0 5 3 10 7 16 6 8 9 18 9 28v112c0 7-7 11-30 11s-30-4-30-11V84c0-10 3-20 9-28 4-6 7-11 7-16V13c1-1 1-2 1-3V6z"
+            d={bottlePath}
             fill="none"
             stroke="#121216"
             strokeWidth="2.2"
@@ -1873,7 +1895,7 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.18 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.19 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
