@@ -563,22 +563,19 @@ const PhotoPicker=({value,onChange,size=80,round})=>{
 };
 
 const BottleGlyph=({color="#8B1A1A"})=>{
-  const rgb=hexToRgb(color)||"139,26,26";
   return(
     <svg width="56" height="72" viewBox="0 0 56 72" aria-hidden="true">
       <path
         d="M20 4c4-2 12-2 16 0v3c0 1 0 2 1 3v13c0 3 2 6 4 9 4 5 6 10 6 16v16c0 5-5 7-19 7S9 69 9 64V48c0-6 2-11 6-16 2-3 4-6 4-9V10c1-1 1-2 1-3V4z"
-        fill={`rgba(${rgb},0.26)`}
+        fill="none"
         stroke="#121216"
         strokeWidth="1.8"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      <path d="M18 49h20v20H18z" fill={`rgba(${rgb},0.42)`}/>
       <path d="M19 30.5c6 1 12 1 18 0" stroke="#121216" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
       <path d="M19 48c6 1 12 1 18 0" stroke="#121216" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
       <path d="M20 14h16" stroke="#121216" strokeWidth="1.4" strokeLinecap="round"/>
-      <path d="M22 7h12v5H22z" fill="rgba(255,255,255,0.75)"/>
     </svg>
   );
 };
@@ -592,13 +589,14 @@ const WineCard=({wine,onClick})=>{
   const yearTag=wine.vintage?String(wine.vintage):null;
   const locationTag=wine.location?(wine.location+(wine.locationSlot?` · ${wine.locationSlot}`:"")):null;
   const priceTag=safeNum(wine.cellarMeta?.pricePerBottle);
+  const bottleRgb=hexToRgb(tc.dot)||"139,26,26";
   const readinessTag=!wine.wishlist&&ready.key!=="none"?ready.label:null;
   const priceText=!wine.wishlist&&priceTag!=null&&priceTag>0?`$${priceTag.toFixed(2)}`:null;
   return(
     <div onClick={onClick} style={{background:"linear-gradient(180deg,var(--card),var(--inputBg))",borderRadius:20,padding:"16px",cursor:"pointer",border:"1px solid var(--border)",marginBottom:10,display:"flex",gap:14,alignItems:"stretch",transition:"transform 0.15s,box-shadow 0.15s",boxShadow:"0 2px 10px var(--shadow)",minHeight:154}}
       onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 8px 28px var(--shadow)";}}
       onMouseLeave={e=>{e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="0 2px 8px var(--shadow)";}}>
-      <div style={{width:60,height:76,borderRadius:14,background:"var(--inputBg)",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",border:"1px solid var(--border)"}}>
+      <div style={{width:60,height:76,borderRadius:14,background:`linear-gradient(160deg,rgba(${bottleRgb},0.22) 0%,rgba(${bottleRgb},0.46) 100%)`,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",border:"1px solid rgba(18,18,22,0.22)",boxShadow:"inset 0 1px 6px rgba(255,255,255,0.28)"}}>
         {wine.photo?<img src={wine.photo} alt={wine.name} style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<BottleGlyph color={tc.dot}/>}
       </div>
       <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",justifyContent:"space-between",gap:8}}>
@@ -1873,7 +1871,7 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.13 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.14 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
