@@ -402,42 +402,53 @@ const Icon=({n,size=20,color="currentColor",fill="none",sw=1.5})=>{
   return(<svg width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><path d={IC[n]}/></svg>);
 };
 
-const BrandLogo=({size=42})=>(
-  <svg width={size} height={size} viewBox="0 0 72 72" aria-hidden="true">
-    <defs>
-      <linearGradient id="gLogoFill" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0%" stopColor="#1A1D21"/>
-        <stop offset="100%" stopColor="#090A0C"/>
-      </linearGradient>
-    </defs>
-    <g fill="url(#gLogoFill)" stroke="#07080A" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M35.6 18.2c.9-4.5 2.5-7.4 5.5-9.4-1.3 4.7-1.9 8.8-1.9 12.3 4.2-5.6 8.4-9.7 13.3-12.4-5.2 5.2-9.2 11-11.6 17.6h-.8c-1.4-4.8-4.1-9.1-8.2-12.9 1.7 1 3.1 2.7 3.7 4.8z"/>
-      <path d="M18.2 22.3c4.2 0 8.9 2.2 13 5.8-4.5-1.1-8.7-.8-12.8 1.3 2.9-3 2.8-4.9-.2-7.1z"/>
-      <path d="M53.8 22.3c-4.2 0-8.9 2.2-13 5.8 4.5-1.1 8.7-.8 12.8 1.3-2.9-3-2.8-4.9.2-7.1z"/>
-      <path d="M36 20.1c4.8 2.8 7.6 6.8 8.8 11.8-3.1-3.6-6.1-7.2-8.8-11.8z"/>
-      <path d="M22 20.8c5.9 2.4 10.8 5.8 14.6 10.6-6.1-3.7-10.9-7.2-14.6-10.6z"/>
-      <path d="M50 20.8c-5.9 2.4-10.8 5.8-14.6 10.6 6.1-3.7 10.9-7.2 14.6-10.6z"/>
-      <path d="M14.1 24.2c-1.7 1.5-2.8 3.4-2.9 5.9 2.4-.4 4.3-1.7 5.7-3.8" fill="none"/>
-      <path d="M57.9 24.2c1.7 1.5 2.8 3.4 2.9 5.9-2.4-.4-4.3-1.7-5.7-3.8" fill="none"/>
-    </g>
-    <g fill="url(#gLogoFill)" stroke="#07080A" strokeWidth="1">
-      <circle cx="22.8" cy="31.6" r="4.4"/><circle cx="28.8" cy="31.6" r="4.4"/>
-      <circle cx="25.5" cy="37.1" r="4.6"/><circle cx="31.3" cy="37.5" r="4.2"/>
-      <circle cx="28.2" cy="43.4" r="4.6"/><circle cx="33.8" cy="44.4" r="4.2"/>
-      <circle cx="31.3" cy="49.8" r="4.6"/><circle cx="36.1" cy="51.8" r="4.2"/>
-      <circle cx="49.2" cy="31.6" r="4.4"/><circle cx="43.2" cy="31.6" r="4.4"/>
-      <circle cx="46.5" cy="37.1" r="4.6"/><circle cx="40.7" cy="37.5" r="4.2"/>
-      <circle cx="43.8" cy="43.4" r="4.6"/><circle cx="38.2" cy="44.4" r="4.2"/>
-      <circle cx="40.7" cy="49.8" r="4.6"/><circle cx="35.9" cy="51.8" r="4.2"/>
-      <circle cx="36" cy="58.5" r="4.7"/>
-    </g>
-    <g fill="rgba(255,255,255,.14)">
-      <circle cx="21.7" cy="30.3" r="1"/><circle cx="27.6" cy="30.2" r="1"/>
-      <circle cx="48.3" cy="30.3" r="1"/><circle cx="42.4" cy="30.2" r="1"/>
-      <circle cx="35.1" cy="57.2" r="1"/>
-    </g>
-  </svg>
-);
+const BrandLogo=({size=42})=>{
+  const berries=[
+    [22,29],[30,29],[38,29],[46,29],
+    [26,36],[34,36],[42,36],
+    [22,43],[30,43],[38,43],[46,43],
+    [26,50],[34,50],[42,50],
+    [30,57],[38,57],
+    [34,64]
+  ];
+  return(
+    <svg width={size} height={size} viewBox="0 0 72 72" aria-hidden="true">
+      <defs>
+        <radialGradient id="gBerry" cx="32%" cy="28%" r="76%">
+          <stop offset="0%" stopColor="#C83B8C"/>
+          <stop offset="52%" stopColor="#932E6B"/>
+          <stop offset="100%" stopColor="#4A123A"/>
+        </radialGradient>
+        <linearGradient id="gStem" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#8A5B2D"/>
+          <stop offset="100%" stopColor="#5E3A1A"/>
+        </linearGradient>
+        <linearGradient id="gLeaf" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#65B33A"/>
+          <stop offset="100%" stopColor="#2E7A2F"/>
+        </linearGradient>
+        <filter id="gDrop" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="1.2" stdDeviation="1.1" floodColor="#2A0D23" floodOpacity="0.3"/>
+        </filter>
+      </defs>
+
+      <g filter="url(#gDrop)">
+        <path d="M35 9c2 6 2 10 0 16" fill="none" stroke="url(#gStem)" strokeWidth="2.8" strokeLinecap="round"/>
+        <path d="M35 25c2-6 6-10 10-13" fill="none" stroke="url(#gStem)" strokeWidth="2.2" strokeLinecap="round"/>
+        <path d="M24 15c4-2 8 0 11 3-5 1-8 2-12 0 1 3 3 5 6 6-3 1-5 1-8-1 1 4 4 6 8 7 4 0 7-2 8-5-1-4-5-8-13-10z" fill="url(#gLeaf)" stroke="#2A6D2A" strokeWidth="1.1" strokeLinejoin="round"/>
+        <path d="M49 17c4-1 8 1 10 5-3-1-5-1-7 1 3 1 4 3 4 6" fill="none" stroke="#7A4A24" strokeWidth="1.8" strokeLinecap="round"/>
+        <path d="M23 19c-4 1-7 4-8 7 3-1 5-1 7 1" fill="none" stroke="#7A4A24" strokeWidth="1.7" strokeLinecap="round"/>
+      </g>
+
+      <g fill="url(#gBerry)" stroke="#3E1733" strokeWidth="1.1">
+        {berries.map(([cx,cy],i)=><circle key={i} cx={cx} cy={cy} r="4.65"/>)}
+      </g>
+      <g fill="rgba(255,255,255,0.28)">
+        {berries.map(([cx,cy],i)=><circle key={`h-${i}`} cx={cx-1.5} cy={cy-1.7} r="1.15"/>)}
+      </g>
+    </svg>
+  );
+};
 
 /* ── AI ───────────────────────────────────────────────────────── */
 const callAI=async(msg,wines)=>{
@@ -1895,7 +1906,7 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.19 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.20 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
