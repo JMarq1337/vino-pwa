@@ -411,6 +411,12 @@ const BrandLogo=({size=42,variant="color"})=>{
     drop:`gDrop-${uid}`,
   };
   const mono=variant==="mono";
+  const stemStroke=mono?"rgba(255,255,255,0.74)":`url(#${ids.stem})`;
+  const stemHighlight=mono?"rgba(255,255,255,0.26)":"rgba(255,244,220,0.28)";
+  const vineStroke=mono?"rgba(255,255,255,0.66)":"#7A4A24";
+  const leafFill=mono?"rgba(255,255,255,0.14)":`url(#${ids.leaf})`;
+  const leafStroke=mono?"rgba(255,255,255,0.68)":"#2A6D2A";
+  const leafVein=mono?"rgba(255,255,255,0.44)":"rgba(33,92,38,0.65)";
   const berries=[
     [22,29],[30,29],[38,29],[46,29],
     [26,36],[34,36],[42,36],
@@ -441,12 +447,14 @@ const BrandLogo=({size=42,variant="color"})=>{
       </defs>
 
       <g filter={mono?undefined:`url(#${ids.drop})`}>
-        <path d="M35 9c2 6 2 10 0 16" fill="none" stroke={mono?"rgba(255,255,255,0.74)":`url(#${ids.stem})`} strokeWidth="2.8" strokeLinecap="round"/>
-        <path d="M35 24c4-5 8-8 13-11" fill="none" stroke={mono?"rgba(255,255,255,0.7)":`url(#${ids.stem})`} strokeWidth="2.2" strokeLinecap="round"/>
-        <path d="M35 24c-3-4-6-6-10-8" fill="none" stroke={mono?"rgba(255,255,255,0.7)":`url(#${ids.stem})`} strokeWidth="2.1" strokeLinecap="round"/>
-        <path d="M20 14c6-2 11 0 15 4-6 2-10 3-15 1 1 3 4 5 8 6-4 1-7 0-10-3 1 4 4 7 9 8 5 0 9-2 10-6-1-4-6-8-17-10z" fill={mono?"rgba(255,255,255,0.14)":`url(#${ids.leaf})`} stroke={mono?"rgba(255,255,255,0.68)":"#2A6D2A"} strokeWidth="1.1" strokeLinejoin="round"/>
-        <path d="M48 17c5-1 9 2 11 6-3-2-6-2-8 0 2 1 4 3 3 6" fill="none" stroke={mono?"rgba(255,255,255,0.66)":"#7A4A24"} strokeWidth="1.8" strokeLinecap="round"/>
-        <path d="M23 18c-4 1-7 4-8 7 3-1 5-1 7 1" fill="none" stroke={mono?"rgba(255,255,255,0.66)":"#7A4A24"} strokeWidth="1.7" strokeLinecap="round"/>
+        <path d="M35 9c2 6.1 2 10.9 0 16.2" fill="none" stroke={stemStroke} strokeWidth="2.8" strokeLinecap="round"/>
+        <path d="M35.7 10.8c.9 4.2.8 8.1-.2 12.1" fill="none" stroke={stemHighlight} strokeWidth="0.95" strokeLinecap="round"/>
+        <path d="M35 24c3.9-5.1 8.6-8.7 13.9-11.1" fill="none" stroke={stemStroke} strokeWidth="2.2" strokeLinecap="round"/>
+        <path d="M35 24c-3.5-4.6-8-7.8-13.2-10.1" fill="none" stroke={stemStroke} strokeWidth="2.15" strokeLinecap="round"/>
+        <path d="M21 14.7c5.5-2.9 11.9-1.3 15.2 3.7-2.7.4-4.9 1.2-6.7 2.5 2.3 1.1 4.2 2.9 5.5 5.3-5 1.4-10 0-13.4-3.8-2.2-2.6-2.5-5.4-.6-7.7z" fill={leafFill} stroke={leafStroke} strokeWidth="1.15" strokeLinejoin="round"/>
+        <path d="M30 20.9c-2.5-1.4-4.9-2.7-7.4-4M30 20.9c-2.8 1.8-5.7 3.3-8.8 4.3M30 20.9c1.1 1.8 2.3 3.4 3.8 4.8" fill="none" stroke={leafVein} strokeWidth="0.95" strokeLinecap="round"/>
+        <path d="M49.1 16.8c5.1-.6 9.2 2.1 10.9 6.4-2.6-2-5.3-2.3-8-1 2.5 1 4.1 2.8 4 5.3" fill="none" stroke={vineStroke} strokeWidth="1.8" strokeLinecap="round"/>
+        <path d="M22.8 17.6c-4.2 1.1-7 3.8-8.2 7.4 2.5-1.2 4.8-1.2 7 .1" fill="none" stroke={vineStroke} strokeWidth="1.7" strokeLinecap="round"/>
       </g>
 
       <g fill={mono?"rgba(255,255,255,0.14)":`url(#${ids.berry})`} stroke={mono?"rgba(255,255,255,0.65)":"#3E1733"} strokeWidth="1.1">
@@ -1915,7 +1923,7 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.21 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.22 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
