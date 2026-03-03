@@ -447,16 +447,16 @@ const BrandLogo=({size=42,variant="color"})=>{
       </defs>
 
       <g filter={mono?undefined:`url(#${ids.drop})`}>
-        <path d="M21.8 20.1c-4.3-.4-7.6 1.9-8.5 5.7 2.2-1.4 4.4-1.7 6.5-.8" fill="none" stroke={vineStroke} strokeWidth="1.55" strokeLinecap="round"/>
-        <path d="M48.7 18.9c5.2-1.2 9.9 1.2 11.8 5.7-2.8-1.3-5.5-1.2-8 .4 2.4 1 3.9 2.8 3.9 5.1" fill="none" stroke={vineStroke} strokeWidth="1.65" strokeLinecap="round"/>
+        <path d="M22 14.6c-4.4-.4-8 2-9.2 5.9 2.4-1.6 4.7-1.9 7-.9" fill="none" stroke={vineStroke} strokeWidth="1.55" strokeLinecap="round"/>
+        <path d="M47.4 13.4c6-1 10.7 1.8 12.2 6.3-2.9-1.5-5.6-1.8-8.1-.7 2.5 1.1 4 3.1 3.9 5.6" fill="none" stroke={vineStroke} strokeWidth="1.68" strokeLinecap="round"/>
 
-        <path d="M35 9c2 5.8 2.1 10.8 0 16.2" fill="none" stroke={stemStroke} strokeWidth="2.8" strokeLinecap="round"/>
-        <path d="M35.7 10.9c.8 4.1.7 8-.2 12" fill="none" stroke={stemHighlight} strokeWidth="0.9" strokeLinecap="round"/>
-        <path d="M35 24c4.2-4.8 9.1-8 14.7-9.8" fill="none" stroke={stemStroke} strokeWidth="2.2" strokeLinecap="round"/>
-        <path d="M35 24c-3.7-4.3-8.2-7.3-13.6-9.1" fill="none" stroke={stemStroke} strokeWidth="2.1" strokeLinecap="round"/>
+        <path d="M35 8.7c1.9 5.9 1.9 10.6 0 15.9" fill="none" stroke={stemStroke} strokeWidth="2.85" strokeLinecap="round"/>
+        <path d="M35.7 10c.7 4 .7 7.4-.2 11" fill="none" stroke={stemHighlight} strokeWidth="0.9" strokeLinecap="round"/>
+        <path d="M35 19.5c3.6-4 7.9-6.7 12.9-8.3" fill="none" stroke={stemStroke} strokeWidth="2.2" strokeLinecap="round"/>
+        <path d="M35 19.9c-3.2-3.6-6.9-6.1-11.5-7.7" fill="none" stroke={stemStroke} strokeWidth="2.05" strokeLinecap="round"/>
 
-        <path d="M17.4 13.8c5-3.3 12.6-2.4 16.7 3.3-2.4.5-4.8 1.8-6.8 3.6 1.8.9 3.5 2.6 4.8 4.9-5.5 2.3-11.7.9-14.9-3.2-2.1-2.8-2.1-6 .2-8.6z" fill={leafFill} stroke={leafStroke} strokeWidth="1.12" strokeLinejoin="round"/>
-        <path d="M27.3 21.1c-2.8-1.9-5.6-3.7-8.8-5.2M27.3 21.1c-3.2 1.9-6.4 3.3-10 4.2M27.3 21.1c1.3 2.2 2.9 4 4.9 5.3" fill="none" stroke={leafVein} strokeWidth="0.92" strokeLinecap="round"/>
+        <path d="M16.7 10.9c4.9-1.5 10 .5 13.1 4.8-2.3.7-4.1 1.9-5.5 3.4 1.9 1 3.4 2.7 4.4 4.8-4.9 2-10.5.8-13.6-2.9-2.3-2.7-2.2-6.6 1.6-10.1z" fill={leafFill} stroke={leafStroke} strokeWidth="1.12" strokeLinejoin="round"/>
+        <path d="M24.2 19.2c-2.5-1.9-5.1-3.5-7.9-5M24.2 19.2c-2.9 2.1-5.9 3.6-9.3 4.7M24.2 19.2c1.8.6 3.5 2.1 5 4.5" fill="none" stroke={leafVein} strokeWidth="0.92" strokeLinecap="round"/>
       </g>
 
       <g fill={mono?"rgba(255,255,255,0.14)":`url(#${ids.berry})`} stroke={mono?"rgba(255,255,255,0.65)":"#3E1733"} strokeWidth="1.1">
@@ -1925,7 +1925,7 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.23 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.24 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
