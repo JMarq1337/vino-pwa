@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useId } from "react";
 import { wineHoldings2021 } from "./data/wineHoldings2021";
 
 /* ── SUPABASE ─────────────────────────────────────────────────── */
@@ -402,7 +402,15 @@ const Icon=({n,size=20,color="currentColor",fill="none",sw=1.5})=>{
   return(<svg width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><path d={IC[n]}/></svg>);
 };
 
-const BrandLogo=({size=42})=>{
+const BrandLogo=({size=42,variant="color"})=>{
+  const uid=useId().replace(/[:]/g,"");
+  const ids={
+    berry:`gBerry-${uid}`,
+    stem:`gStem-${uid}`,
+    leaf:`gLeaf-${uid}`,
+    drop:`gDrop-${uid}`,
+  };
+  const mono=variant==="mono";
   const berries=[
     [22,29],[30,29],[38,29],[46,29],
     [26,36],[34,36],[42,36],
@@ -414,36 +422,37 @@ const BrandLogo=({size=42})=>{
   return(
     <svg width={size} height={size} viewBox="0 0 72 72" aria-hidden="true">
       <defs>
-        <radialGradient id="gBerry" cx="32%" cy="28%" r="76%">
+        <radialGradient id={ids.berry} cx="32%" cy="28%" r="76%">
           <stop offset="0%" stopColor="#C83B8C"/>
           <stop offset="52%" stopColor="#932E6B"/>
           <stop offset="100%" stopColor="#4A123A"/>
         </radialGradient>
-        <linearGradient id="gStem" x1="0" y1="0" x2="1" y2="1">
+        <linearGradient id={ids.stem} x1="0" y1="0" x2="1" y2="1">
           <stop offset="0%" stopColor="#8A5B2D"/>
           <stop offset="100%" stopColor="#5E3A1A"/>
         </linearGradient>
-        <linearGradient id="gLeaf" x1="0" y1="0" x2="1" y2="1">
+        <linearGradient id={ids.leaf} x1="0" y1="0" x2="1" y2="1">
           <stop offset="0%" stopColor="#65B33A"/>
           <stop offset="100%" stopColor="#2E7A2F"/>
         </linearGradient>
-        <filter id="gDrop" x="-20%" y="-20%" width="140%" height="140%">
+        <filter id={ids.drop} x="-20%" y="-20%" width="140%" height="140%">
           <feDropShadow dx="0" dy="1.2" stdDeviation="1.1" floodColor="#2A0D23" floodOpacity="0.3"/>
         </filter>
       </defs>
 
-      <g filter="url(#gDrop)">
-        <path d="M35 9c2 6 2 10 0 16" fill="none" stroke="url(#gStem)" strokeWidth="2.8" strokeLinecap="round"/>
-        <path d="M35 25c2-6 6-10 10-13" fill="none" stroke="url(#gStem)" strokeWidth="2.2" strokeLinecap="round"/>
-        <path d="M24 15c4-2 8 0 11 3-5 1-8 2-12 0 1 3 3 5 6 6-3 1-5 1-8-1 1 4 4 6 8 7 4 0 7-2 8-5-1-4-5-8-13-10z" fill="url(#gLeaf)" stroke="#2A6D2A" strokeWidth="1.1" strokeLinejoin="round"/>
-        <path d="M49 17c4-1 8 1 10 5-3-1-5-1-7 1 3 1 4 3 4 6" fill="none" stroke="#7A4A24" strokeWidth="1.8" strokeLinecap="round"/>
-        <path d="M23 19c-4 1-7 4-8 7 3-1 5-1 7 1" fill="none" stroke="#7A4A24" strokeWidth="1.7" strokeLinecap="round"/>
+      <g filter={mono?undefined:`url(#${ids.drop})`}>
+        <path d="M35 9c2 6 2 10 0 16" fill="none" stroke={mono?"rgba(255,255,255,0.74)":`url(#${ids.stem})`} strokeWidth="2.8" strokeLinecap="round"/>
+        <path d="M35 24c4-5 8-8 13-11" fill="none" stroke={mono?"rgba(255,255,255,0.7)":`url(#${ids.stem})`} strokeWidth="2.2" strokeLinecap="round"/>
+        <path d="M35 24c-3-4-6-6-10-8" fill="none" stroke={mono?"rgba(255,255,255,0.7)":`url(#${ids.stem})`} strokeWidth="2.1" strokeLinecap="round"/>
+        <path d="M20 14c6-2 11 0 15 4-6 2-10 3-15 1 1 3 4 5 8 6-4 1-7 0-10-3 1 4 4 7 9 8 5 0 9-2 10-6-1-4-6-8-17-10z" fill={mono?"rgba(255,255,255,0.14)":`url(#${ids.leaf})`} stroke={mono?"rgba(255,255,255,0.68)":"#2A6D2A"} strokeWidth="1.1" strokeLinejoin="round"/>
+        <path d="M48 17c5-1 9 2 11 6-3-2-6-2-8 0 2 1 4 3 3 6" fill="none" stroke={mono?"rgba(255,255,255,0.66)":"#7A4A24"} strokeWidth="1.8" strokeLinecap="round"/>
+        <path d="M23 18c-4 1-7 4-8 7 3-1 5-1 7 1" fill="none" stroke={mono?"rgba(255,255,255,0.66)":"#7A4A24"} strokeWidth="1.7" strokeLinecap="round"/>
       </g>
 
-      <g fill="url(#gBerry)" stroke="#3E1733" strokeWidth="1.1">
+      <g fill={mono?"rgba(255,255,255,0.14)":`url(#${ids.berry})`} stroke={mono?"rgba(255,255,255,0.65)":"#3E1733"} strokeWidth="1.1">
         {berries.map(([cx,cy],i)=><circle key={i} cx={cx} cy={cy} r="4.65"/>)}
       </g>
-      <g fill="rgba(255,255,255,0.28)">
+      <g fill={mono?"rgba(255,255,255,0.2)":"rgba(255,255,255,0.28)"}>
         {berries.map(([cx,cy],i)=><circle key={`h-${i}`} cx={cx-1.5} cy={cy-1.7} r="1.15"/>)}
       </g>
     </svg>
@@ -653,7 +662,7 @@ const WineDetail=({wine,onEdit,onDelete,onMove})=>{
   return(
     <div>
       <div style={{borderRadius:16,background:`linear-gradient(140deg,${tc.dot} 0%,rgba(0,0,0,.24) 90%)`,padding:"20px",marginBottom:16,position:"relative",overflow:"hidden",minHeight:108,boxShadow:"inset 0 1px 0 rgba(255,255,255,.2)"}}>
-        <div style={{position:"absolute",right:-18,bottom:-18,opacity:0.12,pointerEvents:"none"}}><BrandLogo size={120}/></div>
+        <div style={{position:"absolute",right:-18,bottom:-18,opacity:0.12,pointerEvents:"none"}}><BrandLogo size={120} variant="mono"/></div>
         <div style={{position:"relative",zIndex:1}}>
           <WineTypePill type={type}/>
         </div>
@@ -1829,7 +1838,7 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
 
       {/* Profile card */}
       <div style={{background:profileBg,borderRadius:22,padding:"22px",marginBottom:14,position:"relative",overflow:"hidden",backgroundSize:"cover",backgroundPosition:"center"}}>
-        <div style={{position:"absolute",right:-22,top:-20,opacity:0.1,pointerEvents:"none"}}><BrandLogo size={150}/></div>
+        <div style={{position:"absolute",right:-22,top:-20,opacity:0.1,pointerEvents:"none"}}><BrandLogo size={150} variant="mono"/></div>
         <div style={{display:"flex",alignItems:"center",gap:14,position:"relative",zIndex:1}}>
           <div style={{width:66,height:66,borderRadius:"50%",background:"rgba(255,255,255,0.15)",overflow:"hidden",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",border:"2px solid rgba(255,255,255,0.3)"}}>
             {profile.avatar?<img src={profile.avatar} alt="avatar" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<Icon n="user" size={28} color="rgba(255,255,255,0.8)"/>}
@@ -1906,7 +1915,7 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.20 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.21 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
