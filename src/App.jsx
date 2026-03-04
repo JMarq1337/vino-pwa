@@ -65,6 +65,7 @@ const EXCEL_IMPORT_FLAG = "vino_excel_seed_v1";
 const EXCEL_RESTORE_FLAG = "vino_excel_restore_v1";
 const CACHE_KEY = "vino_local_cache_v2";
 const SAVED_LOCATIONS_KEY = "vino_saved_locations_v1";
+const DELETED_WINES_KEY = "vino_deleted_wines_v1";
 const ACCENTS = {
   wine:{id:"wine",label:"Wine Red",accent:"#9B2335",accentLight:"#F08FA0"},
   ocean:{id:"ocean",label:"Ocean Blue",accent:"#1E5BB8",accentLight:"#7EB6FF"},
@@ -237,6 +238,17 @@ const readSavedLocations=()=>{
     const parsed=JSON.parse(raw);
     if(!Array.isArray(parsed)) return [];
     return dedupeLocations(parsed).filter(loc=>!PRESET_LOCATIONS.some(p=>locationKey(p)===locationKey(loc)));
+  }catch{return[];}
+};
+const readDeletedWines=()=>{
+  try{
+    const raw=localStorage.getItem(DELETED_WINES_KEY);
+    if(!raw)return[];
+    const parsed=JSON.parse(raw);
+    if(!Array.isArray(parsed)) return [];
+    return parsed
+      .filter(item=>item&&item.wine&&item.wine.id)
+      .map(item=>({wine:item.wine,deletedAt:item.deletedAt||""}));
   }catch{return[];}
 };
 
@@ -545,6 +557,7 @@ const IC={
   camera:"M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2zM12 17a4 4 0 100-8 4 4 0 000 8z",
   location:"M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0118 0zM12 13a3 3 0 100-6 3 3 0 000 6z",
   settings:"M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z",
+  rewind:"M3 3v6h6M3 9a9 9 0 101.2-3.6",
   mappin:"M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0zM12 10a1 1 0 100-2 1 1 0 000 2",
   globe:"M12 22a10 10 0 110-20 10 10 0 010 20zM2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z",
   palette:"M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10c.55 0 1-.45 1-1 0-.27-.1-.51-.25-.7a1 1 0 01.25-.7c0-.55.45-1 1-1h1.17C16.73 18.83 18 17.56 18 16c0-3.87-2.69-7.01-6-7z",
@@ -1347,10 +1360,12 @@ const Chip=({label,onX})=>(
 );
 
 /* ── COLLECTION ───────────────────────────────────────────────── */
-const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAdjustConsumption,desktop,savedLocations,onSaveLocation,onRemoveLocation})=>{
+const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAdjustConsumption,desktop,savedLocations,onSaveLocation,onRemoveLocation,deletedWines=[],onRestoreDeleted,onDismissDeleted})=>{
   const [sel,setSel]=useState(null);
   const [editing,setEditing]=useState(false);
   const [adding,setAdding]=useState(false);
+  const [rewindOpen,setRewindOpen]=useState(false);
+  const [recentDelete,setRecentDelete]=useState(null);
   const [search,setSearch]=useState("");
   const [filters,setFilters]=useState(DEFAULT_FILTERS);
   const [filterOpen,setFilterOpen]=useState(false);
@@ -1359,6 +1374,11 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAdjustConsumption,deskt
   const filt=applyFilters(wines,filters,search);
   const bottles=col.reduce((s,w)=>s+(w.bottles||0),0);
   const active=hasFilters(filters);
+  useEffect(()=>{
+    if(!recentDelete)return;
+    const t=setTimeout(()=>setRecentDelete(null),10000);
+    return()=>clearTimeout(t);
+  },[recentDelete]);
   return(
     <div>
       <div style={{marginBottom:24}}>
@@ -1375,6 +1395,10 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAdjustConsumption,deskt
           <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search wines, regions, countries…" style={{paddingLeft:38,borderRadius:14}}/>
           <div style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"var(--sub)",pointerEvents:"none"}}><Icon n="search" size={16}/></div>
         </div>
+        <button onClick={()=>setRewindOpen(true)} style={{width:44,height:44,borderRadius:14,background:deletedWines.length?"rgba(var(--accentRgb),0.1)":"var(--card)",border:deletedWines.length?"1.5px solid rgba(var(--accentRgb),0.4)":"1.5px solid var(--border)",display:"flex",alignItems:"center",justifyContent:"center",color:deletedWines.length?"var(--accent)":"var(--sub)",flexShrink:0,position:"relative",cursor:"pointer"}} title="Rewind deleted wines">
+          <Icon n="rewind" size={17}/>
+          {deletedWines.length>0&&<div style={{position:"absolute",top:-3,right:-3,minWidth:16,height:16,padding:"0 4px",borderRadius:999,background:"var(--accent)",color:"#fff",fontSize:10,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",border:"2px solid var(--bg)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{Math.min(99,deletedWines.length)}</div>}
+        </button>
         <button onClick={()=>setFilterOpen(true)} style={{width:44,height:44,borderRadius:14,background:active?"rgba(var(--accentRgb),0.12)":"var(--card)",border:active?"1.5px solid var(--accent)":"1.5px solid var(--border)",display:"flex",alignItems:"center",justifyContent:"center",color:active?"var(--accent)":"var(--sub)",flexShrink:0,position:"relative",cursor:"pointer"}}>
           <Icon n="filter" size={17}/>
           {active&&<div style={{position:"absolute",top:-2,right:-2,width:7,height:7,borderRadius:"50%",background:"var(--accent)",border:"1.5px solid var(--bg)"}}/>}
@@ -1397,6 +1421,18 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAdjustConsumption,deskt
           <button onClick={()=>setFilters(DEFAULT_FILTERS)} style={{padding:"4px 10px",borderRadius:20,border:"none",background:"none",color:"var(--sub)",fontSize:12,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',sans-serif",textDecoration:"underline"}}>Clear all</button>
         </div>
       )}
+      {recentDelete&&(
+        <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:"10px 12px",marginBottom:12,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+          <div style={{minWidth:0}}>
+            <div style={{fontSize:12,color:"var(--text)",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{recentDelete.name} deleted</div>
+            <div style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Use undo or open rewind history.</div>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+            <button onClick={async()=>{await onRestoreDeleted?.(recentDelete.id);setRecentDelete(null);}} style={{padding:"7px 10px",borderRadius:10,border:"1.5px solid var(--accent)",background:"rgba(var(--accentRgb),0.1)",color:"var(--accent)",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Undo</button>
+            <button onClick={()=>setRewindOpen(true)} style={{padding:"7px 10px",borderRadius:10,border:"1.5px solid var(--border)",background:"var(--inputBg)",color:"var(--text)",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Rewind</button>
+          </div>
+        </div>
+      )}
       {filt.length===0
         ? <Empty icon="wine" text={search||active?"No wines match your filters.":"Your cellar is empty. Add your first wine."}/>
         : <div style={{display:desktop?"grid":"block",gridTemplateColumns:desktop?"repeat(auto-fill,minmax(290px,1fr))":"none",gap:desktop?12:0}}>
@@ -1404,7 +1440,7 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAdjustConsumption,deskt
           </div>
       }
       <Modal show={!!sel&&!editing} onClose={()=>setSel(null)} wide>
-        {sel&&<WineDetail wine={sel} onEdit={()=>setEditing(true)} onDelete={()=>{onDelete(sel.id);setSel(null);}} onAdjustConsumption={async delta=>{const updated=await onAdjustConsumption?.(sel.id,delta);if(updated)setSel(updated);}}/>}
+        {sel&&<WineDetail wine={sel} onEdit={()=>setEditing(true)} onDelete={async()=>{const deletedId=await onDelete(sel.id);setRecentDelete({id:deletedId||sel.id,name:sel.name||"Wine"});setSel(null);}} onAdjustConsumption={async delta=>{const updated=await onAdjustConsumption?.(sel.id,delta);if(updated)setSel(updated);}}/>}
       </Modal>
       <Modal show={editing} onClose={()=>setEditing(false)} wide>
         <WineForm
@@ -1429,6 +1465,33 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAdjustConsumption,deskt
       </Modal>
       <Modal show={filterOpen} onClose={()=>setFilterOpen(false)}>
         <FilterPanel filters={filters} setFilters={setFilters} wines={wines} onClose={()=>setFilterOpen(false)}/>
+      </Modal>
+      <Modal show={rewindOpen} onClose={()=>setRewindOpen(false)} wide>
+        <ModalHeader title="Rewind Deleted Wines" onClose={()=>setRewindOpen(false)}/>
+        {deletedWines.length===0?(
+          <div style={{background:"var(--inputBg)",borderRadius:12,padding:"14px",border:"1px solid var(--border)",fontSize:13,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+            No deleted wines in rewind history.
+          </div>
+        ):(
+          <div style={{display:"grid",gap:8}}>
+            {deletedWines.map(entry=>{
+              const w=entry.wine||{};
+              const when=entry.deletedAt?new Date(entry.deletedAt).toLocaleString("en-AU",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):"";
+              return(
+                <div key={w.id} style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:"10px 12px",display:"flex",justifyContent:"space-between",gap:10,alignItems:"center"}}>
+                  <div style={{minWidth:0}}>
+                    <div style={{fontSize:13,fontWeight:700,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{w.name||"Wine"}</div>
+                    <div style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{[w.vintage,resolveVarietal(w),w.origin].filter(Boolean).join(" · ")||"Deleted wine entry"}{when?` · ${when}`:""}</div>
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+                    <button onClick={async()=>{await onRestoreDeleted?.(w.id);setRecentDelete(null);}} style={{padding:"7px 10px",borderRadius:10,border:"1.5px solid var(--accent)",background:"rgba(var(--accentRgb),0.1)",color:"var(--accent)",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Restore</button>
+                    <button onClick={()=>onDismissDeleted?.(w.id)} style={{width:30,height:30,borderRadius:10,border:"1.5px solid var(--border)",background:"var(--inputBg)",color:"var(--sub)",display:"flex",alignItems:"center",justifyContent:"center"}}><Icon n="x" size={13}/></button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </Modal>
     </div>
   );
@@ -2395,7 +2458,7 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile})=>{
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.44 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.45 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
@@ -2425,6 +2488,7 @@ export default function App(){
   const [tab,setTab]=useState("collection");
   const [wines,setWines]=useState([]);
   const [notes,setNotes]=useState([]);
+  const [deletedWines,setDeletedWines]=useState(()=>readDeletedWines());
   const [profile,setProfileState]=useState(DEFAULT_PROFILE);
   const [savedLocations,setSavedLocations]=useState(()=>readSavedLocations());
   const [ready,setReady]=useState(false);
@@ -2437,6 +2501,7 @@ export default function App(){
 
   useEffect(()=>{try{localStorage.setItem("vino_theme",themeMode)}catch{}},[themeMode]);
   useEffect(()=>{try{localStorage.setItem(SAVED_LOCATIONS_KEY,JSON.stringify(savedLocations))}catch{}},[savedLocations]);
+  useEffect(()=>{try{localStorage.setItem(DELETED_WINES_KEY,JSON.stringify(deletedWines.slice(0,40)))}catch{}},[deletedWines]);
   useEffect(()=>{
     const mq=window.matchMedia?.("(prefers-color-scheme:dark)");
     const h=e=>setSysDark(e.matches);
@@ -2709,7 +2774,29 @@ export default function App(){
 
   const addWine=async w=>{setWines(p=>[...p,w]);await db.upsert("wines",toDb.wine(w));};
   const updWine=async w=>{setWines(p=>p.map(x=>x.id===w.id?w:x));await db.upsert("wines",toDb.wine(w));};
-  const delWine=async id=>{setWines(p=>p.filter(x=>x.id!==id));await db.del("wines",id);};
+  const delWine=async id=>{
+    let removed=null;
+    setWines(prev=>{
+      removed=prev.find(x=>x.id===id)||null;
+      return prev.filter(x=>x.id!==id);
+    });
+    if(!removed) return null;
+    setDeletedWines(prev=>[{wine:removed,deletedAt:new Date().toISOString()},...prev.filter(entry=>entry?.wine?.id!==id)].slice(0,40));
+    await db.del("wines",id);
+    return id;
+  };
+  const restoreDeletedWine=async id=>{
+    let found=null;
+    setDeletedWines(prev=>{
+      found=prev.find(entry=>entry?.wine?.id===id)||null;
+      return prev.filter(entry=>entry?.wine?.id!==id);
+    });
+    if(!found?.wine) return null;
+    setWines(prev=>prev.some(w=>w.id===id)?prev:[found.wine,...prev]);
+    await db.upsert("wines",toDb.wine(found.wine));
+    return found.wine;
+  };
+  const dismissDeletedWine=id=>setDeletedWines(prev=>prev.filter(entry=>entry?.wine?.id!==id));
   const adjustWineConsumption=async(id,delta)=>{
     let updated=null;
     setWines(prev=>prev.map(w=>{
@@ -2861,7 +2948,7 @@ export default function App(){
 
   const screens=(
     <>
-      {tab==="collection"&&<CollectionScreen wines={wines} onAdd={addWine} onUpdate={updWine} onDelete={delWine} onAdjustConsumption={adjustWineConsumption} desktop={isDesktop} savedLocations={savedLocations} onSaveLocation={addSavedLocation} onRemoveLocation={removeSavedLocation}/>}
+      {tab==="collection"&&<CollectionScreen wines={wines} onAdd={addWine} onUpdate={updWine} onDelete={delWine} onAdjustConsumption={adjustWineConsumption} desktop={isDesktop} savedLocations={savedLocations} onSaveLocation={addSavedLocation} onRemoveLocation={removeSavedLocation} deletedWines={deletedWines} onRestoreDeleted={restoreDeletedWine} onDismissDeleted={dismissDeletedWine}/>}
       {tab==="ai"&&<AIScreen wines={wines}/>}
       {tab==="notes"&&<JournalScreen wines={wines} onUpdate={updWine} desktop={isDesktop}/>}
       {tab==="profile"&&<ProfileScreen wines={wines} notes={notes} theme={themeMode} setTheme={setThemeMode} profile={profile} setProfile={setProfile}/>}
