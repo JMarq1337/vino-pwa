@@ -1492,6 +1492,17 @@ const JournalWineCard=({wine,onClick})=>{
   const tc=WINE_TYPE_COLORS[type]||WINE_TYPE_COLORS.Other;
   const geo=deriveRegionCountry(wine.origin||"");
   const hasJournalText=!!((wine.tastingNotes||"").trim()||(wine.review||"").trim()||(wine.notes||"").trim());
+  const journalStatusStyle=hasJournalText
+    ? {
+        border:"1px solid rgba(var(--accentRgb),0.28)",
+        background:"rgba(var(--accentRgb),0.14)",
+        color:"var(--accent)"
+      }
+    : {
+        border:"1px solid var(--border)",
+        background:"var(--inputBg)",
+        color:"var(--sub)"
+      };
   return(
     <div onClick={onClick} style={{background:"var(--card)",borderRadius:18,padding:"14px 16px",cursor:"pointer",border:"1px solid var(--border)",marginBottom:10,transition:"transform 0.15s,box-shadow 0.15s",boxShadow:"0 2px 8px var(--shadow)"}} onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 8px 24px var(--shadow)";}} onMouseLeave={e=>{e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="0 2px 8px var(--shadow)";}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,marginBottom:7}}>
@@ -1500,7 +1511,13 @@ const JournalWineCard=({wine,onClick})=>{
       </div>
       <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:8}}>
         <WineTypePill type={type} label={varietal}/>
-        <span style={{padding:"3px 8px",borderRadius:20,fontSize:11,fontWeight:700,color:hasJournalText?"var(--accent)":"var(--sub)",background:hasJournalText?"rgba(var(--accentRgb),0.12)":"var(--inputBg)",fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap"}}>{hasJournalText?"Has Journal Notes":"No Journal Notes Yet"}</span>
+        <div
+          title={hasJournalText?"Journal entry exists":"No journal entry yet"}
+          aria-label={hasJournalText?"Journal entry exists":"No journal entry yet"}
+          style={{width:24,height:24,borderRadius:999,display:"inline-flex",alignItems:"center",justifyContent:"center",...journalStatusStyle}}
+        >
+          <Icon n="note" size={13} color="currentColor"/>
+        </div>
       </div>
       {(geo.region||geo.country)&&<div style={{fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{geo.region||geo.country}</div>}
       <div style={{marginTop:10,height:2,borderRadius:2,background:tc.dot,opacity:0.45}}/>
