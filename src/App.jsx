@@ -869,8 +869,19 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
   const knownLocations=dedupeLocations([...LOCATIONS,...locationOptions,...savedLocations,initial?.location]);
   const defaultLocation=knownLocations[0]||LOCATIONS[0]||"Kennards";
   const initialLocation=canonicalLocation(initial?.location||defaultLocation,knownLocations)||defaultLocation;
-  const blank={name:"",origin:"",grape:"",alcohol:"",vintage:"",bottles:"1",addPurchased:"",rating:0,notes:"",review:"",tastingNotes:"",datePurchased:"",addedDate:todayIsoLocal(),wishlist:!!isWishlist,photo:null,location:defaultLocation,locationSlot:"",locationSection:"",drinkStart:"",drinkEnd:"",pricePerBottle:"",rrp:"",totalPaid:"",insuranceValue:"",supplier:""};
-  const [f,setF]=useState(initial?{...blank,...initial,location:initialLocation,alcohol:initial.alcohol?.toString()||"",vintage:initial.vintage?.toString()||"",bottles:initial.bottles?.toString()||"",addPurchased:"",locationSlot:initial.locationSlot||"",locationSection:normalizeKennardsSection(initial.cellarMeta?.locationSection||""),drinkStart:initial.cellarMeta?.drinkStart?.toString()||"",drinkEnd:initial.cellarMeta?.drinkEnd?.toString()||"",pricePerBottle:initial.cellarMeta?.pricePerBottle?.toString()||"",rrp:initial.cellarMeta?.rrp?.toString()||"",totalPaid:initial.cellarMeta?.totalPaid?.toString()||"",insuranceValue:initial.cellarMeta?.insuranceValue?.toString()||"",supplier:initial.cellarMeta?.supplier||"",addedDate:initial.cellarMeta?.addedDate||todayIsoLocal()}:blank);
+  const inferredPriceForBottles=(()=>{
+    if(!initial) return "1";
+    const paid=safeNum(initial.cellarMeta?.totalPaid);
+    const perBottle=safeNum(initial.cellarMeta?.pricePerBottle);
+    if(paid&&perBottle){
+      const calc=Math.max(1,Math.round(paid/perBottle));
+      if(Number.isFinite(calc)) return String(calc);
+    }
+    const purchased=getTotalPurchased(initial);
+    return purchased>0?String(purchased):"";
+  })();
+  const blank={name:"",origin:"",grape:"",alcohol:"",vintage:"",bottles:"1",addPurchased:"",rating:0,notes:"",review:"",tastingNotes:"",datePurchased:"",addedDate:todayIsoLocal(),wishlist:!!isWishlist,photo:null,location:defaultLocation,locationSlot:"",locationSection:"",drinkStart:"",drinkEnd:"",pricePerBottle:"",rrp:"",totalPaid:"",priceForBottles:"1",insuranceValue:"",supplier:""};
+  const [f,setF]=useState(initial?{...blank,...initial,location:initialLocation,alcohol:initial.alcohol?.toString()||"",vintage:initial.vintage?.toString()||"",bottles:initial.bottles?.toString()||"",addPurchased:"",locationSlot:initial.locationSlot||"",locationSection:normalizeKennardsSection(initial.cellarMeta?.locationSection||""),drinkStart:initial.cellarMeta?.drinkStart?.toString()||"",drinkEnd:initial.cellarMeta?.drinkEnd?.toString()||"",pricePerBottle:initial.cellarMeta?.pricePerBottle?.toString()||"",rrp:initial.cellarMeta?.rrp?.toString()||"",totalPaid:initial.cellarMeta?.totalPaid?.toString()||"",priceForBottles:inferredPriceForBottles,insuranceValue:initial.cellarMeta?.insuranceValue?.toString()||"",supplier:initial.cellarMeta?.supplier||"",addedDate:initial.cellarMeta?.addedDate||todayIsoLocal()}:blank);
   const [locationMode,setLocationMode]=useState("preset");
   const [customLocation,setCustomLocation]=useState("");
   const [rememberLocation,setRememberLocation]=useState(false);
@@ -890,6 +901,18 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
   const projectedLeft=leftInput+addPurchased;
   const projectedPurchased=Math.max(basePurchased+addPurchased,projectedLeft);
   const projectedConsumed=Math.max(0,projectedPurchased-projectedLeft);
+  const paidAmount=safeNum(f.totalPaid);
+  const paidForBottles=Math.max(0,parseInt(f.priceForBottles)||0);
+  const calculatedPricePerBottle=(paidAmount!=null&&paidAmount>0&&paidForBottles>0)
+    ? Number((paidAmount/paidForBottles).toFixed(2))
+    : null;
+  const manualPricePerBottle=safeNum(f.pricePerBottle);
+  const manualRrp=safeNum(f.rrp);
+  const finalPricePerBottle=(manualPricePerBottle!=null&&manualPricePerBottle>0)?manualPricePerBottle:calculatedPricePerBottle;
+  const finalRrp=(manualRrp!=null&&manualRrp>0)?manualRrp:finalPricePerBottle;
+  const finalTotalPaid=(paidAmount!=null&&paidAmount>0)
+    ? paidAmount
+    : (finalPricePerBottle!=null&&paidForBottles>0?Number((finalPricePerBottle*paidForBottles).toFixed(2)):null);
   const handleQ=v=>{setQ(v);set("name",v);setSugs(v.length>=2?fuzzySearch(v):[]);};
   const pickSug=w=>{setF(p=>({...p,name:w.name,origin:w.origin||"",grape:w.grape||"",alcohol:w.alcohol?.toString()||"",tastingNotes:w.tastingNotes||""}));setQ(w.name);setSugs([]);setShowFields(true);};
   const handleLocationSelect=value=>{
@@ -911,11 +934,11 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
     const finalAddedDate=f.addedDate||initial?.cellarMeta?.addedDate||todayIsoLocal();
     const wt=guessWineType(f.grape,f.name);
     const tc=WINE_TYPE_COLORS[wt]||WINE_TYPE_COLORS.Other;
-    const {addPurchased:_addIgnore,locationSection:_locSectionIgnore,addedDate:_addedIgnore,...payload}=f;
+    const {addPurchased:_addIgnore,locationSection:_locSectionIgnore,addedDate:_addedIgnore,priceForBottles:_priceCountIgnore,...payload}=f;
     if(!isWishlist&&locationMode==="custom"&&rememberLocation&&finalLocation){
       onSaveLocation?.(finalLocation);
     }
-    onSave({...payload,id:f.id||uid(),alcohol:parseFloat(f.alcohol)||0,vintage:parseInt(f.vintage)||null,bottles:projectedLeft,location:finalLocation,locationSlot:f.locationSlot||null,wineType:wt,color:tc.dot,cellarMeta:{...(initial?.cellarMeta||{}),drinkStart:parseInt(f.drinkStart)||null,drinkEnd:parseInt(f.drinkEnd)||null,pricePerBottle:parseFloat(f.pricePerBottle)||null,rrp:parseFloat(f.rrp)||null,totalPaid:parseFloat(f.totalPaid)||null,insuranceValue:parseFloat(f.insuranceValue)||null,supplier:f.supplier||"",locationSection:finalSection,totalPurchased:projectedPurchased,addedDate:finalAddedDate}});
+    onSave({...payload,id:f.id||uid(),alcohol:parseFloat(f.alcohol)||0,vintage:parseInt(f.vintage)||null,bottles:projectedLeft,location:finalLocation,locationSlot:f.locationSlot||null,wineType:wt,color:tc.dot,cellarMeta:{...(initial?.cellarMeta||{}),drinkStart:parseInt(f.drinkStart)||null,drinkEnd:parseInt(f.drinkEnd)||null,pricePerBottle:finalPricePerBottle,rrp:finalRrp,totalPaid:finalTotalPaid,insuranceValue:parseFloat(f.insuranceValue)||null,supplier:f.supplier||"",locationSection:finalSection,totalPurchased:projectedPurchased,addedDate:finalAddedDate}});
     onClose();
   };
   return(
@@ -1033,10 +1056,27 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
                 <Field label="Drink By" value={f.drinkEnd} onChange={v=>set("drinkEnd",v)} type="number" placeholder="2034" optional/>
                 <Field label="Supplier" value={f.supplier} onChange={v=>set("supplier",v)} placeholder="WS / Local shop" optional/>
               </div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
-                <Field label="Paid / Bottle" value={f.pricePerBottle} onChange={v=>set("pricePerBottle",v)} type="number" placeholder="29.9" optional/>
-                <Field label="RRP / Bottle" value={f.rrp} onChange={v=>set("rrp",v)} type="number" placeholder="40" optional/>
-                <Field label="Total Paid" value={f.totalPaid} onChange={v=>set("totalPaid",v)} type="number" placeholder="179.5" optional/>
+              <div style={{background:"var(--card)",borderRadius:12,padding:"10px 12px",marginBottom:12,border:"1px solid var(--border)"}}>
+                <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Price Setup</div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                  <Field label="Amount Paid" value={f.totalPaid} onChange={v=>set("totalPaid",v)} type="number" placeholder="179.5" optional/>
+                  <Field label="Paid For Bottles" value={f.priceForBottles} onChange={v=>set("priceForBottles",v.replace(/[^0-9]/g,""))} type="number" placeholder="6" optional/>
+                </div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:2,marginBottom:10}}>
+                  <span style={{padding:"4px 9px",borderRadius:16,background:"var(--inputBg)",border:"1px solid var(--border)",fontSize:12,color:"var(--text)",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+                    Calculated paid/bottle: {calculatedPricePerBottle!=null?`$${calculatedPricePerBottle.toFixed(2)}`:"—"}
+                  </span>
+                  <span style={{padding:"4px 9px",borderRadius:16,background:"rgba(var(--accentRgb),0.12)",border:"1px solid rgba(var(--accentRgb),0.22)",fontSize:12,color:"var(--accent)",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+                    RRP on save: {finalRrp!=null?`$${Number(finalRrp).toFixed(2)}`:"—"}
+                  </span>
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                  <Field label="Paid / Bottle (optional)" value={f.pricePerBottle} onChange={v=>set("pricePerBottle",v)} type="number" placeholder="29.9" optional/>
+                  <Field label="RRP / Bottle (optional)" value={f.rrp} onChange={v=>set("rrp",v)} type="number" placeholder="40" optional/>
+                </div>
+                <div style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.55}}>
+                  If RRP is left blank, it will automatically use the paid per bottle value.
+                </div>
               </div>
             </>
           )}
@@ -2233,7 +2273,7 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.37 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.38 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
