@@ -81,6 +81,16 @@ const COLOR_THEMES = [
 ];
 const THEME_BY_ID = Object.fromEntries(COLOR_THEMES.map(t=>[t.id,t]));
 const detectAccentFromProfileBg = bg => COLOR_THEMES.find(t=>t.profileBg===bg)?.id || null;
+const EXCEL_STORAGE_LOCATION_MAP = Object.fromEntries(
+  (wineHoldings2021.storageLocations||[])
+    .map(([code,label])=>[(code||"").toUpperCase(),(label||"").trim()])
+);
+const STORAGE_CODE_ALIASES = { K:"WS", O:"OWS" };
+const labelForStorageCode = rawCode => {
+  const code=(rawCode||"").trim().toUpperCase();
+  if(!code)return "";
+  return EXCEL_STORAGE_LOCATION_MAP[code] || EXCEL_STORAGE_LOCATION_MAP[STORAGE_CODE_ALIASES[code]||""] || "";
+};
 const safeNum = v => {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
@@ -88,8 +98,10 @@ const safeNum = v => {
 const normalizeLocation = value => {
   const cleaned=(value||"").trim().replace(/\s+/g," ");
   if(!cleaned)return "";
-  if(cleaned.toLowerCase()==="custom")return "";
-  return cleaned.length===1?cleaned.toUpperCase():cleaned;
+  const mappedLabel=labelForStorageCode(cleaned);
+  const normalized=(mappedLabel||cleaned).trim();
+  if(normalized.toLowerCase()==="custom")return "";
+  return normalized.length===1?normalized.toUpperCase():normalized;
 };
 const locationKey = value => normalizeLocation(value).toLowerCase();
 const dedupeLocations = values => {
@@ -302,7 +314,10 @@ const fuzzySearch = q=>{
   const lq=q.toLowerCase();
   return WINE_DB.filter(w=>w.name.toLowerCase().includes(lq)||w.grape.toLowerCase().includes(lq)||w.origin.toLowerCase().includes(lq)).slice(0,7);
 };
-const LOCATIONS=["Rack A","Rack B","Rack C","Fridge Top","Fridge Bottom","Cellar Row 1","Cellar Row 2","Cellar Row 3","Living Room"];
+const LOCATIONS=(()=>{
+  const fromExcel=dedupeLocations(Object.values(EXCEL_STORAGE_LOCATION_MAP));
+  return fromExcel.length?fromExcel:["Wine storage unit"];
+})();
 const fmt=d=>d?new Date(d).toLocaleDateString("en-AU",{month:"short",year:"numeric"}):null;
 const COUNTRY_SET=new Set(["Australia","Austria","France","Germany","Italy","Spain","Portugal","New Zealand","USA","Argentina","Chile","South Africa"]);
 const REGION_ALIAS_MAP={
@@ -341,7 +356,6 @@ const deriveRegionCountry = (input="") => {
 };
 
 /* ── SEED DATA ────────────────────────────────────────────────── */
-const STORAGE_CODE_MAP = Object.fromEntries((wineHoldings2021.storageLocations||[]).map(r=>[r[0],r[1]]));
 const SOURCE_CELLAR_ROWS=(wineHoldings2021.cellar||[]).filter(r=>{
   const winery=(r.winery||"").trim();
   const label=(r.label||"").trim();
@@ -398,7 +412,7 @@ const SEED_WINES=SOURCE_CELLAR_ROWS.map((r,i)=>{
     wishlist:false,
     color:typeColor,
     photo:null,
-    location:normalizeLocation(STORAGE_CODE_MAP[r.where_stored]||r.where_stored||"Cellar"),
+    location:normalizeLocation(r.where_stored||"Cellar"),
     locationSlot:r.box_no||null,
     wineType,
   };
@@ -2067,7 +2081,7 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.29 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.30 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
