@@ -67,7 +67,6 @@ const CACHE_KEY = "vino_local_cache_v2";
 const SAVED_LOCATIONS_KEY = "vino_saved_locations_v1";
 const DELETED_WINES_KEY = "vino_deleted_wines_v1";
 const AUDITS_KEY = "vino_audits_v1";
-const AUDIT_INTRO_KEY = "vino_audit_intro_seen_v1";
 const ACCENTS = {
   wine:{id:"wine",label:"Wine Red",accent:"#9B2335",accentLight:"#F08FA0"},
   ocean:{id:"ocean",label:"Ocean Blue",accent:"#1E5BB8",accentLight:"#7EB6FF"},
@@ -267,10 +266,25 @@ const readAudits=()=>{
         createdAt:a.createdAt||new Date().toISOString(),
         updatedAt:a.updatedAt||a.createdAt||new Date().toISOString(),
         completedAt:a.completedAt||"",
-        status:a.status==="completed"?"completed":"in_progress",
+        status:a.status==="completed"?"completed":a.status==="revoked"?"revoked":"in_progress",
         realtimeSync:!!a.realtimeSync,
         locations:Array.isArray(a.locations)?dedupeLocations(a.locations):[],
-        items:a.items||{},
+        items:Object.fromEntries(
+          Object.entries(a.items||{})
+            .filter(([,item])=>item&&item.wineId)
+            .map(([key,item])=>[
+              key,
+              {
+                ...item,
+                decision:item.decision==="present"||item.decision==="missing"?item.decision:"pending",
+                countType:item.countType==="boxes"?"boxes":"bottles",
+                countedAmount:Math.max(0,Math.round(safeNum(item.countedAmount)||0)),
+                missingAction:item.missingAction==="remove"?"remove":"keep",
+                synced:!!item.synced,
+                beforeWine:item.beforeWine&&item.beforeWine.id?item.beforeWine:null,
+              }
+            ])
+        ),
       }));
   }catch{return[];}
 };
@@ -1522,12 +1536,12 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAdjustConsumption,deskt
 };
 
 /* ── AUDIT ────────────────────────────────────────────────────── */
-const AuditScreen=({wines,desktop,onSetWineBottles,onRemoveWine})=>{
+const AuditScreen=({wines,desktop,onSetWineBottles,onRemoveWine,onRevokeAudit})=>{
   const col=wines.filter(w=>!w.wishlist);
   const locations=dedupeLocations(col.map(w=>w.location));
   const [audits,setAudits]=useState(()=>readAudits());
   const [activeId,setActiveId]=useState(null);
-  const [showIntro,setShowIntro]=useState(()=>{try{return localStorage.getItem(AUDIT_INTRO_KEY)!=="1";}catch{return true;}});
+  const [showIntro,setShowIntro]=useState(true);
   const [setupOpen,setSetupOpen]=useState(false);
   const [setupName,setSetupName]=useState("");
   const [setupAll,setSetupAll]=useState(true);
@@ -1536,6 +1550,9 @@ const AuditScreen=({wines,desktop,onSetWineBottles,onRemoveWine})=>{
   const [entryEditor,setEntryEditor]=useState(null);
   const [completeOpen,setCompleteOpen]=useState(false);
   const [applyOnComplete,setApplyOnComplete]=useState(true);
+  const [actionAuditId,setActionAuditId]=useState(null);
+  const [confirmDeleteId,setConfirmDeleteId]=useState(null);
+  const [confirmRevokeId,setConfirmRevokeId]=useState(null);
   const [busy,setBusy]=useState(false);
   const [statusMsg,setStatusMsg]=useState("");
 
@@ -1602,6 +1619,8 @@ const AuditScreen=({wines,desktop,onSetWineBottles,onRemoveWine})=>{
       })
     : [];
   const auditsSorted=[...audits].sort((a,b)=>(b.updatedAt||"").localeCompare(a.updatedAt||""));
+  const latestAuditId=auditsSorted[0]?.id||null;
+  const actionAudit=audits.find(a=>a.id===actionAuditId)||null;
   const totalRows=auditRows.length;
   const checkedRows=auditRows.filter(r=>r.item.decision&&r.item.decision!=="pending").length;
 
@@ -1646,6 +1665,7 @@ const AuditScreen=({wines,desktop,onSetWineBottles,onRemoveWine})=>{
         countedAmount:Math.max(0,Math.round(safeNum(w.bottles)||0)),
         missingAction:"keep",
         synced:false,
+        beforeWine:{...w,cellarMeta:{...(w.cellarMeta||{})}},
         updatedAt:stamp,
       }
     ]));
@@ -1664,6 +1684,30 @@ const AuditScreen=({wines,desktop,onSetWineBottles,onRemoveWine})=>{
     setActiveId(created.id);
     setSetupOpen(false);
     setStatusMsg(`Started ${created.name}.`);
+  };
+  const deleteAudit=()=>{
+    if(!confirmDeleteId) return;
+    setAudits(prev=>prev.filter(a=>a.id!==confirmDeleteId));
+    if(activeId===confirmDeleteId) setActiveId(null);
+    setStatusMsg("Audit deleted.");
+    setConfirmDeleteId(null);
+  };
+  const revokeAudit=async()=>{
+    if(!confirmRevokeId||busy) return;
+    const target=audits.find(a=>a.id===confirmRevokeId);
+    if(!target){setConfirmRevokeId(null);return;}
+    const latestId=[...audits].sort((a,b)=>(b.updatedAt||"").localeCompare(a.updatedAt||""))[0]?.id;
+    if(target.id!==latestId){
+      setConfirmRevokeId(null);
+      setStatusMsg("Only the most recent audit can be revoked.");
+      return;
+    }
+    setBusy(true);
+    const result=await onRevokeAudit?.(target);
+    setBusy(false);
+    upsertAudit(target.id,a=>({...a,status:"revoked",updatedAt:new Date().toISOString()}));
+    setStatusMsg(`Audit revoked${result?.restored?` · ${result.restored} wines restored`:""}.`);
+    setConfirmRevokeId(null);
   };
 
   const syncAuditItem=async item=>{
@@ -1763,6 +1807,7 @@ const AuditScreen=({wines,desktop,onSetWineBottles,onRemoveWine})=>{
       setStatusMsg("Audit completed without changing cellar.");
     }
     setCompleteOpen(false);
+    setActiveId(null);
   };
 
   return(
@@ -1800,13 +1845,15 @@ const AuditScreen=({wines,desktop,onSetWineBottles,onRemoveWine})=>{
                 const rows=Object.values(a.items||{});
                 const done=rows.filter(it=>it.decision&&it.decision!=="pending").length;
                 const pct=rows.length?Math.round((done/rows.length)*100):0;
+                const statusBg=a.status==="completed"?"rgba(47,133,90,0.12)":a.status==="revoked"?"rgba(88,88,88,0.18)":"rgba(var(--accentRgb),0.12)";
+                const statusColor=a.status==="completed"?"#2F855A":a.status==="revoked"?"#5A5A5A":"var(--accent)";
                 return(
-                  <div key={a.id} style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:14,padding:"12px 13px",display:"flex",justifyContent:"space-between",gap:10,alignItems:"center"}}>
+                  <div key={a.id} style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:14,padding:"12px 13px",display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",overflow:"hidden"}}>
                     <div style={{minWidth:0}}>
                       <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:4}}>
                         <div style={{fontSize:14,fontWeight:700,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{a.name}</div>
-                        <span style={{padding:"2px 7px",borderRadius:20,fontSize:10,fontWeight:700,background:a.status==="completed"?"rgba(47,133,90,0.12)":"rgba(var(--accentRgb),0.12)",color:a.status==="completed"?"#2F855A":"var(--accent)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
-                          {a.status==="completed"?"Completed":"In progress"}
+                        <span style={{padding:"2px 7px",borderRadius:20,fontSize:10,fontWeight:700,background:statusBg,color:statusColor,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+                          {a.status==="completed"?"Completed":a.status==="revoked"?"Revoked":"In progress"}
                         </span>
                       </div>
                       <div style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:5}}>
@@ -1816,9 +1863,12 @@ const AuditScreen=({wines,desktop,onSetWineBottles,onRemoveWine})=>{
                         {(a.locations||[]).join(" · ")||"All locations"}
                       </div>
                     </div>
-                    <button onClick={()=>setActiveId(a.id)} style={{padding:"7px 10px",borderRadius:10,border:"1.5px solid var(--border)",background:"var(--inputBg)",color:"var(--text)",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:"pointer",flexShrink:0}}>
-                      Open
-                    </button>
+                    <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+                      <button onClick={()=>setActionAuditId(a.id)} style={{width:30,height:30,borderRadius:10,border:"1.5px solid var(--border)",background:"var(--inputBg)",color:"var(--sub)",fontSize:18,lineHeight:1,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} aria-label="Audit actions">⋯</button>
+                      <button onClick={()=>setActiveId(a.id)} style={{padding:"7px 10px",borderRadius:10,border:"1.5px solid var(--border)",background:"var(--inputBg)",color:"var(--text)",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:"pointer",whiteSpace:"nowrap"}}>
+                        Open
+                      </button>
+                    </div>
                   </div>
                 );
               })}
@@ -1858,20 +1908,27 @@ const AuditScreen=({wines,desktop,onSetWineBottles,onRemoveWine})=>{
           {auditRows.length===0?(
             <Empty icon="audit" text="No wines are scoped in this audit."/>
           ):(
-            <div style={{display:"grid",gap:8}}>
+            <div style={{display:"grid",gap:8,overflow:"hidden"}}>
               {auditRows.map(({item,wine})=>{
                 const statusLabel=item.decision==="present"?"Present":item.decision==="missing"?"Missing":"Pending";
                 const statusColor=item.decision==="present"?"#2F855A":item.decision==="missing"?"#B83232":"var(--sub)";
                 const statusBg=item.decision==="present"?"rgba(47,133,90,0.12)":item.decision==="missing"?"rgba(184,50,50,0.12)":"var(--inputBg)";
+                const type=resolveWineType(wine||{grape:item.varietal,name:item.wineName});
+                const varietalLabel=item.varietal||resolveVarietal(wine||{});
+                const vintageLabel=item.vintage||wine?.vintage;
                 return(
-                  <div key={item.wineId} style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:14,padding:"11px 12px"}}>
+                  <div key={item.wineId} style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:14,padding:"11px 12px",overflow:"hidden"}}>
                     <div style={{display:"flex",justifyContent:"space-between",gap:10}}>
                       <div style={{minWidth:0}}>
-                        <div style={{fontSize:14,fontWeight:700,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+                        <div style={{fontSize:15,fontWeight:800,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
                           {wine?.name||item.wineName}
                         </div>
+                        <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginTop:5}}>
+                          <WineTypePill type={type} label={varietalLabel}/>
+                          {vintageLabel&&<span style={{padding:"2px 7px",borderRadius:20,fontSize:10,fontWeight:700,color:"var(--text)",background:"var(--inputBg)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{vintageLabel}</span>}
+                        </div>
                         <div style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginTop:2}}>
-                          {[item.vintage||wine?.vintage, item.varietal||resolveVarietal(wine||{}), item.origin||wine?.origin].filter(Boolean).join(" · ")}
+                          {item.origin||wine?.origin||""}
                         </div>
                         <div style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginTop:2}}>
                           {locationTextFromItem(item)||formatWineLocation(wine)||"No location"}
@@ -1905,22 +1962,19 @@ const AuditScreen=({wines,desktop,onSetWineBottles,onRemoveWine})=>{
         </div>
       )}
 
-      <Modal show={showIntro} onClose={()=>{setShowIntro(false);try{localStorage.setItem(AUDIT_INTRO_KEY,"1");}catch{}}} wide>
-        <ModalHeader title="How Audit Mode Works" onClose={()=>{setShowIntro(false);try{localStorage.setItem(AUDIT_INTRO_KEY,"1");}catch{}}}/>
-        <div style={{display:"grid",gap:8,marginBottom:16}}>
-          {[
-            "Pick one location or audit all locations together.",
-            "Mark each wine as Present or Missing and record counted quantity.",
-            "When finished, choose whether to sync the cellar to match your audit.",
-          ].map((txt,i)=>(
-            <div key={i} style={{background:"var(--inputBg)",border:"1px solid var(--border)",borderRadius:12,padding:"10px 12px",fontSize:13,color:"var(--text)",lineHeight:1.55,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
-              {txt}
-            </div>
-          ))}
+      <Modal show={showIntro} onClose={()=>setShowIntro(false)} wide>
+        <ModalHeader title="How Audit Mode Works" onClose={()=>setShowIntro(false)}/>
+        <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:"12px 13px",marginBottom:16}}>
+          <div style={{fontSize:13,color:"var(--text)",lineHeight:1.65,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+            Audit mode helps you verify what is physically in your cellar. Start by selecting one or more locations, then check each wine as <strong>Present</strong> or <strong>Missing</strong>. You can record bottles or boxes, keep missing wines flagged, or remove missing wines from inventory.
+          </div>
+          <div style={{fontSize:13,color:"var(--text)",lineHeight:1.65,fontFamily:"'Plus Jakarta Sans',sans-serif",marginTop:10}}>
+            At the end, choose whether the cellar should update from your audit results. Every step autosaves so you can safely leave and continue later.
+          </div>
         </div>
         <div style={{display:"flex",gap:8}}>
-          <Btn variant="secondary" onClick={()=>{setShowIntro(false);try{localStorage.setItem(AUDIT_INTRO_KEY,"1");}catch{}}} full>Close</Btn>
-          <Btn onClick={()=>{setShowIntro(false);try{localStorage.setItem(AUDIT_INTRO_KEY,"1");}catch{};openStartAudit();}} full>Start Audit</Btn>
+          <Btn variant="secondary" onClick={()=>setShowIntro(false)} full>Close</Btn>
+          <Btn onClick={()=>{setShowIntro(false);openStartAudit();}} full>Start Audit</Btn>
         </div>
       </Modal>
 
@@ -1929,22 +1983,28 @@ const AuditScreen=({wines,desktop,onSetWineBottles,onRemoveWine})=>{
         <Field label="Audit Name" value={setupName} onChange={setSetupName} placeholder={nowAuditLabel()}/>
         <div style={{fontSize:11,fontWeight:700,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Locations</div>
         <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
-          <button onClick={()=>setSetupAll(v=>!v)} style={{padding:"7px 12px",borderRadius:20,border:setupAll?"1.5px solid var(--accent)":"1.5px solid var(--border)",background:setupAll?"rgba(var(--accentRgb),0.12)":"var(--inputBg)",color:setupAll?"var(--accent)":"var(--text)",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+          <button onClick={()=>setSetupAll(v=>{const next=!v;if(next)setSetupLocations(locations);return next;})} style={{padding:"7px 12px",borderRadius:20,border:setupAll?"1.5px solid var(--accent)":"1.5px solid var(--border)",background:setupAll?"rgba(var(--accentRgb),0.12)":"var(--inputBg)",color:setupAll?"var(--accent)":"var(--text)",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:"pointer"}}>
             All Locations
           </button>
           {locations.map(loc=>{
             const active=setupLocations.some(x=>locationKey(x)===locationKey(loc));
             return(
-              <button key={loc} disabled={setupAll} onClick={()=>toggleSetupLocation(loc)} style={{padding:"7px 12px",borderRadius:20,border:active?"1.5px solid var(--accent)":"1.5px solid var(--border)",background:active?"rgba(var(--accentRgb),0.12)":"var(--inputBg)",color:active?"var(--accent)":"var(--text)",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:setupAll?0.45:1,cursor:setupAll?"default":"pointer"}}>
+              <button key={loc} onClick={()=>{if(setupAll){setSetupAll(false);setSetupLocations([loc]);return;}toggleSetupLocation(loc);}} style={{padding:"7px 12px",borderRadius:20,border:active?"1.5px solid var(--accent)":"1.5px solid var(--border)",background:active?"rgba(var(--accentRgb),0.12)":"var(--inputBg)",color:active?"var(--accent)":"var(--text)",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:"pointer"}}>
                 {loc}
               </button>
             );
           })}
         </div>
-        <button onClick={()=>setSetupRealtime(v=>!v)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"10px 12px",borderRadius:12,border:`1.5px solid ${setupRealtime?"var(--accent)":"var(--border)"}`,background:setupRealtime?"rgba(var(--accentRgb),0.08)":"var(--inputBg)",width:"100%",marginBottom:16,fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:13,color:"var(--text)",fontWeight:600,cursor:"pointer"}}>
-          <span>Update cellar in real time while auditing</span>
-          <span style={{fontSize:15,color:setupRealtime?"var(--accent)":"var(--sub)"}}>{setupRealtime?"✓":"○"}</span>
-        </button>
+        <div onClick={()=>setSetupRealtime(v=>!v)} role="button" tabIndex={0} onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();setSetupRealtime(v=>!v);}}}
+          style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"11px 12px",borderRadius:12,border:"1.5px solid var(--border)",background:"var(--card)",width:"100%",marginBottom:16,cursor:"pointer"}}>
+          <div>
+            <div style={{fontSize:13,color:"var(--text)",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Real-time Cellar Updates</div>
+            <div style={{fontSize:11,color:"var(--sub)",marginTop:2,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Apply each audit check to inventory instantly</div>
+          </div>
+          <div style={{width:40,height:22,borderRadius:999,background:setupRealtime?"var(--accent)":"var(--inputBg)",border:setupRealtime?"1.5px solid rgba(var(--accentRgb),0.6)":"1.5px solid var(--border)",position:"relative",transition:"all .16s"}}>
+            <div style={{position:"absolute",top:2,left:setupRealtime?20:2,width:16,height:16,borderRadius:"50%",background:"#fff",boxShadow:"0 1px 4px rgba(0,0,0,.28)",transition:"left .16s"}}/>
+          </div>
+        </div>
         <div style={{display:"flex",gap:8}}>
           <Btn variant="secondary" onClick={()=>setSetupOpen(false)} full>Cancel</Btn>
           <Btn onClick={createAudit} full>Create Audit</Btn>
@@ -1992,6 +2052,51 @@ const AuditScreen=({wines,desktop,onSetWineBottles,onRemoveWine})=>{
         <div style={{display:"flex",gap:8}}>
           <Btn variant="secondary" onClick={()=>setCompleteOpen(false)} full>Cancel</Btn>
           <Btn onClick={completeAudit} full disabled={busy}>Complete</Btn>
+        </div>
+      </Modal>
+      <Modal show={!!actionAudit} onClose={()=>setActionAuditId(null)}>
+        <ModalHeader title="Audit Options" onClose={()=>setActionAuditId(null)}/>
+        {actionAudit&&(
+          <>
+            <div style={{fontSize:12,color:"var(--sub)",marginBottom:12,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+              {actionAudit.name} · {fmtAuditDate(actionAudit.createdAt)}
+            </div>
+            <div style={{display:"grid",gap:8}}>
+              <button onClick={()=>{setActionAuditId(null);setConfirmDeleteId(actionAudit.id);}} style={{padding:"11px 12px",borderRadius:12,border:"1.5px solid rgba(184,50,50,0.4)",background:"rgba(184,50,50,0.1)",color:"#B83232",fontSize:13,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",textAlign:"left",cursor:"pointer"}}>
+                Delete Audit
+              </button>
+              <button
+                disabled={actionAudit.id!==latestAuditId}
+                onClick={()=>{if(actionAudit.id!==latestAuditId)return;setActionAuditId(null);setConfirmRevokeId(actionAudit.id);}}
+                style={{padding:"11px 12px",borderRadius:12,border:"1.5px solid var(--border)",background:actionAudit.id===latestAuditId?"var(--inputBg)":"rgba(0,0,0,0.03)",color:actionAudit.id===latestAuditId?"var(--text)":"var(--sub)",fontSize:13,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",textAlign:"left",cursor:actionAudit.id===latestAuditId?"pointer":"default",opacity:actionAudit.id===latestAuditId?1:0.55}}
+              >
+                Revoke Audit
+                <div style={{fontSize:11,fontWeight:500,marginTop:2,color:"var(--sub)"}}>
+                  {actionAudit.id===latestAuditId?"Restore inventory to state before this audit":"Only available for the most recent audit"}
+                </div>
+              </button>
+            </div>
+          </>
+        )}
+      </Modal>
+      <Modal show={!!confirmDeleteId} onClose={()=>setConfirmDeleteId(null)}>
+        <ModalHeader title="Delete Audit?" onClose={()=>setConfirmDeleteId(null)}/>
+        <div style={{fontSize:13,color:"var(--text)",lineHeight:1.6,fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:16}}>
+          This removes the audit history entry permanently. It does not change cellar stock.
+        </div>
+        <div style={{display:"flex",gap:8}}>
+          <Btn variant="secondary" onClick={()=>setConfirmDeleteId(null)} full>Cancel</Btn>
+          <Btn variant="danger" onClick={deleteAudit} full>Delete</Btn>
+        </div>
+      </Modal>
+      <Modal show={!!confirmRevokeId} onClose={()=>setConfirmRevokeId(null)}>
+        <ModalHeader title="Revoke Audit?" onClose={()=>setConfirmRevokeId(null)}/>
+        <div style={{fontSize:13,color:"var(--text)",lineHeight:1.6,fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:16}}>
+          This will restore cellar data to how it was before this audit started. Only the latest audit can be revoked to keep data consistent.
+        </div>
+        <div style={{display:"flex",gap:8}}>
+          <Btn variant="secondary" onClick={()=>setConfirmRevokeId(null)} full>Cancel</Btn>
+          <Btn onClick={revokeAudit} full disabled={busy}>Revoke</Btn>
         </div>
       </Modal>
     </div>
@@ -2959,7 +3064,7 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile})=>{
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.48 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.49 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
@@ -3324,6 +3429,20 @@ export default function App(){
     if(updated) await db.upsert("wines",toDb.wine(updated));
     return updated;
   };
+  const revokeAuditSnapshot=async audit=>{
+    const snapshots=Object.values(audit?.items||{})
+      .map(item=>item?.beforeWine)
+      .filter(w=>w&&w.id);
+    if(!snapshots.length) return {restored:0};
+    const unique=[...new Map(snapshots.map(w=>[w.id,w])).values()];
+    setWines(prev=>{
+      const map=new Map(prev.map(w=>[w.id,w]));
+      unique.forEach(w=>map.set(w.id,w));
+      return [...map.values()];
+    });
+    await Promise.all(unique.map(w=>db.upsert("wines",toDb.wine(w))));
+    return {restored:unique.length};
+  };
   const addSavedLocation=loc=>setSavedLocations(prev=>{
     const normalized=normalizeLocation(loc);
     if(!normalized) return prev;
@@ -3462,7 +3581,7 @@ export default function App(){
   const screens=(
     <>
       {tab==="collection"&&<CollectionScreen wines={wines} onAdd={addWine} onUpdate={updWine} onDelete={delWine} onAdjustConsumption={adjustWineConsumption} desktop={isDesktop} savedLocations={savedLocations} onSaveLocation={addSavedLocation} onRemoveLocation={removeSavedLocation} deletedWines={deletedWines} onRestoreDeleted={restoreDeletedWine} onDismissDeleted={dismissDeletedWine}/>}
-      {tab==="audit"&&<AuditScreen wines={wines} desktop={isDesktop} onSetWineBottles={setWineBottleCount} onRemoveWine={delWine}/>}
+      {tab==="audit"&&<AuditScreen wines={wines} desktop={isDesktop} onSetWineBottles={setWineBottleCount} onRemoveWine={delWine} onRevokeAudit={revokeAuditSnapshot}/>}
       {tab==="ai"&&<AIScreen wines={wines}/>}
       {tab==="notes"&&<JournalScreen wines={wines} onUpdate={updWine} desktop={isDesktop}/>}
       {tab==="profile"&&<ProfileScreen wines={wines} notes={notes} theme={themeMode} setTheme={setThemeMode} profile={profile} setProfile={setProfile}/>}
