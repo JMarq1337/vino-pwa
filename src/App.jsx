@@ -1718,6 +1718,9 @@ const AuditScreen=({wines,desktop,onSetWineBottles,onRemoveWine,onRevokeAudit})=
   const actionAudit=audits.find(a=>a.id===actionAuditId)||null;
   const totalRows=auditRows.length;
   const checkedRows=auditRows.filter(r=>r.item.decision&&r.item.decision!=="pending").length;
+  const pendingUnsyncedCount=activeAudit
+    ? Object.values(activeAudit.items||{}).filter(item=>item&&item.decision!=="pending"&&!item.synced).length
+    : 0;
 
   const openStartAudit=()=>{
     setSetupName(nowAuditLabel());
@@ -1989,27 +1992,38 @@ const AuditScreen=({wines,desktop,onSetWineBottles,onRemoveWine,onRevokeAudit})=
 
       {activeAudit&&(
         <div>
-          <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:16,padding:"14px",marginBottom:12}}>
+          <div style={{background:"linear-gradient(145deg,#1D1715 0%,#2C201C 55%,#1C1614 100%)",border:"1px solid rgba(255,255,255,0.14)",borderRadius:16,padding:"14px",marginBottom:12,boxShadow:"0 10px 26px rgba(0,0,0,0.26)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,marginBottom:10}}>
+              <button onClick={()=>setActiveId(null)} style={{padding:"7px 10px",borderRadius:10,border:"1px solid rgba(255,255,255,0.2)",background:"rgba(255,255,255,0.08)",color:"#F6EEE8",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:"pointer",whiteSpace:"nowrap"}}>
+                ← Back to Audits
+              </button>
+              <div style={{padding:"4px 9px",borderRadius:999,background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.16)",fontSize:11,fontWeight:700,color:"#EADFD8",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+                {checkedRows}/{totalRows} Verified
+              </div>
+            </div>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,marginBottom:8}}>
               <div style={{minWidth:0}}>
-                <div style={{fontSize:17,fontWeight:800,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.2}}>{activeAudit.name}</div>
-                <div style={{fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginTop:2}}>
-                  {fmtAuditDate(activeAudit.createdAt)} · {checkedRows}/{totalRows} verified
+                <div style={{fontSize:18,fontWeight:800,color:"#FFFFFF",fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.2}}>{activeAudit.name}</div>
+                <div style={{fontSize:12,color:"rgba(255,255,255,0.72)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginTop:2}}>
+                  {fmtAuditDate(activeAudit.createdAt)} · {activeAudit.realtimeSync?"Real-time Sync":"Manual Sync"}
                 </div>
               </div>
-              <button onClick={()=>setActiveId(null)} style={{padding:"7px 10px",borderRadius:10,border:"1.5px solid var(--border)",background:"var(--inputBg)",color:"var(--text)",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:"pointer",whiteSpace:"nowrap"}}>History</button>
             </div>
             <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
-              {(activeAudit.locations||[]).map(loc=><span key={loc} style={{padding:"3px 8px",borderRadius:20,fontSize:11,fontWeight:700,color:"var(--accent)",background:"rgba(var(--accentRgb),0.12)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{loc}</span>)}
-              <span style={{padding:"3px 8px",borderRadius:20,fontSize:11,fontWeight:700,color:activeAudit.realtimeSync?"#2F855A":"var(--sub)",background:activeAudit.realtimeSync?"rgba(47,133,90,0.12)":"var(--inputBg)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
-                {activeAudit.realtimeSync?"Realtime sync on":"Manual sync"}
-              </span>
+              {(activeAudit.locations||[]).map(loc=><span key={loc} style={{padding:"3px 8px",borderRadius:20,fontSize:11,fontWeight:700,color:"#FAF2EC",background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.16)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{loc}</span>)}
             </div>
-            <div style={{display:"grid",gridTemplateColumns:desktop?"1fr 1fr":"1fr",gap:8}}>
-              <button disabled={busy} onClick={()=>applyAuditChanges(activeAudit)} style={{padding:"10px 12px",borderRadius:11,border:"1.5px solid var(--border)",background:"var(--inputBg)",color:"var(--text)",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:busy?"default":"pointer",opacity:busy?0.6:1}}>
-                Apply Unsynced Changes
-              </button>
-              <button disabled={busy} onClick={()=>setCompleteOpen(true)} style={{padding:"10px 12px",borderRadius:11,border:"none",background:"var(--accent)",color:"#fff",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:busy?"default":"pointer",opacity:busy?0.7:1}}>
+            {!activeAudit.realtimeSync&&(
+              <div style={{fontSize:11.5,color:"rgba(255,255,255,0.76)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:8,lineHeight:1.55}}>
+                Apply Pending Updates syncs your audit changes to cellar quantities when you are not using real-time sync.
+              </div>
+            )}
+            <div style={{display:"grid",gridTemplateColumns:(!activeAudit.realtimeSync&&desktop)?"1fr 1fr":"1fr",gap:8}}>
+              {!activeAudit.realtimeSync&&(
+                <button disabled={busy||pendingUnsyncedCount===0} onClick={()=>applyAuditChanges(activeAudit)} style={{padding:"9px 11px",borderRadius:11,border:"1px solid rgba(255,255,255,0.24)",background:"rgba(255,255,255,0.08)",color:"#FFF7F3",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:(busy||pendingUnsyncedCount===0)?"default":"pointer",opacity:(busy||pendingUnsyncedCount===0)?0.45:1}}>
+                  Apply Pending Updates {pendingUnsyncedCount>0?`(${pendingUnsyncedCount})`:""}
+                </button>
+              )}
+              <button disabled={busy} onClick={()=>setCompleteOpen(true)} style={{padding:"9px 11px",borderRadius:11,border:"none",background:"var(--accent)",color:"#fff",fontSize:12,fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:busy?"default":"pointer",opacity:busy?0.7:1,boxShadow:"0 6px 16px rgba(var(--accentRgb),0.35)"}}>
                 Complete Audit
               </button>
             </div>
@@ -2018,7 +2032,7 @@ const AuditScreen=({wines,desktop,onSetWineBottles,onRemoveWine,onRevokeAudit})=
           {auditRows.length===0?(
             <Empty icon="audit" text="No wines are scoped in this audit."/>
           ):(
-            <div style={{display:"grid",gap:8,overflow:"hidden"}}>
+            <div style={{display:"grid",gridTemplateColumns:desktop?"repeat(2,minmax(0,1fr))":"1fr",gap:8,overflow:"hidden"}}>
               {auditRows.map(({item,wine})=>{
                 const statusLabel=item.decision==="present"?"Present":item.decision==="missing"?"Missing":"Pending";
                 const statusColor=item.decision==="present"?"#2F855A":item.decision==="missing"?"#B83232":"var(--sub)";
@@ -2027,20 +2041,20 @@ const AuditScreen=({wines,desktop,onSetWineBottles,onRemoveWine,onRevokeAudit})=
                 const varietalLabel=item.varietal||resolveVarietal(wine||{});
                 const vintageLabel=item.vintage||wine?.vintage;
                 return(
-                  <div key={item.wineId} style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:14,padding:"11px 12px",overflow:"hidden"}}>
+                  <div key={item.wineId} style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:14,padding:"10px 11px",overflow:"hidden",boxShadow:"0 2px 8px var(--shadow)"}}>
                     <div style={{display:"flex",justifyContent:"space-between",gap:10}}>
                       <div style={{minWidth:0}}>
-                        <div style={{fontSize:15,fontWeight:800,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+                        <div style={{fontSize:14.5,fontWeight:800,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
                           {wine?.name||item.wineName}
                         </div>
                         <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginTop:5}}>
                           <WineTypePill type={type} label={varietalLabel}/>
                           {vintageLabel&&<span style={{padding:"2px 7px",borderRadius:20,fontSize:10,fontWeight:700,color:"var(--text)",background:"var(--inputBg)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{vintageLabel}</span>}
                         </div>
-                        <div style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginTop:2}}>
+                        <div style={{fontSize:10.8,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginTop:3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
                           {item.origin||wine?.origin||""}
                         </div>
-                        <div style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginTop:2}}>
+                        <div style={{fontSize:10.8,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
                           {locationTextFromItem(item)||formatWineLocation(wine)||"No location"}
                         </div>
                       </div>
@@ -2053,14 +2067,14 @@ const AuditScreen=({wines,desktop,onSetWineBottles,onRemoveWine,onRevokeAudit})=
                         </div>
                       </div>
                     </div>
-                    <div style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginTop:7,marginBottom:8}}>
+                    <div style={{fontSize:10.8,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginTop:6,marginBottom:7}}>
                       {itemSummary(item)}
                     </div>
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7}}>
-                      <button disabled={busy} onClick={()=>setEntryEditor({wineId:item.wineId,mode:"present",countType:item.countType||"bottles",countedAmount:String(Math.max(0,Math.round(safeNum(item.countedAmount)||safeNum(wine?.bottles)||safeNum(item.expectedBottles)||0)))})} style={{padding:"8px 10px",borderRadius:10,border:"1.5px solid rgba(47,133,90,0.35)",background:item.decision==="present"?"rgba(47,133,90,0.12)":"var(--inputBg)",color:"#2F855A",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:busy?"default":"pointer",opacity:busy?0.6:1}}>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+                      <button disabled={busy} onClick={()=>setEntryEditor({wineId:item.wineId,mode:"present",countType:item.countType||"bottles",countedAmount:String(Math.max(0,Math.round(safeNum(item.countedAmount)||safeNum(wine?.bottles)||safeNum(item.expectedBottles)||0)))})} style={{padding:"7px 9px",borderRadius:10,border:"1.5px solid rgba(47,133,90,0.35)",background:item.decision==="present"?"rgba(47,133,90,0.12)":"var(--inputBg)",color:"#2F855A",fontSize:11.5,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:busy?"default":"pointer",opacity:busy?0.6:1}}>
                         ✓ Present
                       </button>
-                      <button disabled={busy} onClick={()=>setEntryEditor({wineId:item.wineId,mode:"missing",missingAction:item.missingAction||"keep"})} style={{padding:"8px 10px",borderRadius:10,border:"1.5px solid rgba(184,50,50,0.35)",background:item.decision==="missing"?"rgba(184,50,50,0.12)":"var(--inputBg)",color:"#B83232",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:busy?"default":"pointer",opacity:busy?0.6:1}}>
+                      <button disabled={busy} onClick={()=>setEntryEditor({wineId:item.wineId,mode:"missing",missingAction:item.missingAction||"keep"})} style={{padding:"7px 9px",borderRadius:10,border:"1.5px solid rgba(184,50,50,0.35)",background:item.decision==="missing"?"rgba(184,50,50,0.12)":"var(--inputBg)",color:"#B83232",fontSize:11.5,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:busy?"default":"pointer",opacity:busy?0.6:1}}>
                         ✕ Missing
                       </button>
                     </div>
@@ -3199,7 +3213,7 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile})=>{
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.51 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.52 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
