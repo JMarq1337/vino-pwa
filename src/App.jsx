@@ -2098,28 +2098,28 @@ const AuditScreen=({wines,desktop,onSetWineBottles,onRemoveWine,onRevokeAudit})=
 
       <Modal show={showIntro} onClose={()=>setShowIntro(false)} wide>
         <ModalHeader title="How Audit Mode Works" onClose={()=>setShowIntro(false)}/>
-        <div style={{marginBottom:12}}>
+        <div style={{marginBottom:14}}>
           <div style={{fontSize:11,fontWeight:800,letterSpacing:"1.1px",textTransform:"uppercase",color:"var(--accent)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:4}}>Audit Flow</div>
-          <div style={{fontSize:22,fontWeight:900,color:"var(--text)",lineHeight:1.15,fontFamily:"'Plus Jakarta Sans',sans-serif",letterSpacing:"0.4px",marginBottom:5}}>
+          <div style={{fontSize:25,fontWeight:900,color:"var(--text)",lineHeight:1.1,fontFamily:"'Plus Jakarta Sans',sans-serif",letterSpacing:"0.5px",marginBottom:6}}>
             VERIFY YOUR STOCK
           </div>
-          <div style={{fontSize:13,color:"var(--sub)",lineHeight:1.55,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+          <div style={{fontSize:13.5,color:"var(--sub)",lineHeight:1.55,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
             Check what is physically in your cellar and keep inventory accurate.
           </div>
         </div>
-        <div style={{position:"relative",marginBottom:14}}>
-          <div style={{position:"absolute",left:10,top:12,bottom:12,width:2,borderRadius:2,background:"rgba(var(--accentRgb),0.24)"}}/>
+        <div style={{position:"relative",marginBottom:15}}>
+          <div style={{position:"absolute",left:11,top:14,bottom:14,width:2,borderRadius:2,background:"rgba(var(--accentRgb),0.28)"}}/>
           {[
             ["Select Locations","Choose one location or audit your full cellar."],
             ["Mark Each Wine","Set each item as Present or Missing and record quantity."],
             ["Apply & Save","Finish the audit and choose if inventory should update."],
           ].map(([title,desc],idx)=>(
-            <div key={title} style={{display:"grid",gridTemplateColumns:"22px 1fr",gap:10,alignItems:"start",padding:idx<2?"0 0 12px":"0"}}>
-              <div style={{width:22,height:22,borderRadius:"50%",background:"var(--accent)",color:"#fff",fontSize:11,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Plus Jakarta Sans',sans-serif",flexShrink:0,marginTop:1,position:"relative",zIndex:1}}>
+            <div key={title} style={{display:"grid",gridTemplateColumns:"22px 1fr",gap:10,alignItems:"start",padding:idx<2?"0 0 10px":"0"}}>
+              <div style={{width:22,height:22,borderRadius:"50%",background:"var(--accent)",color:"#fff",fontSize:11,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Plus Jakarta Sans',sans-serif",flexShrink:0,marginTop:8,position:"relative",zIndex:1,boxShadow:"0 2px 8px rgba(var(--accentRgb),0.35)"}}>
                 {idx+1}
               </div>
-              <div>
-                <div style={{fontSize:12,fontWeight:800,letterSpacing:"0.55px",textTransform:"uppercase",color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:2}}>
+              <div style={{padding:"9px 10px",borderRadius:12,background:"linear-gradient(140deg,rgba(var(--accentRgb),0.15) 0%,rgba(var(--accentRgb),0.05) 100%)",border:"1px solid rgba(var(--accentRgb),0.22)",boxShadow:"inset 0 1px 0 rgba(255,255,255,0.25)"}}>
+                <div style={{fontSize:12.2,fontWeight:800,letterSpacing:"0.55px",textTransform:"uppercase",color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:2}}>
                   {title}
                 </div>
                 <div style={{fontSize:12.5,color:"var(--sub)",lineHeight:1.55,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
@@ -3227,7 +3227,7 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile})=>{
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.54 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.56 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
