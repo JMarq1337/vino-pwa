@@ -2098,27 +2098,28 @@ const AuditScreen=({wines,desktop,onSetWineBottles,onRemoveWine,onRevokeAudit})=
 
       <Modal show={showIntro} onClose={()=>setShowIntro(false)} wide>
         <ModalHeader title="How Audit Mode Works" onClose={()=>setShowIntro(false)}/>
-        <div style={{borderRadius:14,padding:"14px 14px",marginBottom:10,background:"linear-gradient(145deg,rgba(var(--accentRgb),0.2) 0%,rgba(var(--accentRgb),0.05) 100%)",border:"1px solid rgba(var(--accentRgb),0.3)"}}>
-          <div style={{fontSize:11,fontWeight:800,letterSpacing:"1.1px",textTransform:"uppercase",color:"var(--accent)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:5}}>Audit Flow</div>
-          <div style={{fontSize:18,fontWeight:800,color:"var(--text)",lineHeight:1.25,fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:5}}>
-            Verify Real-World Stock In 3 Clear Steps
+        <div style={{marginBottom:12}}>
+          <div style={{fontSize:11,fontWeight:800,letterSpacing:"1.1px",textTransform:"uppercase",color:"var(--accent)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:4}}>Audit Flow</div>
+          <div style={{fontSize:22,fontWeight:900,color:"var(--text)",lineHeight:1.15,fontFamily:"'Plus Jakarta Sans',sans-serif",letterSpacing:"0.4px",marginBottom:5}}>
+            VERIFY YOUR STOCK
           </div>
           <div style={{fontSize:13,color:"var(--sub)",lineHeight:1.55,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
-            Quick, autosaved checks so your cellar matches what you actually have.
+            Check what is physically in your cellar and keep inventory accurate.
           </div>
         </div>
-        <div style={{display:"grid",gap:8,marginBottom:14}}>
+        <div style={{position:"relative",marginBottom:14}}>
+          <div style={{position:"absolute",left:10,top:12,bottom:12,width:2,borderRadius:2,background:"rgba(var(--accentRgb),0.24)"}}/>
           {[
             ["Select Locations","Choose one location or audit your full cellar."],
             ["Mark Each Wine","Set each item as Present or Missing and record quantity."],
             ["Apply & Save","Finish the audit and choose if inventory should update."],
           ].map(([title,desc],idx)=>(
-            <div key={title} style={{display:"flex",gap:10,alignItems:"flex-start",padding:"10px 12px",borderRadius:12,background:"rgba(var(--accentRgb),0.08)",border:"1px solid rgba(var(--accentRgb),0.2)"}}>
-              <div style={{width:22,height:22,borderRadius:"50%",background:"var(--accent)",color:"#fff",fontSize:11,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Plus Jakarta Sans',sans-serif",flexShrink:0,marginTop:1}}>
+            <div key={title} style={{display:"grid",gridTemplateColumns:"22px 1fr",gap:10,alignItems:"start",padding:idx<2?"0 0 12px":"0"}}>
+              <div style={{width:22,height:22,borderRadius:"50%",background:"var(--accent)",color:"#fff",fontSize:11,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Plus Jakarta Sans',sans-serif",flexShrink:0,marginTop:1,position:"relative",zIndex:1}}>
                 {idx+1}
               </div>
               <div>
-                <div style={{fontSize:12,fontWeight:800,letterSpacing:"0.6px",textTransform:"uppercase",color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:2}}>
+                <div style={{fontSize:12,fontWeight:800,letterSpacing:"0.55px",textTransform:"uppercase",color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:2}}>
                   {title}
                 </div>
                 <div style={{fontSize:12.5,color:"var(--sub)",lineHeight:1.55,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
@@ -2128,8 +2129,11 @@ const AuditScreen=({wines,desktop,onSetWineBottles,onRemoveWine,onRevokeAudit})=
             </div>
           ))}
         </div>
-        <div style={{padding:"9px 11px",borderRadius:11,background:"var(--inputBg)",border:"1px solid var(--border)",fontSize:12,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:16}}>
-          <strong>Autosave is always on:</strong> you can close the app and continue the audit later.
+        <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:16}}>
+          <span style={{width:8,height:8,borderRadius:"50%",background:"var(--accent)",display:"inline-block",flexShrink:0}}/>
+          <span style={{fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+            <strong style={{color:"var(--text)"}}>Autosave ON.</strong> Close anytime and continue later.
+          </span>
         </div>
         <div style={{display:"flex",gap:8}}>
           <Btn variant="secondary" onClick={()=>setShowIntro(false)} full>Close</Btn>
