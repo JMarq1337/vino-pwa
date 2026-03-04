@@ -808,7 +808,6 @@ const WineDetail=({wine,onEdit,onDelete,onMove,onAdjustConsumption})=>{
         </div>
         <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:22,fontWeight:800,color:"#fff",marginTop:8,lineHeight:1.2,position:"relative",zIndex:1,textShadow:"0 2px 10px rgba(0,0,0,.28)"}}>{wine.name}</div>
         {(wine.vintage||geo.region||geo.country)&&<div style={{fontSize:14,color:"rgba(255,255,255,.86)",marginTop:2,fontFamily:"'Plus Jakarta Sans',sans-serif",position:"relative",zIndex:1}}>{[wine.vintage,geo.region||geo.country,geo.country&&geo.region?geo.country:null].filter(Boolean).join(" · ")}</div>}
-        {wine.rating>0&&<div style={{marginTop:10}}><Stars value={wine.rating} size={16}/></div>}
       </div>
       {!wine.wishlist&&(
         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:8}}>
@@ -845,14 +844,6 @@ const WineDetail=({wine,onEdit,onDelete,onMove,onAdjustConsumption})=>{
           </div>
         ))}
       </div>
-      {[["Tasting Notes",wine.tastingNotes,false],["Review",wine.review,true],["Personal Notes",wine.notes,false]].map(([l,v,ital])=>v?(
-        <div key={l} style={{background:"linear-gradient(180deg,var(--inputBg),rgba(var(--accentRgb),0.03))",borderRadius:14,padding:"12px 14px",marginBottom:8,border:"1px solid var(--border)"}}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
-            <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{l}</div>
-          </div>
-          <div style={{fontSize:14,color:"var(--text)",lineHeight:1.7,fontStyle:ital?"italic":"normal",fontFamily:"'Plus Jakarta Sans',sans-serif",maxHeight:160,overflowY:"auto",paddingRight:4}}>{ital?`"${v}"`:v}</div>
-        </div>
-      ):null)}
       {wine.wishlist&&onMove&&<div style={{marginBottom:8}}><Btn full onClick={onMove}>Move to Collection</Btn></div>}
       <div style={{display:"flex",gap:8,marginTop:12}}>
         <Btn variant="secondary" onClick={onEdit} full icon="edit">Edit</Btn>
@@ -885,6 +876,8 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
   const [customLocation,setCustomLocation]=useState("");
   const [rememberLocation,setRememberLocation]=useState(false);
   const [priceBottlesManual,setPriceBottlesManual]=useState(false);
+  const isTwoStepNewCellar=!initial&&!isWishlist;
+  const [step,setStep]=useState("details");
   const set=(k,v)=>setF(p=>({...p,[k]:v}));
   const handleBottlesChange=v=>{
     const clean=v.replace(/[^0-9]/g,"");
@@ -930,6 +923,10 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
     : (existingTotalPaid!=null&&existingTotalPaid>0
       ? existingTotalPaid
       : (finalPricePerBottle!=null&&paidForBottles>0?Number((finalPricePerBottle*paidForBottles).toFixed(2)):null));
+  const invalidCustomLocation=!isWishlist&&locationMode==="custom"&&!normalizeLocation(customLocation);
+  const canSubmit=!!f.name&&!invalidCustomLocation;
+  const showDetailsStep=!isTwoStepNewCellar||step==="details";
+  const showJournalStep=isTwoStepNewCellar&&step==="journal";
   const handleQ=v=>{setQ(v);set("name",v);setSugs(v.length>=2?fuzzySearch(v):[]);};
   const pickSug=w=>{setF(p=>({...p,name:w.name,origin:w.origin||"",grape:w.grape||"",alcohol:w.alcohol?.toString()||"",tastingNotes:w.tastingNotes||""}));setQ(w.name);setSugs([]);setShowFields(true);};
   const handleLocationSelect=value=>{
@@ -994,125 +991,164 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
       </div>
       {showFields&&(
         <div>
-          <Field label="Wine Name" value={f.name} onChange={v=>set("name",v)} placeholder="e.g. Penfolds Grange"/>
-          <Field label="Origin" value={f.origin} onChange={v=>set("origin",v)} placeholder="Region, Country" optional/>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
-            <Field label="Varietal" value={f.grape} onChange={v=>set("grape",v)} placeholder="Shiraz" optional/>
-            <Field label="Vintage" value={f.vintage} onChange={v=>set("vintage",v)} type="number" placeholder="2019" optional/>
-            <Field label="Alc %" value={f.alcohol} onChange={v=>set("alcohol",v)} type="number" placeholder="14.5" optional/>
-          </div>
-          {!isWishlist&&(
-            <>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 2fr 1fr",gap:10}}>
-                <Field label="Bottles" value={f.bottles} onChange={handleBottlesChange} type="number" placeholder="1" optional/>
-                <SelField
-                  label="Location"
-                  value={selectedLocationValue}
-                  onChange={handleLocationSelect}
-                  options={[...selectableLocations.map(loc=>({value:loc,label:loc})),{value:CUSTOM_LOCATION_OPTION,label:"Custom location…"}]}
-                />
-                <Field label={isKennardsLocation?"Box No.":"Slot"} value={f.locationSlot} onChange={v=>set("locationSlot",v)} placeholder={isKennardsLocation?"e.g. 12":"A3"} optional/>
-              </div>
-              {isKennardsLocation&&(
-                <SelField
-                  label="Kennards Placement"
-                  value={normalizeKennardsSection(f.locationSection)||"Cube"}
-                  onChange={v=>set("locationSection",normalizeKennardsSection(v))}
-                  options={KENNARDS_SECTIONS}
-                />
-              )}
-              <div style={{background:"var(--card)",borderRadius:12,padding:"10px 12px",marginBottom:12,border:"1px solid var(--border)"}}>
-                <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Bottle Tracker</div>
-                <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:8}}>
-                  {[["Purchased",projectedPurchased],["Left",projectedLeft],["Consumed",projectedConsumed]].map(([label,val])=>(
-                    <div key={label} style={{background:"var(--inputBg)",borderRadius:10,padding:"7px 8px",border:"1px solid var(--border)"}}>
-                      <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:1,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{label}</div>
-                      <div style={{fontSize:15,color:"var(--text)",fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.2}}>{val}</div>
-                    </div>
-                  ))}
-                </div>
-                {initial&&<Field label="Add Newly Purchased Bottles" value={f.addPurchased} onChange={v=>set("addPurchased",v.replace(/[^0-9]/g,""))} type="number" placeholder="0" optional/>}
-              </div>
-              {locationMode==="custom"&&(
-                <div style={{marginBottom:14,marginTop:-4}}>
-                  <Field label="Custom Location" value={customLocation} onChange={setCustomLocation} placeholder="e.g. Events Cellar" optional/>
-                  <button
-                    type="button"
-                    onClick={()=>setRememberLocation(v=>!v)}
-                    style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"9px 12px",borderRadius:11,border:`1.5px solid ${rememberLocation?"var(--accent)":"var(--border)"}`,background:rememberLocation?"rgba(var(--accentRgb),0.08)":"var(--inputBg)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:12,color:"var(--text)",fontWeight:600,width:"100%",cursor:"pointer"}}
-                  >
-                    <span>Save this location for future wines</span>
-                    <span style={{fontSize:14,color:rememberLocation?"var(--accent)":"var(--sub)"}}>{rememberLocation?"✓":"○"}</span>
-                  </button>
-                </div>
-              )}
-              {savedLocations.length>0&&(
-                <div style={{marginBottom:14,marginTop:-4}}>
-                  <div style={{fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Saved Locations</div>
-                  <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                    {savedLocations.map(loc=>(
-                      <button
-                        key={loc}
-                        type="button"
-                        onClick={()=>onRemoveLocation?.(loc)}
-                        style={{display:"inline-flex",alignItems:"center",gap:6,padding:"6px 10px",borderRadius:20,border:"1.5px solid var(--border)",background:"var(--inputBg)",color:"var(--text)",fontSize:12,fontWeight:600,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:"pointer"}}
-                      >
-                        <span>{loc}</span>
-                        <span style={{color:"var(--sub)",lineHeight:1}}>×</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-          {!isWishlist&&(
-            <>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
-                <Field label="Drink From" value={f.drinkStart} onChange={v=>set("drinkStart",v)} type="number" placeholder="2026" optional/>
-                <Field label="Drink By" value={f.drinkEnd} onChange={v=>set("drinkEnd",v)} type="number" placeholder="2034" optional/>
-                <Field label="Supplier" value={f.supplier} onChange={v=>set("supplier",v)} placeholder="WS / Local shop" optional/>
-              </div>
-              <div style={{background:"var(--card)",borderRadius:12,padding:"10px 12px",marginBottom:12,border:"1px solid var(--border)"}}>
-                <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Price Setup</div>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                  <Field label="Amount Paid" value={f.totalPaid} onChange={v=>set("totalPaid",v)} type="number" placeholder="179.5" optional/>
-                  <Field label="Bottles Paid For" value={f.priceForBottles} onChange={handlePriceForBottlesChange} type="number" placeholder="6" optional/>
-                </div>
-                <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:2,marginBottom:10}}>
-                  <span style={{padding:"4px 9px",borderRadius:16,background:"var(--inputBg)",border:"1px solid var(--border)",fontSize:12,color:"var(--text)",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
-                    Calculated paid/bottle: {(calculatedPricePerBottle??existingPaidPerBottle)!=null?`$${Number(calculatedPricePerBottle??existingPaidPerBottle).toFixed(2)}`:"—"}
-                  </span>
-                  <span style={{padding:"4px 9px",borderRadius:16,background:"rgba(var(--accentRgb),0.12)",border:"1px solid rgba(var(--accentRgb),0.22)",fontSize:12,color:"var(--accent)",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
-                    Calculated RRP/bottle: {autoRrpPerBottle!=null?`$${Number(autoRrpPerBottle).toFixed(2)}`:"—"}
-                  </span>
-                </div>
-                <Field label="RRP / Bottle (optional override)" value={f.rrp} onChange={v=>set("rrp",v)} type="number" placeholder="40" optional/>
-                <div style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.55}}>
-                  If RRP is left blank, it will use the calculated paid per bottle automatically.
-                </div>
-              </div>
-            </>
-          )}
-          <Field label="Tasting Notes" value={f.tastingNotes} onChange={v=>set("tastingNotes",v)} placeholder="Dark plum, cedar…" optional/>
-          <Field label="Personal Notes" value={f.notes} onChange={v=>set("notes",v)} placeholder="Pairings, memories…" rows={2} optional/>
-          {!isWishlist&&(
-            <div>
-              <div style={{marginBottom:14}}>
-                <div style={{fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Rating</div>
-                <Stars value={f.rating} onChange={v=>set("rating",v)} size={22}/>
-              </div>
-              <Field label="Review" value={f.review} onChange={v=>set("review",v)} placeholder="Your thoughts…" rows={2} optional/>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                <Field label="Date Purchased" value={f.datePurchased} onChange={v=>set("datePurchased",v)} type="date" optional/>
-                <Field label="Added to Inventory" value={f.addedDate} onChange={v=>set("addedDate",v)} type="date" optional/>
-              </div>
+          {isTwoStepNewCellar&&(
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
+              <button type="button" onClick={()=>setStep("details")} style={{padding:"8px 10px",borderRadius:10,border:step==="details"?"1.5px solid var(--accent)":"1.5px solid var(--border)",background:step==="details"?"rgba(var(--accentRgb),0.1)":"var(--inputBg)",color:step==="details"?"var(--accent)":"var(--sub)",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>1. Wine Details</button>
+              <button type="button" onClick={()=>setStep("journal")} disabled={!canSubmit} style={{padding:"8px 10px",borderRadius:10,border:step==="journal"?"1.5px solid var(--accent)":"1.5px solid var(--border)",background:step==="journal"?"rgba(var(--accentRgb),0.1)":"var(--inputBg)",color:step==="journal"?"var(--accent)":"var(--sub)",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:canSubmit?1:0.5}}>2. Journal Notes</button>
             </div>
           )}
-          <div style={{display:"flex",gap:8,marginTop:4}}>
-            <Btn variant="secondary" onClick={onClose} full>Cancel</Btn>
-            <Btn onClick={save} full disabled={!f.name||(!isWishlist&&locationMode==="custom"&&!normalizeLocation(customLocation))}>Save Wine</Btn>
-          </div>
+          {showDetailsStep&&(
+            <>
+              <Field label="Wine Name" value={f.name} onChange={v=>set("name",v)} placeholder="e.g. Penfolds Grange"/>
+              <Field label="Origin" value={f.origin} onChange={v=>set("origin",v)} placeholder="Region, Country" optional/>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+                <Field label="Varietal" value={f.grape} onChange={v=>set("grape",v)} placeholder="Shiraz" optional/>
+                <Field label="Vintage" value={f.vintage} onChange={v=>set("vintage",v)} type="number" placeholder="2019" optional/>
+                <Field label="Alc %" value={f.alcohol} onChange={v=>set("alcohol",v)} type="number" placeholder="14.5" optional/>
+              </div>
+              {!isWishlist&&(
+                <>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 2fr 1fr",gap:10}}>
+                    <Field label="Bottles" value={f.bottles} onChange={handleBottlesChange} type="number" placeholder="1" optional/>
+                    <SelField
+                      label="Location"
+                      value={selectedLocationValue}
+                      onChange={handleLocationSelect}
+                      options={[...selectableLocations.map(loc=>({value:loc,label:loc})),{value:CUSTOM_LOCATION_OPTION,label:"Custom location…"}]}
+                    />
+                    <Field label={isKennardsLocation?"Box No.":"Slot"} value={f.locationSlot} onChange={v=>set("locationSlot",v)} placeholder={isKennardsLocation?"e.g. 12":"A3"} optional/>
+                  </div>
+                  {isKennardsLocation&&(
+                    <SelField
+                      label="Kennards Placement"
+                      value={normalizeKennardsSection(f.locationSection)||"Cube"}
+                      onChange={v=>set("locationSection",normalizeKennardsSection(v))}
+                      options={KENNARDS_SECTIONS}
+                    />
+                  )}
+                  <div style={{background:"var(--card)",borderRadius:12,padding:"10px 12px",marginBottom:12,border:"1px solid var(--border)"}}>
+                    <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Bottle Tracker</div>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:8}}>
+                      {[["Purchased",projectedPurchased],["Left",projectedLeft],["Consumed",projectedConsumed]].map(([label,val])=>(
+                        <div key={label} style={{background:"var(--inputBg)",borderRadius:10,padding:"7px 8px",border:"1px solid var(--border)"}}>
+                          <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:1,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{label}</div>
+                          <div style={{fontSize:15,color:"var(--text)",fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.2}}>{val}</div>
+                        </div>
+                      ))}
+                    </div>
+                    {initial&&<Field label="Add Newly Purchased Bottles" value={f.addPurchased} onChange={v=>set("addPurchased",v.replace(/[^0-9]/g,""))} type="number" placeholder="0" optional/>}
+                  </div>
+                  {locationMode==="custom"&&(
+                    <div style={{marginBottom:14,marginTop:-4}}>
+                      <Field label="Custom Location" value={customLocation} onChange={setCustomLocation} placeholder="e.g. Events Cellar" optional/>
+                      <button
+                        type="button"
+                        onClick={()=>setRememberLocation(v=>!v)}
+                        style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"9px 12px",borderRadius:11,border:`1.5px solid ${rememberLocation?"var(--accent)":"var(--border)"}`,background:rememberLocation?"rgba(var(--accentRgb),0.08)":"var(--inputBg)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:12,color:"var(--text)",fontWeight:600,width:"100%",cursor:"pointer"}}
+                      >
+                        <span>Save this location for future wines</span>
+                        <span style={{fontSize:14,color:rememberLocation?"var(--accent)":"var(--sub)"}}>{rememberLocation?"✓":"○"}</span>
+                      </button>
+                    </div>
+                  )}
+                  {savedLocations.length>0&&(
+                    <div style={{marginBottom:14,marginTop:-4}}>
+                      <div style={{fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Saved Locations</div>
+                      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                        {savedLocations.map(loc=>(
+                          <button
+                            key={loc}
+                            type="button"
+                            onClick={()=>onRemoveLocation?.(loc)}
+                            style={{display:"inline-flex",alignItems:"center",gap:6,padding:"6px 10px",borderRadius:20,border:"1.5px solid var(--border)",background:"var(--inputBg)",color:"var(--text)",fontSize:12,fontWeight:600,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:"pointer"}}
+                          >
+                            <span>{loc}</span>
+                            <span style={{color:"var(--sub)",lineHeight:1}}>×</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+              {!isWishlist&&(
+                <>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+                    <Field label="Drink From" value={f.drinkStart} onChange={v=>set("drinkStart",v)} type="number" placeholder="2026" optional/>
+                    <Field label="Drink By" value={f.drinkEnd} onChange={v=>set("drinkEnd",v)} type="number" placeholder="2034" optional/>
+                    <Field label="Supplier" value={f.supplier} onChange={v=>set("supplier",v)} placeholder="WS / Local shop" optional/>
+                  </div>
+                  <div style={{background:"var(--card)",borderRadius:12,padding:"10px 12px",marginBottom:12,border:"1px solid var(--border)"}}>
+                    <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Price Setup</div>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                      <Field label="Amount Paid" value={f.totalPaid} onChange={v=>set("totalPaid",v)} type="number" placeholder="179.5" optional/>
+                      <Field label="Bottles Paid For" value={f.priceForBottles} onChange={handlePriceForBottlesChange} type="number" placeholder="6" optional/>
+                    </div>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:2,marginBottom:10}}>
+                      <span style={{padding:"4px 9px",borderRadius:16,background:"var(--inputBg)",border:"1px solid var(--border)",fontSize:12,color:"var(--text)",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+                        Calculated paid/bottle: {(calculatedPricePerBottle??existingPaidPerBottle)!=null?`$${Number(calculatedPricePerBottle??existingPaidPerBottle).toFixed(2)}`:"—"}
+                      </span>
+                      <span style={{padding:"4px 9px",borderRadius:16,background:"rgba(var(--accentRgb),0.12)",border:"1px solid rgba(var(--accentRgb),0.22)",fontSize:12,color:"var(--accent)",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+                        Calculated RRP/bottle: {autoRrpPerBottle!=null?`$${Number(autoRrpPerBottle).toFixed(2)}`:"—"}
+                      </span>
+                    </div>
+                    <Field label="RRP / Bottle (optional override)" value={f.rrp} onChange={v=>set("rrp",v)} type="number" placeholder="40" optional/>
+                    <div style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.55}}>
+                      If RRP is left blank, it will use the calculated paid per bottle automatically.
+                    </div>
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                    <Field label="Date Purchased" value={f.datePurchased} onChange={v=>set("datePurchased",v)} type="date" optional/>
+                    <Field label="Added to Inventory" value={f.addedDate} onChange={v=>set("addedDate",v)} type="date" optional/>
+                  </div>
+                </>
+              )}
+            </>
+          )}
+          {showJournalStep&&(
+            <>
+              <div style={{background:"var(--card)",borderRadius:12,padding:"10px 12px",marginBottom:12,border:"1px solid var(--border)"}}>
+                <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:6,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Journal Notes (Optional)</div>
+                <div style={{fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Add your review and impressions now, or leave blank and edit later in the Journal tab.</div>
+              </div>
+              <Field label="Review" value={f.review} onChange={v=>set("review",v)} placeholder="Overall opinion..." rows={3} optional/>
+              <Field label="Personal Notes" value={f.notes} onChange={v=>set("notes",v)} placeholder="Memories, pairings, context..." rows={3} optional/>
+              <Field label="Tasting Notes" value={f.tastingNotes} onChange={v=>set("tastingNotes",v)} placeholder="Aromas, palate, finish..." rows={3} optional/>
+            </>
+          )}
+          {!showJournalStep&&!isTwoStepNewCellar&&(
+            <>
+              <Field label="Tasting Notes" value={f.tastingNotes} onChange={v=>set("tastingNotes",v)} placeholder="Dark plum, cedar…" optional/>
+              <Field label="Personal Notes" value={f.notes} onChange={v=>set("notes",v)} placeholder="Pairings, memories…" rows={2} optional/>
+              {!isWishlist&&(
+                <div>
+                  <div style={{marginBottom:14}}>
+                    <div style={{fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Rating</div>
+                    <Stars value={f.rating} onChange={v=>set("rating",v)} size={22}/>
+                  </div>
+                  <Field label="Review" value={f.review} onChange={v=>set("review",v)} placeholder="Your thoughts…" rows={2} optional/>
+                </div>
+              )}
+            </>
+          )}
+          {isTwoStepNewCellar&&step==="details"&&(
+            <div style={{display:"flex",gap:8,marginTop:4}}>
+              <Btn variant="secondary" onClick={onClose} full>Cancel</Btn>
+              <Btn onClick={()=>setStep("journal")} full disabled={!canSubmit}>Continue</Btn>
+            </div>
+          )}
+          {isTwoStepNewCellar&&step==="journal"&&(
+            <div style={{display:"flex",gap:8,marginTop:4}}>
+              <Btn variant="secondary" onClick={()=>setStep("details")} full>Back</Btn>
+              <Btn onClick={save} full disabled={!canSubmit}>Save Wine</Btn>
+            </div>
+          )}
+          {!isTwoStepNewCellar&&(
+            <div style={{display:"flex",gap:8,marginTop:4}}>
+              <Btn variant="secondary" onClick={onClose} full>Cancel</Btn>
+              <Btn onClick={save} full disabled={!canSubmit}>Save Wine</Btn>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -1449,73 +1485,123 @@ const AIScreen=({wines})=>{
   );
 };
 
-/* ── NOTES ────────────────────────────────────────────────────── */
-const NotesScreen=({wines,notes,onAdd,onDelete})=>{
-  const [adding,setAdding]=useState(false);
-  const [sel,setSel]=useState(null);
-  const [form,setForm]=useState({wineId:"",title:"",content:"",attachToWine:false});
-  const col=wines.filter(w=>!w.wishlist);
-  const getW=id=>col.find(w=>w.id===id);
+/* ── JOURNAL ──────────────────────────────────────────────────── */
+const JournalWineCard=({wine,onClick})=>{
+  const type=resolveWineType(wine);
+  const varietal=resolveVarietal(wine);
+  const tc=WINE_TYPE_COLORS[type]||WINE_TYPE_COLORS.Other;
+  const geo=deriveRegionCountry(wine.origin||"");
+  const hasJournalText=!!((wine.tastingNotes||"").trim()||(wine.review||"").trim()||(wine.notes||"").trim());
+  return(
+    <div onClick={onClick} style={{background:"var(--card)",borderRadius:18,padding:"14px 16px",cursor:"pointer",border:"1px solid var(--border)",marginBottom:10,transition:"transform 0.15s,box-shadow 0.15s",boxShadow:"0 2px 8px var(--shadow)"}} onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 8px 24px var(--shadow)";}} onMouseLeave={e=>{e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="0 2px 8px var(--shadow)";}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,marginBottom:7}}>
+        <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:16,fontWeight:700,color:"var(--text)",lineHeight:1.2}}>{wine.name}</div>
+        {wine.vintage&&<span style={{padding:"3px 8px",borderRadius:20,fontSize:11,fontWeight:700,color:"var(--text)",background:"var(--inputBg)",fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap"}}>{wine.vintage}</span>}
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:8}}>
+        <WineTypePill type={type} label={varietal}/>
+        <span style={{padding:"3px 8px",borderRadius:20,fontSize:11,fontWeight:700,color:hasJournalText?"var(--accent)":"var(--sub)",background:hasJournalText?"rgba(var(--accentRgb),0.12)":"var(--inputBg)",fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap"}}>{hasJournalText?"Has Journal Notes":"No Journal Notes Yet"}</span>
+      </div>
+      {(geo.region||geo.country)&&<div style={{fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{geo.region||geo.country}</div>}
+      <div style={{marginTop:10,height:2,borderRadius:2,background:tc.dot,opacity:0.45}}/>
+    </div>
+  );
+};
+
+const JournalWineDetail=({wine,onEdit})=>{
+  const type=resolveWineType(wine);
+  const varietal=resolveVarietal(wine);
+  const geo=deriveRegionCountry(wine.origin||"");
+  const sections=[["Review",wine.review,true],["Personal Notes",wine.notes,false],["Tasting Notes",wine.tastingNotes,false]];
+  const hasContent=sections.some(([,value])=>(value||"").trim());
   return(
     <div>
-      <div style={{marginBottom:24}}>
+      <div style={{borderRadius:16,background:"linear-gradient(135deg,rgba(var(--accentRgb),0.2) 0%,rgba(var(--accentRgb),0.08) 100%)",padding:"18px 18px",marginBottom:14,border:"1px solid rgba(var(--accentRgb),0.2)"}}>
+        <WineTypePill type={type} label={varietal}/>
+        <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:22,fontWeight:800,color:"var(--text)",marginTop:8,lineHeight:1.2}}>{wine.name}</div>
+        {(wine.vintage||geo.region||geo.country)&&<div style={{fontSize:13,color:"var(--sub)",marginTop:3,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{[wine.vintage,geo.region||geo.country,geo.country&&geo.region?geo.country:null].filter(Boolean).join(" · ")}</div>}
+      </div>
+      {!hasContent&&(
+        <div style={{background:"var(--inputBg)",borderRadius:13,padding:"14px",marginBottom:12,border:"1px solid var(--border)",fontSize:13,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+          No review notes yet for this wine.
+        </div>
+      )}
+      {sections.map(([label,value,italic])=>value?(
+        <div key={label} style={{background:"linear-gradient(180deg,var(--inputBg),rgba(var(--accentRgb),0.03))",borderRadius:14,padding:"12px 14px",marginBottom:8,border:"1px solid var(--border)"}}>
+          <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:6,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{label}</div>
+          <div style={{fontSize:14,color:"var(--text)",lineHeight:1.7,fontStyle:italic?"italic":"normal",fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"pre-wrap"}}>{italic?`"${value}"`:value}</div>
+        </div>
+      ):null)}
+      <Btn onClick={onEdit} full icon="edit">Edit Journal Notes</Btn>
+    </div>
+  );
+};
+
+const JournalNoteForm=({wine,onSave,onClose})=>{
+  const [form,setForm]=useState({
+    review:wine.review||"",
+    notes:wine.notes||"",
+    tastingNotes:wine.tastingNotes||"",
+  });
+  const set=(k,v)=>setForm(p=>({...p,[k]:v}));
+  return(
+    <div>
+      <ModalHeader title="Edit Journal Notes" onClose={onClose}/>
+      <div style={{fontSize:12,color:"var(--sub)",marginBottom:14,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{wine.name}</div>
+      <Field label="Review" value={form.review} onChange={v=>set("review",v)} placeholder="Overall opinion..." rows={3} optional/>
+      <Field label="Personal Notes" value={form.notes} onChange={v=>set("notes",v)} placeholder="Memories, pairings, context..." rows={3} optional/>
+      <Field label="Tasting Notes" value={form.tastingNotes} onChange={v=>set("tastingNotes",v)} placeholder="Aromas, palate, finish..." rows={3} optional/>
+      <div style={{display:"flex",gap:8}}>
+        <Btn variant="secondary" onClick={onClose} full>Cancel</Btn>
+        <Btn onClick={()=>onSave({...wine,...form})} full>Save Notes</Btn>
+      </div>
+    </div>
+  );
+};
+
+const JournalScreen=({wines,onUpdate,desktop})=>{
+  const [search,setSearch]=useState("");
+  const [sel,setSel]=useState(null);
+  const [editing,setEditing]=useState(false);
+  const col=wines.filter(w=>!w.wishlist);
+  const filtered=col
+    .filter(w=>{
+      if(!search.trim()) return true;
+      const haystack=[
+        w.name,w.grape,resolveVarietal(w),w.origin,w.vintage?.toString()||"",
+        w.review,w.notes,w.tastingNotes
+      ].join(" ").toLowerCase();
+      return haystack.includes(search.trim().toLowerCase());
+    })
+    .sort((a,b)=>a.name.localeCompare(b.name));
+  return(
+    <div>
+      <div style={{marginBottom:20}}>
         <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"2px",textTransform:"uppercase",marginBottom:4}}>Journal</div>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end"}}>
-          <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:34,fontWeight:800,color:"var(--text)",lineHeight:1}}>
-            {notes.length} <span style={{fontSize:18,color:"var(--sub)",fontWeight:400}}>notes</span>
-          </div>
-          <button onClick={()=>{setForm({wineId:col[0]?.id||"",title:"",content:"",attachToWine:false});setAdding(true);}} style={{width:44,height:44,borderRadius:14,background:"var(--accent)",border:"none",display:"flex",alignItems:"center",justifyContent:"center",color:"white",boxShadow:"0 4px 16px rgba(var(--accentRgb),0.35)",cursor:"pointer"}}><Icon n="plus" size={20}/></button>
+        <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:34,fontWeight:800,color:"var(--text)",lineHeight:1}}>
+          {col.length} <span style={{fontSize:18,color:"var(--sub)",fontWeight:400}}>wines</span>
         </div>
       </div>
-      {notes.length===0
-        ? <Empty icon="note" text="Capture your tasting memories."/>
-        : notes.map(n=>{
-            const w=getW(n.wineId);
-            const type=w?(resolveWineType(w)):"Other";
-            const tc=WINE_TYPE_COLORS[type]||WINE_TYPE_COLORS.Other;
-            return(
-              <div key={n.id} onClick={()=>setSel(n)} style={{background:"var(--card)",borderRadius:18,padding:"16px",cursor:"pointer",border:"1px solid var(--border)",marginBottom:10,transition:"transform 0.15s,box-shadow 0.15s",boxShadow:"0 2px 8px var(--shadow)"}}
-                onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 8px 28px var(--shadow)";}}
-                onMouseLeave={e=>{e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="0 2px 8px var(--shadow)";}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
-                  <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:16,fontWeight:700,color:"var(--text)",lineHeight:1.2,flex:1,paddingRight:8}}>{n.title}</div>
-                  <div style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",flexShrink:0}}>{n.date?new Date(n.date).toLocaleDateString("en-AU",{day:"numeric",month:"short"}):""}</div>
-                </div>
-                {w&&<div style={{display:"inline-flex",alignItems:"center",gap:6,marginBottom:8}}><div style={{width:7,height:7,borderRadius:"50%",background:tc.dot}}/><span style={{fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{w.name}</span></div>}
-                <div style={{fontSize:13,color:"var(--sub)",lineHeight:1.55,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{n.content}</div>
-              </div>
-            );
-          })
-      }
-      <Modal show={adding} onClose={()=>setAdding(false)}>
-        <ModalHeader title="New Note" onClose={()=>setAdding(false)}/>
-        {col.length>0&&(
-          <div style={{marginBottom:12}}>
-            <button onClick={()=>setForm(p=>({...p,attachToWine:!p.attachToWine,wineId:!p.attachToWine?(p.wineId||col[0]?.id||""):""}))}
-              style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 12px",borderRadius:12,border:`1.5px solid ${form.attachToWine?"var(--accent)":"var(--border)"}`,background:form.attachToWine?"rgba(var(--accentRgb),0.09)":"var(--inputBg)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:13,fontWeight:600,color:"var(--text)",cursor:"pointer"}}>
-              <span>Link this note to a wine</span>
-              <span style={{fontSize:16,color:form.attachToWine?"var(--accent)":"var(--sub)"}}>{form.attachToWine?"✓":"○"}</span>
-            </button>
+      <div style={{marginBottom:14,position:"relative"}}>
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search wines, varietal, origin, or notes..." style={{paddingLeft:38}}/>
+        <div style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"var(--sub)",pointerEvents:"none"}}><Icon n="search" size={16}/></div>
+      </div>
+      {filtered.length===0
+        ? <Empty icon="note" text={search.trim()?"No journal wines match your search.":"Your cellar has no wines yet."}/>
+        : <div style={{display:desktop?"grid":"block",gridTemplateColumns:desktop?"repeat(auto-fill,minmax(290px,1fr))":"none",gap:desktop?12:0}}>
+            {filtered.map(w=><JournalWineCard key={w.id} wine={w} onClick={()=>{setSel(w);setEditing(false);}}/>)}
           </div>
-        )}
-        {col.length>0&&form.attachToWine&&<SelField label="Wine" value={form.wineId} onChange={v=>setForm(p=>({...p,wineId:v}))} options={col.map(w=>({value:w.id,label:w.name}))}/>}
-        <Field label="Title" value={form.title} onChange={v=>setForm(p=>({...p,title:v}))} placeholder="e.g. Christmas Dinner 2024"/>
-        <Field label="Note" value={form.content} onChange={v=>setForm(p=>({...p,content:v}))} placeholder="Impressions, pairings, memories…" rows={4} optional/>
-        <div style={{display:"flex",gap:8}}>
-          <Btn variant="secondary" onClick={()=>setAdding(false)} full>Cancel</Btn>
-          <Btn onClick={()=>{if(form.title){onAdd({...form,id:uid(),wineId:form.attachToWine?form.wineId:"",date:new Date().toISOString().split("T")[0]});setAdding(false);}}} full disabled={!form.title}>Save Note</Btn>
-        </div>
-      </Modal>
-      <Modal show={!!sel} onClose={()=>setSel(null)} wide>
+      }
+      <Modal show={!!sel&&!editing} onClose={()=>setSel(null)} wide>
         {sel&&(
           <div>
-            <ModalHeader title={sel.title} onClose={()=>setSel(null)}/>
-            {getW(sel.wineId)&&<div style={{fontSize:13,color:"var(--accent)",marginBottom:8,fontWeight:600,fontFamily:"'Plus Jakarta Sans',sans-serif",display:"flex",alignItems:"center",gap:6}}><div style={{width:7,height:7,borderRadius:"50%",background:"var(--accent)"}}/>{getW(sel.wineId)?.name}</div>}
-            <div style={{fontSize:12,color:"var(--sub)",marginBottom:16,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{sel.date?new Date(sel.date).toLocaleDateString("en-AU",{weekday:"long",day:"numeric",month:"long",year:"numeric"}):""}</div>
-            <div style={{fontSize:15,color:"var(--text)",lineHeight:1.75,marginBottom:24,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{sel.content}</div>
-            <Btn variant="danger" onClick={()=>{onDelete(sel.id);setSel(null);}} full icon="trash">Delete Note</Btn>
+            <ModalHeader title="Wine Journal" onClose={()=>setSel(null)}/>
+            <JournalWineDetail wine={sel} onEdit={()=>setEditing(true)}/>
           </div>
         )}
+      </Modal>
+      <Modal show={!!sel&&editing} onClose={()=>setEditing(false)} wide>
+        {sel&&<JournalNoteForm wine={sel} onClose={()=>setEditing(false)} onSave={w=>{onUpdate(w);setSel(w);setEditing(false);}}/>}
       </Modal>
     </div>
   );
@@ -2287,7 +2373,7 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.39 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.40 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
@@ -2752,7 +2838,7 @@ export default function App(){
       {tab==="collection"&&<CollectionScreen wines={wines} onAdd={addWine} onUpdate={updWine} onDelete={delWine} onAdjustConsumption={adjustWineConsumption} desktop={isDesktop} savedLocations={savedLocations} onSaveLocation={addSavedLocation} onRemoveLocation={removeSavedLocation}/>}
       {tab==="wishlist"&&<WishlistScreen wishlist={wishlist} onAdd={addWish} onUpdate={updWish} onDelete={delWish} onMove={moveToCol} desktop={isDesktop}/>}
       {tab==="ai"&&<AIScreen wines={wines}/>}
-      {tab==="notes"&&<NotesScreen wines={wines} notes={notes} onAdd={addNote} onDelete={delNote}/>}
+      {tab==="notes"&&<JournalScreen wines={wines} onUpdate={updWine} desktop={isDesktop}/>}
       {tab==="profile"&&<ProfileScreen wines={wines} wishlist={wishlist} notes={notes} theme={themeMode} setTheme={setThemeMode} profile={profile} setProfile={setProfile}/>}
     </>
   );
