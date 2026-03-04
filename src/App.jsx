@@ -64,6 +64,7 @@ const YEAR_NOW = new Date().getFullYear();
 const EXCEL_IMPORT_FLAG = "vino_excel_seed_v1";
 const EXCEL_RESTORE_FLAG = "vino_excel_restore_v1";
 const CACHE_KEY = "vino_local_cache_v2";
+const SAVED_LOCATIONS_KEY = "vino_saved_locations_v1";
 const ACCENTS = {
   wine:{id:"wine",label:"Wine Red",accent:"#9B2335",accentLight:"#F08FA0"},
   ocean:{id:"ocean",label:"Ocean Blue",accent:"#1E5BB8",accentLight:"#7EB6FF"},
@@ -88,6 +89,24 @@ const normalizeLocation = value => {
   const cleaned=(value||"").trim().replace(/\s+/g," ");
   if(!cleaned)return "";
   return cleaned.length===1?cleaned.toUpperCase():cleaned;
+};
+const locationKey = value => normalizeLocation(value).toLowerCase();
+const dedupeLocations = values => {
+  const map=new Map();
+  (values||[]).forEach(value=>{
+    const label=normalizeLocation(value);
+    if(!label)return;
+    const key=locationKey(label);
+    if(!map.has(key)) map.set(key,label);
+  });
+  return [...map.values()];
+};
+const canonicalLocation = (value,knownLocations=[]) => {
+  const label=normalizeLocation(value);
+  if(!label) return "";
+  const key=locationKey(label);
+  const existing=(knownLocations||[]).find(loc=>locationKey(loc)===key);
+  return existing||label;
 };
 const excelSerialToIso = serial => {
   const n=safeNum(serial);
@@ -157,6 +176,15 @@ const readCache=()=>{
     const raw=localStorage.getItem(CACHE_KEY);
     return raw?JSON.parse(raw):null;
   }catch{return null;}
+};
+const readSavedLocations=()=>{
+  try{
+    const raw=localStorage.getItem(SAVED_LOCATIONS_KEY);
+    if(!raw)return[];
+    const parsed=JSON.parse(raw);
+    if(!Array.isArray(parsed)) return [];
+    return dedupeLocations(parsed);
+  }catch{return[];}
 };
 
 const fromDb = {
@@ -273,7 +301,7 @@ const fuzzySearch = q=>{
   const lq=q.toLowerCase();
   return WINE_DB.filter(w=>w.name.toLowerCase().includes(lq)||w.grape.toLowerCase().includes(lq)||w.origin.toLowerCase().includes(lq)).slice(0,7);
 };
-const LOCATIONS=["Rack A","Rack B","Rack C","Fridge Top","Fridge Bottom","Cellar Row 1","Cellar Row 2","Cellar Row 3","Living Room","Custom"];
+const LOCATIONS=["Rack A","Rack B","Rack C","Fridge Top","Fridge Bottom","Cellar Row 1","Cellar Row 2","Cellar Row 3","Living Room"];
 const fmt=d=>d?new Date(d).toLocaleDateString("en-AU",{month:"short",year:"numeric"}):null;
 const COUNTRY_SET=new Set(["Australia","Austria","France","Germany","Italy","Spain","Portugal","New Zealand","USA","Argentina","Chile","South Africa"]);
 const REGION_ALIAS_MAP={
@@ -721,20 +749,47 @@ const WineDetail=({wine,onEdit,onDelete,onMove})=>{
 };
 
 /* ── WINE FORM ────────────────────────────────────────────────── */
-const WineForm=({initial,onSave,onClose,isWishlist})=>{
-  const blank={name:"",origin:"",grape:"",alcohol:"",vintage:"",bottles:"1",rating:0,notes:"",review:"",tastingNotes:"",datePurchased:"",wishlist:!!isWishlist,photo:null,location:"Rack A",locationSlot:"",drinkStart:"",drinkEnd:"",pricePerBottle:"",rrp:"",totalPaid:"",insuranceValue:"",supplier:""};
-  const [f,setF]=useState(initial?{...blank,...initial,location:normalizeLocation(initial.location)||"Rack A",alcohol:initial.alcohol?.toString()||"",vintage:initial.vintage?.toString()||"",bottles:initial.bottles?.toString()||"",locationSlot:initial.locationSlot||"",drinkStart:initial.cellarMeta?.drinkStart?.toString()||"",drinkEnd:initial.cellarMeta?.drinkEnd?.toString()||"",pricePerBottle:initial.cellarMeta?.pricePerBottle?.toString()||"",rrp:initial.cellarMeta?.rrp?.toString()||"",totalPaid:initial.cellarMeta?.totalPaid?.toString()||"",insuranceValue:initial.cellarMeta?.insuranceValue?.toString()||"",supplier:initial.cellarMeta?.supplier||""}:blank);
+const CUSTOM_LOCATION_OPTION = "__custom_location__";
+const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocations=[],onSaveLocation,onRemoveLocation})=>{
+  const knownLocations=dedupeLocations([...LOCATIONS,...locationOptions,...savedLocations,initial?.location]);
+  const defaultLocation=knownLocations[0]||"Rack A";
+  const initialLocation=canonicalLocation(initial?.location||defaultLocation,knownLocations)||defaultLocation;
+  const blank={name:"",origin:"",grape:"",alcohol:"",vintage:"",bottles:"1",rating:0,notes:"",review:"",tastingNotes:"",datePurchased:"",wishlist:!!isWishlist,photo:null,location:defaultLocation,locationSlot:"",drinkStart:"",drinkEnd:"",pricePerBottle:"",rrp:"",totalPaid:"",insuranceValue:"",supplier:""};
+  const [f,setF]=useState(initial?{...blank,...initial,location:initialLocation,alcohol:initial.alcohol?.toString()||"",vintage:initial.vintage?.toString()||"",bottles:initial.bottles?.toString()||"",locationSlot:initial.locationSlot||"",drinkStart:initial.cellarMeta?.drinkStart?.toString()||"",drinkEnd:initial.cellarMeta?.drinkEnd?.toString()||"",pricePerBottle:initial.cellarMeta?.pricePerBottle?.toString()||"",rrp:initial.cellarMeta?.rrp?.toString()||"",totalPaid:initial.cellarMeta?.totalPaid?.toString()||"",insuranceValue:initial.cellarMeta?.insuranceValue?.toString()||"",supplier:initial.cellarMeta?.supplier||""}:blank);
+  const [locationMode,setLocationMode]=useState("preset");
+  const [customLocation,setCustomLocation]=useState("");
+  const [rememberLocation,setRememberLocation]=useState(false);
   const set=(k,v)=>setF(p=>({...p,[k]:v}));
   const [q,setQ]=useState(initial?.name||"");
   const [sugs,setSugs]=useState([]);
   const [showFields,setShowFields]=useState(!!initial);
+  const selectableLocations=dedupeLocations([...knownLocations,f.location]);
+  const selectedLocationValue=locationMode==="custom"
+    ? CUSTOM_LOCATION_OPTION
+    : (canonicalLocation(f.location,selectableLocations)||selectableLocations[0]||defaultLocation);
   const handleQ=v=>{setQ(v);set("name",v);setSugs(v.length>=2?fuzzySearch(v):[]);};
   const pickSug=w=>{setF(p=>({...p,name:w.name,origin:w.origin||"",grape:w.grape||"",alcohol:w.alcohol?.toString()||"",tastingNotes:w.tastingNotes||""}));setQ(w.name);setSugs([]);setShowFields(true);};
+  const handleLocationSelect=value=>{
+    if(value===CUSTOM_LOCATION_OPTION){
+      setLocationMode("custom");
+      setRememberLocation(false);
+      return;
+    }
+    setLocationMode("preset");
+    setRememberLocation(false);
+    set("location",canonicalLocation(value,selectableLocations));
+  };
   const save=()=>{
     if(!f.name)return;
+    if(!isWishlist&&locationMode==="custom"&&!normalizeLocation(customLocation))return;
+    const locationSource=locationMode==="custom"?customLocation:f.location;
+    const finalLocation=canonicalLocation(locationSource,selectableLocations)||"Cellar";
     const wt=guessWineType(f.grape,f.name);
     const tc=WINE_TYPE_COLORS[wt]||WINE_TYPE_COLORS.Other;
-    onSave({...f,id:f.id||uid(),alcohol:parseFloat(f.alcohol)||0,vintage:parseInt(f.vintage)||null,bottles:parseInt(f.bottles)||0,location:normalizeLocation(f.location)||"Cellar",locationSlot:f.locationSlot||null,wineType:wt,color:tc.dot,cellarMeta:{...(initial?.cellarMeta||{}),drinkStart:parseInt(f.drinkStart)||null,drinkEnd:parseInt(f.drinkEnd)||null,pricePerBottle:parseFloat(f.pricePerBottle)||null,rrp:parseFloat(f.rrp)||null,totalPaid:parseFloat(f.totalPaid)||null,insuranceValue:parseFloat(f.insuranceValue)||null,supplier:f.supplier||""}});
+    if(!isWishlist&&locationMode==="custom"&&rememberLocation&&finalLocation){
+      onSaveLocation?.(finalLocation);
+    }
+    onSave({...f,id:f.id||uid(),alcohol:parseFloat(f.alcohol)||0,vintage:parseInt(f.vintage)||null,bottles:parseInt(f.bottles)||0,location:finalLocation,locationSlot:f.locationSlot||null,wineType:wt,color:tc.dot,cellarMeta:{...(initial?.cellarMeta||{}),drinkStart:parseInt(f.drinkStart)||null,drinkEnd:parseInt(f.drinkEnd)||null,pricePerBottle:parseFloat(f.pricePerBottle)||null,rrp:parseFloat(f.rrp)||null,totalPaid:parseFloat(f.totalPaid)||null,insuranceValue:parseFloat(f.insuranceValue)||null,supplier:f.supplier||""}});
     onClose();
   };
   return(
@@ -781,11 +836,49 @@ const WineForm=({initial,onSave,onClose,isWishlist})=>{
             <Field label="Alc %" value={f.alcohol} onChange={v=>set("alcohol",v)} type="number" placeholder="14.5" optional/>
           </div>
           {!isWishlist&&(
-            <div style={{display:"grid",gridTemplateColumns:"1fr 2fr 1fr",gap:10}}>
-              <Field label="Bottles" value={f.bottles} onChange={v=>set("bottles",v)} type="number" placeholder="1" optional/>
-              <SelField label="Location" value={f.location} onChange={v=>set("location",normalizeLocation(v))} options={[...new Set([...LOCATIONS,normalizeLocation(f.location)].filter(Boolean))]}/>
-              <Field label="Slot" value={f.locationSlot} onChange={v=>set("locationSlot",v)} placeholder="A3" optional/>
-            </div>
+            <>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 2fr 1fr",gap:10}}>
+                <Field label="Bottles" value={f.bottles} onChange={v=>set("bottles",v)} type="number" placeholder="1" optional/>
+                <SelField
+                  label="Location"
+                  value={selectedLocationValue}
+                  onChange={handleLocationSelect}
+                  options={[...selectableLocations.map(loc=>({value:loc,label:loc})),{value:CUSTOM_LOCATION_OPTION,label:"Custom location…"}]}
+                />
+                <Field label="Slot" value={f.locationSlot} onChange={v=>set("locationSlot",v)} placeholder="A3" optional/>
+              </div>
+              {locationMode==="custom"&&(
+                <div style={{marginBottom:14,marginTop:-4}}>
+                  <Field label="Custom Location" value={customLocation} onChange={setCustomLocation} placeholder="e.g. Office / Studio Rack" optional/>
+                  <button
+                    type="button"
+                    onClick={()=>setRememberLocation(v=>!v)}
+                    style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"9px 12px",borderRadius:11,border:`1.5px solid ${rememberLocation?"var(--accent)":"var(--border)"}`,background:rememberLocation?"rgba(var(--accentRgb),0.08)":"var(--inputBg)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:12,color:"var(--text)",fontWeight:600,width:"100%",cursor:"pointer"}}
+                  >
+                    <span>Save this location for future wines</span>
+                    <span style={{fontSize:14,color:rememberLocation?"var(--accent)":"var(--sub)"}}>{rememberLocation?"✓":"○"}</span>
+                  </button>
+                </div>
+              )}
+              {savedLocations.length>0&&(
+                <div style={{marginBottom:14,marginTop:-4}}>
+                  <div style={{fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Saved Locations</div>
+                  <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                    {savedLocations.map(loc=>(
+                      <button
+                        key={loc}
+                        type="button"
+                        onClick={()=>onRemoveLocation?.(loc)}
+                        style={{display:"inline-flex",alignItems:"center",gap:6,padding:"6px 10px",borderRadius:20,border:"1.5px solid var(--border)",background:"var(--inputBg)",color:"var(--text)",fontSize:12,fontWeight:600,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:"pointer"}}
+                      >
+                        <span>{loc}</span>
+                        <span style={{color:"var(--sub)",lineHeight:1}}>×</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
           )}
           {!isWishlist&&(
             <>
@@ -816,7 +909,7 @@ const WineForm=({initial,onSave,onClose,isWishlist})=>{
           )}
           <div style={{display:"flex",gap:8,marginTop:4}}>
             <Btn variant="secondary" onClick={onClose} full>Cancel</Btn>
-            <Btn onClick={save} full disabled={!f.name}>Save Wine</Btn>
+            <Btn onClick={save} full disabled={!f.name||(!isWishlist&&locationMode==="custom"&&!normalizeLocation(customLocation))}>Save Wine</Btn>
           </div>
         </div>
       )}
@@ -841,7 +934,7 @@ const applyFilters=(wines,f,s)=>{
   if(s)r=r.filter(w=>`${w.name} ${w.grape} ${resolveVarietal(w)} ${w.origin} ${w.location}`.toLowerCase().includes(s.toLowerCase()));
   if(f.minRating>0)r=r.filter(w=>(w.rating||0)>=f.minRating);
   if(f.varietal)r=r.filter(w=>resolveVarietal(w)===f.varietal);
-  if(f.location)r=r.filter(w=>normalizeLocation(w.location)===f.location);
+  if(f.location)r=r.filter(w=>locationKey(w.location)===locationKey(f.location));
   if(f.region)r=r.filter(w=>deriveRegionCountry(w.origin||"").region===f.region);
   if(f.country)r=r.filter(w=>deriveRegionCountry(w.origin||"").country===f.country);
   if(f.readiness){
@@ -877,7 +970,7 @@ const applyFilters=(wines,f,s)=>{
 
 const FilterPanel=({filters,setFilters,wines,onClose})=>{
   const col=wines.filter(w=>!w.wishlist);
-  const locs=[...new Set(col.map(w=>normalizeLocation(w.location)).filter(Boolean))].sort();
+  const locs=dedupeLocations(col.map(w=>w.location)).sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:"base"}));
   const varietals=[...new Set(col.map(resolveVarietal).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
   const regions=[...new Set(col.map(w=>deriveRegionCountry(w.origin||"").region).filter(Boolean))].sort();
   const countries=[...new Set(col.map(w=>deriveRegionCountry(w.origin||"").country).filter(Boolean))].sort();
@@ -956,7 +1049,7 @@ const Chip=({label,onX})=>(
 );
 
 /* ── COLLECTION ───────────────────────────────────────────────── */
-const CollectionScreen=({wines,onAdd,onUpdate,onDelete,desktop})=>{
+const CollectionScreen=({wines,onAdd,onUpdate,onDelete,desktop,savedLocations,onSaveLocation,onRemoveLocation})=>{
   const [sel,setSel]=useState(null);
   const [editing,setEditing]=useState(false);
   const [adding,setAdding]=useState(false);
@@ -964,6 +1057,7 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,desktop})=>{
   const [filters,setFilters]=useState(DEFAULT_FILTERS);
   const [filterOpen,setFilterOpen]=useState(false);
   const col=wines.filter(w=>!w.wishlist);
+  const locationOptions=dedupeLocations(col.map(w=>w.location));
   const filt=applyFilters(wines,filters,search);
   const bottles=col.reduce((s,w)=>s+(w.bottles||0),0);
   const active=hasFilters(filters);
@@ -1014,10 +1108,25 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,desktop})=>{
         {sel&&<WineDetail wine={sel} onEdit={()=>setEditing(true)} onDelete={()=>{onDelete(sel.id);setSel(null);}}/>}
       </Modal>
       <Modal show={editing} onClose={()=>setEditing(false)} wide>
-        <WineForm initial={sel} onSave={w=>{onUpdate(w);setSel(w);setEditing(false);}} onClose={()=>setEditing(false)}/>
+        <WineForm
+          initial={sel}
+          onSave={w=>{onUpdate(w);setSel(w);setEditing(false);}}
+          onClose={()=>setEditing(false)}
+          locationOptions={locationOptions}
+          savedLocations={savedLocations}
+          onSaveLocation={onSaveLocation}
+          onRemoveLocation={onRemoveLocation}
+        />
       </Modal>
       <Modal show={adding} onClose={()=>setAdding(false)} wide>
-        <WineForm onSave={w=>{onAdd(w);setAdding(false);}} onClose={()=>setAdding(false)}/>
+        <WineForm
+          onSave={w=>{onAdd(w);setAdding(false);}}
+          onClose={()=>setAdding(false)}
+          locationOptions={locationOptions}
+          savedLocations={savedLocations}
+          onSaveLocation={onSaveLocation}
+          onRemoveLocation={onRemoveLocation}
+        />
       </Modal>
       <Modal show={filterOpen} onClose={()=>setFilterOpen(false)}>
         <FilterPanel filters={filters} setFilters={setFilters} wines={wines} onClose={()=>setFilterOpen(false)}/>
@@ -1957,7 +2066,7 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.27 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.28 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
@@ -1992,6 +2101,7 @@ export default function App(){
   const [wishlist,setWishlist]=useState([]);
   const [notes,setNotes]=useState([]);
   const [profile,setProfileState]=useState(DEFAULT_PROFILE);
+  const [savedLocations,setSavedLocations]=useState(()=>readSavedLocations());
   const [ready,setReady]=useState(false);
   const [splashPhase,setSplashPhase]=useState("logo"); // logo | greet | onboard | done
   const [isDesktop,setIsDesktop]=useState(()=>window.innerWidth>=768);
@@ -2001,6 +2111,7 @@ export default function App(){
   const [oCellar,setOCellar]=useState("");
 
   useEffect(()=>{try{localStorage.setItem("vino_theme",themeMode)}catch{}},[themeMode]);
+  useEffect(()=>{try{localStorage.setItem(SAVED_LOCATIONS_KEY,JSON.stringify(savedLocations))}catch{}},[savedLocations]);
   useEffect(()=>{
     const mq=window.matchMedia?.("(prefers-color-scheme:dark)");
     const h=e=>setSysDark(e.matches);
@@ -2178,6 +2289,8 @@ export default function App(){
   const addWine=async w=>{setWines(p=>[...p,w]);await db.upsert("wines",toDb.wine(w));};
   const updWine=async w=>{setWines(p=>p.map(x=>x.id===w.id?w:x));await db.upsert("wines",toDb.wine(w));};
   const delWine=async id=>{setWines(p=>p.filter(x=>x.id!==id));await db.del("wines",id);};
+  const addSavedLocation=loc=>setSavedLocations(prev=>dedupeLocations([...prev,loc]));
+  const removeSavedLocation=loc=>setSavedLocations(prev=>prev.filter(x=>locationKey(x)!==locationKey(loc)));
   const addWish=async w=>{setWishlist(p=>[...p,w]);await db.upsert("wines",toDb.wine(w));};
   const updWish=async w=>{setWishlist(p=>p.map(x=>x.id===w.id?w:x));await db.upsert("wines",toDb.wine(w));};
   const delWish=async id=>{setWishlist(p=>p.filter(x=>x.id!==id));await db.del("wines",id);};
@@ -2318,7 +2431,7 @@ export default function App(){
 
   const screens=(
     <>
-      {tab==="collection"&&<CollectionScreen wines={wines} onAdd={addWine} onUpdate={updWine} onDelete={delWine} desktop={isDesktop}/>}
+      {tab==="collection"&&<CollectionScreen wines={wines} onAdd={addWine} onUpdate={updWine} onDelete={delWine} desktop={isDesktop} savedLocations={savedLocations} onSaveLocation={addSavedLocation} onRemoveLocation={removeSavedLocation}/>}
       {tab==="wishlist"&&<WishlistScreen wishlist={wishlist} onAdd={addWish} onUpdate={updWish} onDelete={delWish} onMove={moveToCol} desktop={isDesktop}/>}
       {tab==="ai"&&<AIScreen wines={wines}/>}
       {tab==="notes"&&<NotesScreen wines={wines} notes={notes} onAdd={addNote} onDelete={delNote}/>}
