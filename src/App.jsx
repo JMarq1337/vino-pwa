@@ -884,7 +884,20 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
   const [locationMode,setLocationMode]=useState("preset");
   const [customLocation,setCustomLocation]=useState("");
   const [rememberLocation,setRememberLocation]=useState(false);
+  const [priceBottlesManual,setPriceBottlesManual]=useState(false);
   const set=(k,v)=>setF(p=>({...p,[k]:v}));
+  const handleBottlesChange=v=>{
+    const clean=v.replace(/[^0-9]/g,"");
+    setF(p=>({
+      ...p,
+      bottles:clean,
+      priceForBottles:(!initial&&!priceBottlesManual)?clean:p.priceForBottles
+    }));
+  };
+  const handlePriceForBottlesChange=v=>{
+    setPriceBottlesManual(true);
+    set("priceForBottles",v.replace(/[^0-9]/g,""));
+  };
   const [q,setQ]=useState(initial?.name||"");
   const [sugs,setSugs]=useState([]);
   const [showFields,setShowFields]=useState(!!initial);
@@ -991,7 +1004,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
           {!isWishlist&&(
             <>
               <div style={{display:"grid",gridTemplateColumns:"1fr 2fr 1fr",gap:10}}>
-                <Field label="Bottles" value={f.bottles} onChange={v=>set("bottles",v)} type="number" placeholder="1" optional/>
+                <Field label="Bottles" value={f.bottles} onChange={handleBottlesChange} type="number" placeholder="1" optional/>
                 <SelField
                   label="Location"
                   value={selectedLocationValue}
@@ -1064,7 +1077,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
                 <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Price Setup</div>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
                   <Field label="Amount Paid" value={f.totalPaid} onChange={v=>set("totalPaid",v)} type="number" placeholder="179.5" optional/>
-                  <Field label="Bottles Paid For" value={f.priceForBottles} onChange={v=>set("priceForBottles",v.replace(/[^0-9]/g,""))} type="number" placeholder="6" optional/>
+                  <Field label="Bottles Paid For" value={f.priceForBottles} onChange={handlePriceForBottlesChange} type="number" placeholder="6" optional/>
                 </div>
                 <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:2,marginBottom:10}}>
                   <span style={{padding:"4px 9px",borderRadius:16,background:"var(--inputBg)",border:"1px solid var(--border)",fontSize:12,color:"var(--text)",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
