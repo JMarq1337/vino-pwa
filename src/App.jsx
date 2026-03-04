@@ -245,8 +245,8 @@ const fromDb = {
     const parsed=parseWineMetaFromNotes(r.notes);
     const meta={...(parsed.meta||{})};
     if(!meta.addedDate){
-      if(typeof r.created_at==="string"&&r.created_at.length>=10) meta.addedDate=r.created_at.slice(0,10);
-      else if(typeof r.date_purchased==="string"&&r.date_purchased.length>=10) meta.addedDate=r.date_purchased.slice(0,10);
+      if(typeof r.date_purchased==="string"&&r.date_purchased.length>=10) meta.addedDate=r.date_purchased.slice(0,10);
+      else if(typeof r.created_at==="string"&&r.created_at.length>=10) meta.addedDate=r.created_at.slice(0,10);
     }
     return ({ id:r.id,name:r.name,origin:r.origin,grape:r.grape,alcohol:r.alcohol,vintage:r.vintage,bottles:r.bottles,rating:r.rating,notes:parsed.plain,cellarMeta:meta,review:r.review,tastingNotes:r.tasting_notes,datePurchased:r.date_purchased,wishlist:r.wishlist,color:r.color,photo:r.photo,location:normalizeLocation(r.location),locationSlot:r.location_slot,wineType:r.wine_type });
   },
@@ -432,7 +432,7 @@ const SEED_WINES=SOURCE_CELLAR_ROWS.map((r,i)=>{
     pDateRaw:r.p_date||"",
     locationSection:normalizeKennardsSection(r.field||""),
     totalPurchased:totalPurchasedSeed,
-    addedDate:todayIsoLocal(),
+    addedDate:purchaseDate||todayIsoLocal(),
   };
   const extraNotes=[
     r.notes||"",
@@ -2233,7 +2233,7 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.35 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.36 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
@@ -2395,6 +2395,22 @@ export default function App(){
             });
             await Promise.all(repairedPricing.map(w=>db.upsert("wines",toDb.wine(w))));
             const byId=Object.fromEntries(repairedPricing.map(w=>[w.id,w.cellarMeta]));
+            all=all.map(w=>byId[w.id]?{...w,cellarMeta:byId[w.id]}:w);
+          }
+          const toAlignImportedAddedDate=all.filter(w=>{
+            if(!String(w.id||"").startsWith("xl-")) return false;
+            const purchased=(w.datePurchased||"").toString().slice(0,10);
+            if(!purchased) return false;
+            const added=((w.cellarMeta||{}).addedDate||"").toString().slice(0,10);
+            return added!==purchased;
+          });
+          if(toAlignImportedAddedDate.length){
+            const repairedImported=toAlignImportedAddedDate.map(w=>({
+              ...w,
+              cellarMeta:{...(w.cellarMeta||{}),addedDate:(w.datePurchased||"").toString().slice(0,10)}
+            }));
+            await Promise.all(repairedImported.map(w=>db.upsert("wines",toDb.wine(w))));
+            const byId=Object.fromEntries(repairedImported.map(w=>[w.id,w.cellarMeta]));
             all=all.map(w=>byId[w.id]?{...w,cellarMeta:byId[w.id]}:w);
           }
           const toRepairAddedDate=all.filter(w=>!(w.cellarMeta||{}).addedDate);
