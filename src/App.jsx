@@ -66,6 +66,8 @@ const EXCEL_RESTORE_FLAG = "vino_excel_restore_v1";
 const CACHE_KEY = "vino_local_cache_v2";
 const SAVED_LOCATIONS_KEY = "vino_saved_locations_v1";
 const DELETED_WINES_KEY = "vino_deleted_wines_v1";
+const AUDITS_KEY = "vino_audits_v1";
+const AUDIT_INTRO_KEY = "vino_audit_intro_seen_v1";
 const ACCENTS = {
   wine:{id:"wine",label:"Wine Red",accent:"#9B2335",accentLight:"#F08FA0"},
   ocean:{id:"ocean",label:"Ocean Blue",accent:"#1E5BB8",accentLight:"#7EB6FF"},
@@ -249,6 +251,27 @@ const readDeletedWines=()=>{
     return parsed
       .filter(item=>item&&item.wine&&item.wine.id)
       .map(item=>({wine:item.wine,deletedAt:item.deletedAt||""}));
+  }catch{return[];}
+};
+const readAudits=()=>{
+  try{
+    const raw=localStorage.getItem(AUDITS_KEY);
+    if(!raw)return[];
+    const parsed=JSON.parse(raw);
+    if(!Array.isArray(parsed)) return [];
+    return parsed
+      .filter(a=>a&&a.id&&a.items&&typeof a.items==="object")
+      .map(a=>({
+        id:a.id,
+        name:a.name||"Audit",
+        createdAt:a.createdAt||new Date().toISOString(),
+        updatedAt:a.updatedAt||a.createdAt||new Date().toISOString(),
+        completedAt:a.completedAt||"",
+        status:a.status==="completed"?"completed":"in_progress",
+        realtimeSync:!!a.realtimeSync,
+        locations:Array.isArray(a.locations)?dedupeLocations(a.locations):[],
+        items:a.items||{},
+      }));
   }catch{return[];}
 };
 
@@ -558,6 +581,7 @@ const IC={
   location:"M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0118 0zM12 13a3 3 0 100-6 3 3 0 000 6z",
   settings:"M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z",
   rewind:"M4 10H1l3-3m-3 3 3 3M4 10a8 8 0 1 1 2.2 5.8",
+  audit:"M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11",
   mappin:"M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0zM12 10a1 1 0 100-2 1 1 0 000 2",
   globe:"M12 22a10 10 0 110-20 10 10 0 010 20zM2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z",
   palette:"M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10c.55 0 1-.45 1-1 0-.27-.1-.51-.25-.7a1 1 0 01.25-.7c0-.55.45-1 1-1h1.17C16.73 18.83 18 17.56 18 16c0-3.87-2.69-7.01-6-7z",
@@ -1492,6 +1516,483 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAdjustConsumption,deskt
             })}
           </div>
         )}
+      </Modal>
+    </div>
+  );
+};
+
+/* ── AUDIT ────────────────────────────────────────────────────── */
+const AuditScreen=({wines,desktop,onSetWineBottles,onRemoveWine})=>{
+  const col=wines.filter(w=>!w.wishlist);
+  const locations=dedupeLocations(col.map(w=>w.location));
+  const [audits,setAudits]=useState(()=>readAudits());
+  const [activeId,setActiveId]=useState(null);
+  const [showIntro,setShowIntro]=useState(()=>{try{return localStorage.getItem(AUDIT_INTRO_KEY)!=="1";}catch{return true;}});
+  const [setupOpen,setSetupOpen]=useState(false);
+  const [setupName,setSetupName]=useState("");
+  const [setupAll,setSetupAll]=useState(true);
+  const [setupRealtime,setSetupRealtime]=useState(false);
+  const [setupLocations,setSetupLocations]=useState([]);
+  const [entryEditor,setEntryEditor]=useState(null);
+  const [completeOpen,setCompleteOpen]=useState(false);
+  const [applyOnComplete,setApplyOnComplete]=useState(true);
+  const [busy,setBusy]=useState(false);
+  const [statusMsg,setStatusMsg]=useState("");
+
+  const fmtAuditDate=iso=>{
+    if(!iso) return "";
+    const d=new Date(iso);
+    if(Number.isNaN(d.getTime())) return "";
+    return d.toLocaleDateString("en-AU",{day:"numeric",month:"short",year:"numeric"});
+  };
+  const nowAuditLabel=()=>{
+    const d=new Date();
+    return `Audit ${d.toLocaleDateString("en-AU",{day:"2-digit",month:"short",year:"numeric"})}`;
+  };
+  const locationTextFromItem=item=>[
+    normalizeLocation(item.location||""),
+    normalizeKennardsSection(item.locationSection||""),
+    (item.locationSlot||"").toString().trim(),
+  ].filter(Boolean).join(" · ");
+  const itemSummary=item=>{
+    if(item.decision==="present"){
+      const amt=Math.max(0,Math.round(safeNum(item.countedAmount)||0));
+      return item.countType==="boxes"?`${amt} boxes recorded`:`${amt} bottles confirmed`;
+    }
+    if(item.decision==="missing"){
+      return item.missingAction==="remove"?"Marked missing · remove from cellar":"Marked missing · keep in cellar";
+    }
+    return "Pending check";
+  };
+
+  useEffect(()=>{
+    try{localStorage.setItem(AUDITS_KEY,JSON.stringify(audits.slice(0,60)))}catch{}
+  },[audits]);
+  useEffect(()=>{
+    if(activeId&&!audits.some(a=>a.id===activeId)) setActiveId(null);
+  },[audits,activeId]);
+  useEffect(()=>{
+    if(!statusMsg) return;
+    const t=setTimeout(()=>setStatusMsg(""),5000);
+    return()=>clearTimeout(t);
+  },[statusMsg]);
+
+  const upsertAudit=(auditId,updater)=>setAudits(prev=>prev.map(a=>a.id===auditId?updater(a):a));
+  const patchAuditItem=(auditId,wineId,patch)=>{
+    upsertAudit(auditId,audit=>{
+      const nextItem={...(audit.items?.[wineId]||{}),...patch,updatedAt:new Date().toISOString()};
+      return{
+        ...audit,
+        updatedAt:new Date().toISOString(),
+        items:{...(audit.items||{}),[wineId]:nextItem},
+      };
+    });
+  };
+
+  const activeAudit=audits.find(a=>a.id===activeId)||null;
+  const wineById=Object.fromEntries(col.map(w=>[w.id,w]));
+  const auditRows=activeAudit
+    ? Object.values(activeAudit.items||{})
+      .map(item=>({item,wine:wineById[item.wineId]||null}))
+      .sort((a,b)=>{
+        const locA=locationTextFromItem(a.item);
+        const locB=locationTextFromItem(b.item);
+        if(locA!==locB) return locA.localeCompare(locB);
+        return (a.item.wineName||"").localeCompare(b.item.wineName||"");
+      })
+    : [];
+  const auditsSorted=[...audits].sort((a,b)=>(b.updatedAt||"").localeCompare(a.updatedAt||""));
+  const totalRows=auditRows.length;
+  const checkedRows=auditRows.filter(r=>r.item.decision&&r.item.decision!=="pending").length;
+
+  const openStartAudit=()=>{
+    setSetupName(nowAuditLabel());
+    setSetupAll(true);
+    setSetupRealtime(false);
+    setSetupLocations(locations);
+    setSetupOpen(true);
+  };
+  const toggleSetupLocation=loc=>{
+    setSetupLocations(prev=>{
+      const key=locationKey(loc);
+      const has=prev.some(x=>locationKey(x)===key);
+      if(has) return prev.filter(x=>locationKey(x)!==key);
+      return dedupeLocations([...prev,loc]);
+    });
+  };
+  const createAudit=()=>{
+    const chosen=setupAll?locations:dedupeLocations(setupLocations);
+    const chosenKeys=new Set(chosen.map(locationKey));
+    const scope=col.filter(w=>setupAll||chosenKeys.has(locationKey(w.location)));
+    if(scope.length===0){
+      setStatusMsg("No wines found for the selected locations.");
+      return;
+    }
+    const stamp=new Date().toISOString();
+    const items=Object.fromEntries(scope.map(w=>[
+      w.id,
+      {
+        wineId:w.id,
+        wineName:w.name||"Wine",
+        origin:w.origin||"",
+        varietal:resolveVarietal(w),
+        vintage:w.vintage||null,
+        location:normalizeLocation(w.location||""),
+        locationSection:normalizeKennardsSection(w.cellarMeta?.locationSection||""),
+        locationSlot:w.locationSlot||"",
+        expectedBottles:Math.max(0,Math.round(safeNum(w.bottles)||0)),
+        decision:"pending",
+        countType:"bottles",
+        countedAmount:Math.max(0,Math.round(safeNum(w.bottles)||0)),
+        missingAction:"keep",
+        synced:false,
+        updatedAt:stamp,
+      }
+    ]));
+    const created={
+      id:`audit-${uid()}`,
+      name:(setupName||"").trim()||nowAuditLabel(),
+      createdAt:stamp,
+      updatedAt:stamp,
+      completedAt:"",
+      status:"in_progress",
+      realtimeSync:!!setupRealtime,
+      locations:chosen,
+      items,
+    };
+    setAudits(prev=>[created,...prev]);
+    setActiveId(created.id);
+    setSetupOpen(false);
+    setStatusMsg(`Started ${created.name}.`);
+  };
+
+  const syncAuditItem=async item=>{
+    if(item.decision==="present"){
+      if(item.countType!=="bottles") return {kind:"skip"};
+      const amt=Math.max(0,Math.round(safeNum(item.countedAmount)||0));
+      const updated=await onSetWineBottles?.(item.wineId,amt);
+      return updated?{kind:"applied"}:{kind:"missing"};
+    }
+    if(item.decision==="missing"){
+      if(item.missingAction==="remove"){
+        const removed=await onRemoveWine?.(item.wineId);
+        return removed?{kind:"applied"}:{kind:"missing"};
+      }
+      return {kind:"noop"};
+    }
+    return {kind:"noop"};
+  };
+
+  const saveEntryEditor=async()=>{
+    if(!activeAudit||!entryEditor||busy) return;
+    const base=activeAudit.items?.[entryEditor.wineId];
+    if(!base) return;
+    const next={
+      ...base,
+      decision:entryEditor.mode==="present"?"present":"missing",
+      countType:entryEditor.mode==="present"?(entryEditor.countType||"bottles"):(base.countType||"bottles"),
+      countedAmount:entryEditor.mode==="present"?Math.max(0,Math.round(safeNum(entryEditor.countedAmount)||0)):(base.countedAmount||0),
+      missingAction:entryEditor.mode==="missing"?(entryEditor.missingAction||"keep"):(base.missingAction||"keep"),
+      synced:false,
+    };
+    patchAuditItem(activeAudit.id,entryEditor.wineId,next);
+    setEntryEditor(null);
+    if(!activeAudit.realtimeSync){
+      setStatusMsg("Audit entry saved.");
+      return;
+    }
+    setBusy(true);
+    const res=await syncAuditItem(next);
+    setBusy(false);
+    if(res.kind==="applied"||res.kind==="noop"){
+      patchAuditItem(activeAudit.id,next.wineId,{synced:true});
+      setStatusMsg(res.kind==="applied"?"Cellar updated in real time.":"Audit entry saved.");
+    }else if(res.kind==="skip"){
+      setStatusMsg("Saved. Box counts are recorded in audit only.");
+    }else{
+      setStatusMsg("Wine no longer exists in cellar; saved in audit history.");
+    }
+  };
+
+  const applyAuditChanges=async(audit,{markCompleted=false}={})=>{
+    if(!audit||busy) return;
+    const items=Object.values(audit.items||{});
+    if(items.length===0){
+      if(markCompleted){
+        upsertAudit(audit.id,a=>({...a,status:"completed",completedAt:new Date().toISOString(),updatedAt:new Date().toISOString()}));
+      }
+      return;
+    }
+    setBusy(true);
+    let applied=0,skipped=0,missing=0;
+    const syncedIds=[];
+    for(const item of items){
+      if(!item||item.decision==="pending"||item.synced) continue;
+      const res=await syncAuditItem(item);
+      if(res.kind==="applied"){applied+=1;syncedIds.push(item.wineId);}
+      else if(res.kind==="noop"){syncedIds.push(item.wineId);}
+      else if(res.kind==="skip"){skipped+=1;}
+      else{missing+=1;}
+    }
+    upsertAudit(audit.id,a=>{
+      const nextItems={...(a.items||{})};
+      syncedIds.forEach(id=>{
+        if(nextItems[id]) nextItems[id]={...nextItems[id],synced:true,updatedAt:new Date().toISOString()};
+      });
+      return{
+        ...a,
+        items:nextItems,
+        status:markCompleted?"completed":a.status,
+        completedAt:markCompleted?new Date().toISOString():a.completedAt,
+        updatedAt:new Date().toISOString(),
+      };
+    });
+    setBusy(false);
+    const parts=[`${applied} updated`];
+    if(skipped) parts.push(`${skipped} box entries kept in audit only`);
+    if(missing) parts.push(`${missing} already missing`);
+    setStatusMsg(parts.join(" · "));
+  };
+
+  const completeAudit=async()=>{
+    if(!activeAudit||busy) return;
+    if(applyOnComplete){
+      await applyAuditChanges(activeAudit,{markCompleted:true});
+    }else{
+      upsertAudit(activeAudit.id,a=>({...a,status:"completed",completedAt:new Date().toISOString(),updatedAt:new Date().toISOString()}));
+      setStatusMsg("Audit completed without changing cellar.");
+    }
+    setCompleteOpen(false);
+  };
+
+  return(
+    <div>
+      <div style={{marginBottom:20}}>
+        <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"2px",textTransform:"uppercase",marginBottom:4}}>Inventory Control</div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",gap:10}}>
+          <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:34,fontWeight:800,color:"var(--text)",lineHeight:1}}>
+            Audit <span style={{fontSize:18,color:"var(--sub)",fontWeight:400}}>{audits.length} saved</span>
+          </div>
+          <button onClick={openStartAudit} style={{padding:"10px 14px",borderRadius:12,border:"none",background:"var(--accent)",color:"#fff",fontSize:13,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",boxShadow:"0 6px 18px rgba(var(--accentRgb),0.28)",cursor:"pointer",whiteSpace:"nowrap"}}>
+            Start New Audit
+          </button>
+        </div>
+      </div>
+
+      {statusMsg&&(
+        <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:"10px 12px",marginBottom:12,fontSize:12,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+          {statusMsg}
+        </div>
+      )}
+
+      {!activeAudit&&(
+        <>
+          {auditsSorted.length===0?(
+            <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:16,padding:"18px"}}>
+              <div style={{fontSize:15,fontWeight:700,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:6}}>No audits yet</div>
+              <div style={{fontSize:13,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.6}}>
+                Start an audit to verify cellar stock location-by-location and optionally sync the results back to your inventory.
+              </div>
+            </div>
+          ):(
+            <div style={{display:"grid",gap:9}}>
+              {auditsSorted.map(a=>{
+                const rows=Object.values(a.items||{});
+                const done=rows.filter(it=>it.decision&&it.decision!=="pending").length;
+                const pct=rows.length?Math.round((done/rows.length)*100):0;
+                return(
+                  <div key={a.id} style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:14,padding:"12px 13px",display:"flex",justifyContent:"space-between",gap:10,alignItems:"center"}}>
+                    <div style={{minWidth:0}}>
+                      <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:4}}>
+                        <div style={{fontSize:14,fontWeight:700,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{a.name}</div>
+                        <span style={{padding:"2px 7px",borderRadius:20,fontSize:10,fontWeight:700,background:a.status==="completed"?"rgba(47,133,90,0.12)":"rgba(var(--accentRgb),0.12)",color:a.status==="completed"?"#2F855A":"var(--accent)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+                          {a.status==="completed"?"Completed":"In progress"}
+                        </span>
+                      </div>
+                      <div style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:5}}>
+                        {fmtAuditDate(a.createdAt)} · {done}/{rows.length} checked · {pct}%
+                      </div>
+                      <div style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+                        {(a.locations||[]).join(" · ")||"All locations"}
+                      </div>
+                    </div>
+                    <button onClick={()=>setActiveId(a.id)} style={{padding:"7px 10px",borderRadius:10,border:"1.5px solid var(--border)",background:"var(--inputBg)",color:"var(--text)",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:"pointer",flexShrink:0}}>
+                      Open
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
+
+      {activeAudit&&(
+        <div>
+          <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:16,padding:"14px",marginBottom:12}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,marginBottom:8}}>
+              <div style={{minWidth:0}}>
+                <div style={{fontSize:17,fontWeight:800,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.2}}>{activeAudit.name}</div>
+                <div style={{fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginTop:2}}>
+                  {fmtAuditDate(activeAudit.createdAt)} · {checkedRows}/{totalRows} verified
+                </div>
+              </div>
+              <button onClick={()=>setActiveId(null)} style={{padding:"7px 10px",borderRadius:10,border:"1.5px solid var(--border)",background:"var(--inputBg)",color:"var(--text)",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:"pointer",whiteSpace:"nowrap"}}>History</button>
+            </div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
+              {(activeAudit.locations||[]).map(loc=><span key={loc} style={{padding:"3px 8px",borderRadius:20,fontSize:11,fontWeight:700,color:"var(--accent)",background:"rgba(var(--accentRgb),0.12)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{loc}</span>)}
+              <span style={{padding:"3px 8px",borderRadius:20,fontSize:11,fontWeight:700,color:activeAudit.realtimeSync?"#2F855A":"var(--sub)",background:activeAudit.realtimeSync?"rgba(47,133,90,0.12)":"var(--inputBg)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+                {activeAudit.realtimeSync?"Realtime sync on":"Manual sync"}
+              </span>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:desktop?"1fr 1fr":"1fr",gap:8}}>
+              <button disabled={busy} onClick={()=>applyAuditChanges(activeAudit)} style={{padding:"10px 12px",borderRadius:11,border:"1.5px solid var(--border)",background:"var(--inputBg)",color:"var(--text)",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:busy?"default":"pointer",opacity:busy?0.6:1}}>
+                Apply Unsynced Changes
+              </button>
+              <button disabled={busy} onClick={()=>setCompleteOpen(true)} style={{padding:"10px 12px",borderRadius:11,border:"none",background:"var(--accent)",color:"#fff",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:busy?"default":"pointer",opacity:busy?0.7:1}}>
+                Complete Audit
+              </button>
+            </div>
+          </div>
+
+          {auditRows.length===0?(
+            <Empty icon="audit" text="No wines are scoped in this audit."/>
+          ):(
+            <div style={{display:"grid",gap:8}}>
+              {auditRows.map(({item,wine})=>{
+                const statusLabel=item.decision==="present"?"Present":item.decision==="missing"?"Missing":"Pending";
+                const statusColor=item.decision==="present"?"#2F855A":item.decision==="missing"?"#B83232":"var(--sub)";
+                const statusBg=item.decision==="present"?"rgba(47,133,90,0.12)":item.decision==="missing"?"rgba(184,50,50,0.12)":"var(--inputBg)";
+                return(
+                  <div key={item.wineId} style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:14,padding:"11px 12px"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",gap:10}}>
+                      <div style={{minWidth:0}}>
+                        <div style={{fontSize:14,fontWeight:700,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+                          {wine?.name||item.wineName}
+                        </div>
+                        <div style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginTop:2}}>
+                          {[item.vintage||wine?.vintage, item.varietal||resolveVarietal(wine||{}), item.origin||wine?.origin].filter(Boolean).join(" · ")}
+                        </div>
+                        <div style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginTop:2}}>
+                          {locationTextFromItem(item)||formatWineLocation(wine)||"No location"}
+                        </div>
+                      </div>
+                      <div style={{textAlign:"right",flexShrink:0}}>
+                        <div style={{padding:"3px 8px",borderRadius:20,fontSize:10,fontWeight:700,color:statusColor,background:statusBg,fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:4}}>
+                          {statusLabel}
+                        </div>
+                        <div style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+                          Expected {Math.max(0,Math.round(safeNum(wine?.bottles)||safeNum(item.expectedBottles)||0))}
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginTop:7,marginBottom:8}}>
+                      {itemSummary(item)}
+                    </div>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7}}>
+                      <button disabled={busy} onClick={()=>setEntryEditor({wineId:item.wineId,mode:"present",countType:item.countType||"bottles",countedAmount:String(Math.max(0,Math.round(safeNum(item.countedAmount)||safeNum(wine?.bottles)||safeNum(item.expectedBottles)||0)))})} style={{padding:"8px 10px",borderRadius:10,border:"1.5px solid rgba(47,133,90,0.35)",background:item.decision==="present"?"rgba(47,133,90,0.12)":"var(--inputBg)",color:"#2F855A",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:busy?"default":"pointer",opacity:busy?0.6:1}}>
+                        ✓ Present
+                      </button>
+                      <button disabled={busy} onClick={()=>setEntryEditor({wineId:item.wineId,mode:"missing",missingAction:item.missingAction||"keep"})} style={{padding:"8px 10px",borderRadius:10,border:"1.5px solid rgba(184,50,50,0.35)",background:item.decision==="missing"?"rgba(184,50,50,0.12)":"var(--inputBg)",color:"#B83232",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:busy?"default":"pointer",opacity:busy?0.6:1}}>
+                        ✕ Missing
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      <Modal show={showIntro} onClose={()=>{setShowIntro(false);try{localStorage.setItem(AUDIT_INTRO_KEY,"1");}catch{}}} wide>
+        <ModalHeader title="How Audit Mode Works" onClose={()=>{setShowIntro(false);try{localStorage.setItem(AUDIT_INTRO_KEY,"1");}catch{}}}/>
+        <div style={{display:"grid",gap:8,marginBottom:16}}>
+          {[
+            "Pick one location or audit all locations together.",
+            "Mark each wine as Present or Missing and record counted quantity.",
+            "When finished, choose whether to sync the cellar to match your audit.",
+          ].map((txt,i)=>(
+            <div key={i} style={{background:"var(--inputBg)",border:"1px solid var(--border)",borderRadius:12,padding:"10px 12px",fontSize:13,color:"var(--text)",lineHeight:1.55,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+              {txt}
+            </div>
+          ))}
+        </div>
+        <div style={{display:"flex",gap:8}}>
+          <Btn variant="secondary" onClick={()=>{setShowIntro(false);try{localStorage.setItem(AUDIT_INTRO_KEY,"1");}catch{}}} full>Close</Btn>
+          <Btn onClick={()=>{setShowIntro(false);try{localStorage.setItem(AUDIT_INTRO_KEY,"1");}catch{};openStartAudit();}} full>Start Audit</Btn>
+        </div>
+      </Modal>
+
+      <Modal show={setupOpen} onClose={()=>setSetupOpen(false)} wide>
+        <ModalHeader title="Start New Audit" onClose={()=>setSetupOpen(false)}/>
+        <Field label="Audit Name" value={setupName} onChange={setSetupName} placeholder={nowAuditLabel()}/>
+        <div style={{fontSize:11,fontWeight:700,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Locations</div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
+          <button onClick={()=>setSetupAll(v=>!v)} style={{padding:"7px 12px",borderRadius:20,border:setupAll?"1.5px solid var(--accent)":"1.5px solid var(--border)",background:setupAll?"rgba(var(--accentRgb),0.12)":"var(--inputBg)",color:setupAll?"var(--accent)":"var(--text)",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+            All Locations
+          </button>
+          {locations.map(loc=>{
+            const active=setupLocations.some(x=>locationKey(x)===locationKey(loc));
+            return(
+              <button key={loc} disabled={setupAll} onClick={()=>toggleSetupLocation(loc)} style={{padding:"7px 12px",borderRadius:20,border:active?"1.5px solid var(--accent)":"1.5px solid var(--border)",background:active?"rgba(var(--accentRgb),0.12)":"var(--inputBg)",color:active?"var(--accent)":"var(--text)",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:setupAll?0.45:1,cursor:setupAll?"default":"pointer"}}>
+                {loc}
+              </button>
+            );
+          })}
+        </div>
+        <button onClick={()=>setSetupRealtime(v=>!v)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"10px 12px",borderRadius:12,border:`1.5px solid ${setupRealtime?"var(--accent)":"var(--border)"}`,background:setupRealtime?"rgba(var(--accentRgb),0.08)":"var(--inputBg)",width:"100%",marginBottom:16,fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:13,color:"var(--text)",fontWeight:600,cursor:"pointer"}}>
+          <span>Update cellar in real time while auditing</span>
+          <span style={{fontSize:15,color:setupRealtime?"var(--accent)":"var(--sub)"}}>{setupRealtime?"✓":"○"}</span>
+        </button>
+        <div style={{display:"flex",gap:8}}>
+          <Btn variant="secondary" onClick={()=>setSetupOpen(false)} full>Cancel</Btn>
+          <Btn onClick={createAudit} full>Create Audit</Btn>
+        </div>
+      </Modal>
+
+      <Modal show={!!entryEditor} onClose={()=>setEntryEditor(null)}>
+        <ModalHeader title={entryEditor?.mode==="missing"?"Mark Missing":"Confirm Present"} onClose={()=>setEntryEditor(null)}/>
+        {entryEditor?.mode==="present"?(
+          <>
+            <SelField label="Count Type" value={entryEditor.countType||"bottles"} onChange={v=>setEntryEditor(p=>({...p,countType:v}))} options={[{value:"bottles",label:"Bottles"},{value:"boxes",label:"Boxes"}]}/>
+            <Field label="Counted Amount" value={entryEditor.countedAmount||""} onChange={v=>setEntryEditor(p=>({...p,countedAmount:v.replace(/[^0-9]/g,"")}))} type="number" placeholder="0"/>
+            {entryEditor.countType==="boxes"&&(
+              <div style={{fontSize:12,color:"var(--sub)",marginBottom:14,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+                Box counts are saved in audit history and not converted to bottles automatically.
+              </div>
+            )}
+          </>
+        ):(
+          <>
+            <div style={{fontSize:12,color:"var(--sub)",marginBottom:10,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Choose what should happen if this wine is not physically present:</div>
+            <div style={{display:"grid",gap:8,marginBottom:14}}>
+              <button onClick={()=>setEntryEditor(p=>({...p,missingAction:"keep"}))} style={{padding:"10px 12px",borderRadius:11,border:entryEditor?.missingAction==="keep"?"1.5px solid var(--accent)":"1.5px solid var(--border)",background:entryEditor?.missingAction==="keep"?"rgba(var(--accentRgb),0.08)":"var(--inputBg)",fontSize:13,fontWeight:700,color:entryEditor?.missingAction==="keep"?"var(--accent)":"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Keep wine in cellar, mark missing in audit</button>
+              <button onClick={()=>setEntryEditor(p=>({...p,missingAction:"remove"}))} style={{padding:"10px 12px",borderRadius:11,border:entryEditor?.missingAction==="remove"?"1.5px solid rgba(184,50,50,0.5)":"1.5px solid var(--border)",background:entryEditor?.missingAction==="remove"?"rgba(184,50,50,0.1)":"var(--inputBg)",fontSize:13,fontWeight:700,color:entryEditor?.missingAction==="remove"?"#B83232":"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Remove wine from cellar</button>
+            </div>
+          </>
+        )}
+        <div style={{display:"flex",gap:8}}>
+          <Btn variant="secondary" onClick={()=>setEntryEditor(null)} full>Cancel</Btn>
+          <Btn onClick={saveEntryEditor} full disabled={busy}>Save</Btn>
+        </div>
+      </Modal>
+
+      <Modal show={completeOpen} onClose={()=>setCompleteOpen(false)}>
+        <ModalHeader title="Complete Audit" onClose={()=>setCompleteOpen(false)}/>
+        <button onClick={()=>setApplyOnComplete(v=>!v)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"10px 12px",borderRadius:12,border:`1.5px solid ${applyOnComplete?"var(--accent)":"var(--border)"}`,background:applyOnComplete?"rgba(var(--accentRgb),0.08)":"var(--inputBg)",width:"100%",marginBottom:12,fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:13,color:"var(--text)",fontWeight:600,cursor:"pointer"}}>
+          <span>Update cellar quantities based on this audit</span>
+          <span style={{fontSize:15,color:applyOnComplete?"var(--accent)":"var(--sub)"}}>{applyOnComplete?"✓":"○"}</span>
+        </button>
+        <div style={{fontSize:12,color:"var(--sub)",marginBottom:16,fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.6}}>
+          {applyOnComplete
+            ?"Bottle counts and remove-actions will sync to your cellar."
+            :"Audit results will be saved as history only."}
+        </div>
+        <div style={{display:"flex",gap:8}}>
+          <Btn variant="secondary" onClick={()=>setCompleteOpen(false)} full>Cancel</Btn>
+          <Btn onClick={completeAudit} full disabled={busy}>Complete</Btn>
+        </div>
       </Modal>
     </div>
   );
@@ -2458,7 +2959,7 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile})=>{
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.47 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.48 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
@@ -2479,7 +2980,7 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile})=>{
 };
 
 /* ── TABS ─────────────────────────────────────────────────────── */
-const TABS=[{id:"collection",label:"Cellar",ic:"wine"},{id:"ai",label:"Sommelier",ic:"chat"},{id:"notes",label:"Journal",ic:"note"},{id:"profile",label:"Winery",ic:"user"}];
+const TABS=[{id:"collection",label:"Cellar",ic:"wine"},{id:"audit",label:"Audit",ic:"audit"},{id:"ai",label:"Sommelier",ic:"chat"},{id:"notes",label:"Journal",ic:"note"},{id:"profile",label:"Winery",ic:"user"}];
 
 /* ── APP ──────────────────────────────────────────────────────── */
 export default function App(){
@@ -2811,6 +3312,18 @@ export default function App(){
     if(updated) await db.upsert("wines",toDb.wine(updated));
     return updated;
   };
+  const setWineBottleCount=async(id,count)=>{
+    let updated=null;
+    setWines(prev=>prev.map(w=>{
+      if(w.id!==id) return w;
+      const nextLeft=Math.max(0,Math.round(safeNum(count)||0));
+      const nextTotal=Math.max(nextLeft,getTotalPurchased(w));
+      updated={...w,bottles:nextLeft,cellarMeta:{...(w.cellarMeta||{}),totalPurchased:nextTotal}};
+      return updated;
+    }));
+    if(updated) await db.upsert("wines",toDb.wine(updated));
+    return updated;
+  };
   const addSavedLocation=loc=>setSavedLocations(prev=>{
     const normalized=normalizeLocation(loc);
     if(!normalized) return prev;
@@ -2949,6 +3462,7 @@ export default function App(){
   const screens=(
     <>
       {tab==="collection"&&<CollectionScreen wines={wines} onAdd={addWine} onUpdate={updWine} onDelete={delWine} onAdjustConsumption={adjustWineConsumption} desktop={isDesktop} savedLocations={savedLocations} onSaveLocation={addSavedLocation} onRemoveLocation={removeSavedLocation} deletedWines={deletedWines} onRestoreDeleted={restoreDeletedWine} onDismissDeleted={dismissDeletedWine}/>}
+      {tab==="audit"&&<AuditScreen wines={wines} desktop={isDesktop} onSetWineBottles={setWineBottleCount} onRemoveWine={delWine}/>}
       {tab==="ai"&&<AIScreen wines={wines}/>}
       {tab==="notes"&&<JournalScreen wines={wines} onUpdate={updWine} desktop={isDesktop}/>}
       {tab==="profile"&&<ProfileScreen wines={wines} notes={notes} theme={themeMode} setTheme={setThemeMode} profile={profile} setProfile={setProfile}/>}
