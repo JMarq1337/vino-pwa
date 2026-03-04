@@ -1492,17 +1492,12 @@ const JournalWineCard=({wine,onClick})=>{
   const tc=WINE_TYPE_COLORS[type]||WINE_TYPE_COLORS.Other;
   const geo=deriveRegionCountry(wine.origin||"");
   const hasJournalText=!!((wine.tastingNotes||"").trim()||(wine.review||"").trim()||(wine.notes||"").trim());
-  const journalStatusStyle=hasJournalText
-    ? {
-        border:"1px solid rgba(var(--accentRgb),0.28)",
-        background:"rgba(var(--accentRgb),0.14)",
-        color:"var(--accent)"
-      }
-    : {
-        border:"1px solid var(--border)",
-        background:"var(--inputBg)",
-        color:"var(--sub)"
-      };
+  const journalStatusStyle={
+    border:"1px solid var(--border)",
+    background:"var(--surface)",
+    color:"var(--text)",
+    opacity:0.88
+  };
   return(
     <div onClick={onClick} style={{background:"var(--card)",borderRadius:18,padding:"14px 16px",cursor:"pointer",border:"1px solid var(--border)",marginBottom:10,transition:"transform 0.15s,box-shadow 0.15s",boxShadow:"0 2px 8px var(--shadow)"}} onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 8px 24px var(--shadow)";}} onMouseLeave={e=>{e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="0 2px 8px var(--shadow)";}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,marginBottom:7}}>
@@ -1511,13 +1506,15 @@ const JournalWineCard=({wine,onClick})=>{
       </div>
       <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:8}}>
         <WineTypePill type={type} label={varietal}/>
-        <div
-          title={hasJournalText?"Journal entry exists":"No journal entry yet"}
-          aria-label={hasJournalText?"Journal entry exists":"No journal entry yet"}
-          style={{width:24,height:24,borderRadius:999,display:"inline-flex",alignItems:"center",justifyContent:"center",...journalStatusStyle}}
-        >
-          <Icon n="note" size={13} color="currentColor"/>
-        </div>
+        {hasJournalText&&(
+          <div
+            title="Journal entry exists"
+            aria-label="Journal entry exists"
+            style={{width:24,height:24,borderRadius:999,display:"inline-flex",alignItems:"center",justifyContent:"center",...journalStatusStyle}}
+          >
+            <Icon n="note" size={13} color="currentColor"/>
+          </div>
+        )}
       </div>
       {(geo.region||geo.country)&&<div style={{fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{geo.region||geo.country}</div>}
       <div style={{marginTop:10,height:2,borderRadius:2,background:tc.dot,opacity:0.45}}/>
@@ -2390,7 +2387,7 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.40 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.41 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
