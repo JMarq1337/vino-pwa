@@ -739,7 +739,6 @@ const WineCard=({wine,onClick})=>{
   const readinessTag=!wine.wishlist&&ready.key!=="none"?ready.label:null;
   const rrpText=!wine.wishlist&&rrpPerBottle!=null&&rrpPerBottle>0?`RRP $${rrpPerBottle.toFixed(2)}`:null;
   const paidText=!wine.wishlist&&paidPerBottle!=null&&paidPerBottle>0?`Paid $${paidPerBottle.toFixed(2)}`:null;
-  const showPaidTag=!!paidText&&(!rrpPerBottle||Math.abs(rrpPerBottle-paidPerBottle)>0.009);
   const footerText=[locationTag||geo.country,addedTag].filter(Boolean).join(" · ");
   const quickTagStyle={padding:"3px 8px",borderRadius:20,fontSize:11,fontWeight:700,color:"var(--text)",background:"var(--inputBg)",fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap"};
   return(
@@ -763,7 +762,7 @@ const WineCard=({wine,onClick})=>{
           <WineTypePill type={type} label={varietal}/>
           {yearTag&&<span style={quickTagStyle}>{yearTag}</span>}
           {rrpText&&<span style={{...quickTagStyle,background:"rgba(var(--accentRgb),0.13)",color:"var(--accent)",fontWeight:800}}>{rrpText}</span>}
-          {showPaidTag&&<span style={{...quickTagStyle,background:"var(--card)",border:"1px solid var(--border)"}}>{paidText}</span>}
+          {paidText&&<span style={{...quickTagStyle,background:"var(--card)",border:"1px solid var(--border)"}}>{paidText}</span>}
           {readinessTag&&<span style={{...quickTagStyle,color:"#fff",background:ready.color}}>{ready.key==="ready"?"Ready":ready.label}</span>}
         </div>
         {(footerText||wine.rating>0)&&(
@@ -906,13 +905,18 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
   const calculatedPricePerBottle=(paidAmount!=null&&paidAmount>0&&paidForBottles>0)
     ? Number((paidAmount/paidForBottles).toFixed(2))
     : null;
-  const manualPricePerBottle=safeNum(f.pricePerBottle);
+  const existingPaidPerBottle=safeNum(initial?.cellarMeta?.pricePerBottle);
+  const existingRrpPerBottle=safeNum(initial?.cellarMeta?.rrp);
+  const existingTotalPaid=safeNum(initial?.cellarMeta?.totalPaid);
   const manualRrp=safeNum(f.rrp);
-  const finalPricePerBottle=(manualPricePerBottle!=null&&manualPricePerBottle>0)?manualPricePerBottle:calculatedPricePerBottle;
-  const finalRrp=(manualRrp!=null&&manualRrp>0)?manualRrp:finalPricePerBottle;
+  const finalPricePerBottle=calculatedPricePerBottle??existingPaidPerBottle??null;
+  const autoRrpPerBottle=calculatedPricePerBottle??finalPricePerBottle;
+  const finalRrp=(manualRrp!=null&&manualRrp>0)?manualRrp:(autoRrpPerBottle??existingRrpPerBottle??null);
   const finalTotalPaid=(paidAmount!=null&&paidAmount>0)
     ? paidAmount
-    : (finalPricePerBottle!=null&&paidForBottles>0?Number((finalPricePerBottle*paidForBottles).toFixed(2)):null);
+    : (existingTotalPaid!=null&&existingTotalPaid>0
+      ? existingTotalPaid
+      : (finalPricePerBottle!=null&&paidForBottles>0?Number((finalPricePerBottle*paidForBottles).toFixed(2)):null));
   const handleQ=v=>{setQ(v);set("name",v);setSugs(v.length>=2?fuzzySearch(v):[]);};
   const pickSug=w=>{setF(p=>({...p,name:w.name,origin:w.origin||"",grape:w.grape||"",alcohol:w.alcohol?.toString()||"",tastingNotes:w.tastingNotes||""}));setQ(w.name);setSugs([]);setShowFields(true);};
   const handleLocationSelect=value=>{
@@ -934,7 +938,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
     const finalAddedDate=f.addedDate||initial?.cellarMeta?.addedDate||todayIsoLocal();
     const wt=guessWineType(f.grape,f.name);
     const tc=WINE_TYPE_COLORS[wt]||WINE_TYPE_COLORS.Other;
-    const {addPurchased:_addIgnore,locationSection:_locSectionIgnore,addedDate:_addedIgnore,priceForBottles:_priceCountIgnore,...payload}=f;
+    const {addPurchased:_addIgnore,locationSection:_locSectionIgnore,addedDate:_addedIgnore,priceForBottles:_priceCountIgnore,pricePerBottle:_pricePerBottleIgnore,...payload}=f;
     if(!isWishlist&&locationMode==="custom"&&rememberLocation&&finalLocation){
       onSaveLocation?.(finalLocation);
     }
@@ -1060,22 +1064,19 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
                 <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Price Setup</div>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
                   <Field label="Amount Paid" value={f.totalPaid} onChange={v=>set("totalPaid",v)} type="number" placeholder="179.5" optional/>
-                  <Field label="Paid For Bottles" value={f.priceForBottles} onChange={v=>set("priceForBottles",v.replace(/[^0-9]/g,""))} type="number" placeholder="6" optional/>
+                  <Field label="Bottles Paid For" value={f.priceForBottles} onChange={v=>set("priceForBottles",v.replace(/[^0-9]/g,""))} type="number" placeholder="6" optional/>
                 </div>
                 <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:2,marginBottom:10}}>
                   <span style={{padding:"4px 9px",borderRadius:16,background:"var(--inputBg)",border:"1px solid var(--border)",fontSize:12,color:"var(--text)",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
-                    Calculated paid/bottle: {calculatedPricePerBottle!=null?`$${calculatedPricePerBottle.toFixed(2)}`:"—"}
+                    Calculated paid/bottle: {(calculatedPricePerBottle??existingPaidPerBottle)!=null?`$${Number(calculatedPricePerBottle??existingPaidPerBottle).toFixed(2)}`:"—"}
                   </span>
                   <span style={{padding:"4px 9px",borderRadius:16,background:"rgba(var(--accentRgb),0.12)",border:"1px solid rgba(var(--accentRgb),0.22)",fontSize:12,color:"var(--accent)",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
-                    RRP on save: {finalRrp!=null?`$${Number(finalRrp).toFixed(2)}`:"—"}
+                    Calculated RRP/bottle: {autoRrpPerBottle!=null?`$${Number(autoRrpPerBottle).toFixed(2)}`:"—"}
                   </span>
                 </div>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                  <Field label="Paid / Bottle (optional)" value={f.pricePerBottle} onChange={v=>set("pricePerBottle",v)} type="number" placeholder="29.9" optional/>
-                  <Field label="RRP / Bottle (optional)" value={f.rrp} onChange={v=>set("rrp",v)} type="number" placeholder="40" optional/>
-                </div>
+                <Field label="RRP / Bottle (optional override)" value={f.rrp} onChange={v=>set("rrp",v)} type="number" placeholder="40" optional/>
                 <div style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.55}}>
-                  If RRP is left blank, it will automatically use the paid per bottle value.
+                  If RRP is left blank, it will use the calculated paid per bottle automatically.
                 </div>
               </div>
             </>
@@ -2273,7 +2274,7 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.38 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.39 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
