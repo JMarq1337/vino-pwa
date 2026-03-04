@@ -2074,13 +2074,38 @@ const AuditScreen=({wines,desktop,onSetWineBottles,onRemoveWine,onRevokeAudit})=
 
       <Modal show={showIntro} onClose={()=>setShowIntro(false)} wide>
         <ModalHeader title="How Audit Mode Works" onClose={()=>setShowIntro(false)}/>
-        <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:"12px 13px",marginBottom:16}}>
-          <div style={{fontSize:13,color:"var(--text)",lineHeight:1.65,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
-            Audit mode helps you verify what is physically in your cellar. Start by selecting one or more locations, then check each wine as <strong>Present</strong> or <strong>Missing</strong>. You can record bottles or boxes, keep missing wines flagged, or remove missing wines from inventory.
+        <div style={{borderRadius:14,padding:"14px 14px",marginBottom:10,background:"linear-gradient(145deg,rgba(var(--accentRgb),0.2) 0%,rgba(var(--accentRgb),0.05) 100%)",border:"1px solid rgba(var(--accentRgb),0.3)"}}>
+          <div style={{fontSize:11,fontWeight:800,letterSpacing:"1.1px",textTransform:"uppercase",color:"var(--accent)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:5}}>Audit Flow</div>
+          <div style={{fontSize:18,fontWeight:800,color:"var(--text)",lineHeight:1.25,fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:5}}>
+            Verify Real-World Stock In 3 Clear Steps
           </div>
-          <div style={{fontSize:13,color:"var(--text)",lineHeight:1.65,fontFamily:"'Plus Jakarta Sans',sans-serif",marginTop:10}}>
-            At the end, choose whether the cellar should update from your audit results. Every step autosaves so you can safely leave and continue later.
+          <div style={{fontSize:13,color:"var(--sub)",lineHeight:1.55,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+            Quick, autosaved checks so your cellar matches what you actually have.
           </div>
+        </div>
+        <div style={{display:"grid",gap:8,marginBottom:14}}>
+          {[
+            ["Select Locations","Choose one location or audit your full cellar."],
+            ["Mark Each Wine","Set each item as Present or Missing and record quantity."],
+            ["Apply & Save","Finish the audit and choose if inventory should update."],
+          ].map(([title,desc],idx)=>(
+            <div key={title} style={{display:"flex",gap:10,alignItems:"flex-start",padding:"10px 12px",borderRadius:12,background:"rgba(var(--accentRgb),0.08)",border:"1px solid rgba(var(--accentRgb),0.2)"}}>
+              <div style={{width:22,height:22,borderRadius:"50%",background:"var(--accent)",color:"#fff",fontSize:11,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Plus Jakarta Sans',sans-serif",flexShrink:0,marginTop:1}}>
+                {idx+1}
+              </div>
+              <div>
+                <div style={{fontSize:12,fontWeight:800,letterSpacing:"0.6px",textTransform:"uppercase",color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:2}}>
+                  {title}
+                </div>
+                <div style={{fontSize:12.5,color:"var(--sub)",lineHeight:1.55,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+                  {desc}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div style={{padding:"9px 11px",borderRadius:11,background:"var(--inputBg)",border:"1px solid var(--border)",fontSize:12,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:16}}>
+          <strong>Autosave is always on:</strong> you can close the app and continue the audit later.
         </div>
         <div style={{display:"flex",gap:8}}>
           <Btn variant="secondary" onClick={()=>setShowIntro(false)} full>Close</Btn>
@@ -3174,7 +3199,7 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile})=>{
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.50 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.51 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
