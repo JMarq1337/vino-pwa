@@ -2013,17 +2013,22 @@ const AuditScreen=({wines,desktop,onSetWineBottles,onRemoveWine,onRevokeAudit})=
               {(activeAudit.locations||[]).map(loc=><span key={loc} style={{padding:"3px 8px",borderRadius:20,fontSize:11,fontWeight:700,color:"#FAF2EC",background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.16)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{loc}</span>)}
             </div>
             {!activeAudit.realtimeSync&&(
-              <div style={{fontSize:11.5,color:"rgba(255,255,255,0.76)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:8,lineHeight:1.55}}>
-                Apply Pending Updates syncs your audit changes to cellar quantities when you are not using real-time sync.
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"6px 9px",borderRadius:10,background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.14)",marginBottom:9}}>
+                <div style={{fontSize:11.5,color:"rgba(255,255,255,0.83)",fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.45}}>
+                  Manual sync mode. {pendingUnsyncedCount>0?`${pendingUnsyncedCount} pending update${pendingUnsyncedCount===1?"":"s"}.`:"No pending updates."}
+                </div>
+                <div style={{padding:"2px 7px",borderRadius:999,fontSize:10,fontWeight:700,color:"#FDF6F1",background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.14)",fontFamily:"'Plus Jakarta Sans',sans-serif",flexShrink:0}}>
+                  Manual
+                </div>
               </div>
             )}
-            <div style={{display:"grid",gridTemplateColumns:(!activeAudit.realtimeSync&&desktop)?"1fr 1fr":"1fr",gap:8}}>
+            <div style={{display:"flex",flexWrap:"wrap",gap:7,justifyContent:"flex-end"}}>
               {!activeAudit.realtimeSync&&(
-                <button disabled={busy||pendingUnsyncedCount===0} onClick={()=>applyAuditChanges(activeAudit)} style={{padding:"9px 11px",borderRadius:11,border:"1px solid rgba(255,255,255,0.24)",background:"rgba(255,255,255,0.08)",color:"#FFF7F3",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:(busy||pendingUnsyncedCount===0)?"default":"pointer",opacity:(busy||pendingUnsyncedCount===0)?0.45:1}}>
+                <button disabled={busy||pendingUnsyncedCount===0} onClick={()=>applyAuditChanges(activeAudit)} style={{padding:"7px 10px",borderRadius:10,border:"1px solid rgba(255,255,255,0.24)",background:"rgba(255,255,255,0.08)",color:"#FFF7F3",fontSize:11.5,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:(busy||pendingUnsyncedCount===0)?"default":"pointer",opacity:(busy||pendingUnsyncedCount===0)?0.45:1,whiteSpace:"nowrap"}}>
                   Apply Pending Updates {pendingUnsyncedCount>0?`(${pendingUnsyncedCount})`:""}
                 </button>
               )}
-              <button disabled={busy} onClick={()=>setCompleteOpen(true)} style={{padding:"9px 11px",borderRadius:11,border:"none",background:"var(--accent)",color:"#fff",fontSize:12,fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:busy?"default":"pointer",opacity:busy?0.7:1,boxShadow:"0 6px 16px rgba(var(--accentRgb),0.35)"}}>
+              <button disabled={busy} onClick={()=>setCompleteOpen(true)} style={{padding:"7px 11px",borderRadius:10,border:"none",background:"var(--accent)",color:"#fff",fontSize:11.5,fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:busy?"default":"pointer",opacity:busy?0.7:1,boxShadow:"0 6px 16px rgba(var(--accentRgb),0.35)",whiteSpace:"nowrap"}}>
                 Complete Audit
               </button>
             </div>
@@ -3213,7 +3218,7 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile})=>{
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.52 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.53 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
