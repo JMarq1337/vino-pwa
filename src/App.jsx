@@ -1682,13 +1682,18 @@ const AuditScreen=({wines,desktop,onSetWineBottles,onRemoveWine,onRevokeAudit})=
     }
   };
   const upsertAudit=(auditId,updater)=>{
-    let nextAudit=null;
-    setAudits(prev=>prev.map(a=>{
-      if(a.id!==auditId) return a;
-      nextAudit=updater(a);
-      return nextAudit;
-    }));
-    if(nextAudit) syncAuditRow(nextAudit);
+    setAudits(prev=>{
+      let changed=null;
+      const next=prev.map(a=>{
+        if(a.id!==auditId) return a;
+        changed=normalizeAuditRecord(updater(a));
+        return changed;
+      });
+      if(changed){
+        Promise.resolve().then(()=>syncAuditRow(changed));
+      }
+      return next;
+    });
   };
   const patchAuditItem=(auditId,wineId,patch)=>{
     upsertAudit(auditId,audit=>{
@@ -2013,12 +2018,12 @@ const AuditScreen=({wines,desktop,onSetWineBottles,onRemoveWine,onRevokeAudit})=
               {(activeAudit.locations||[]).map(loc=><span key={loc} style={{padding:"3px 8px",borderRadius:20,fontSize:11,fontWeight:700,color:"#FAF2EC",background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.16)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{loc}</span>)}
             </div>
             {!activeAudit.realtimeSync&&(
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"6px 9px",borderRadius:10,background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.14)",marginBottom:9}}>
-                <div style={{fontSize:11.5,color:"rgba(255,255,255,0.83)",fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.45}}>
-                  Manual sync mode. {pendingUnsyncedCount>0?`${pendingUnsyncedCount} pending update${pendingUnsyncedCount===1?"":"s"}.`:"No pending updates."}
+              <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:9,flexWrap:"wrap"}}>
+                <div style={{display:"inline-flex",alignItems:"center",gap:6,padding:"4px 8px",borderRadius:999,background:"rgba(255,255,255,0.08)",backdropFilter:"blur(10px)",WebkitBackdropFilter:"blur(10px)",border:"1px solid rgba(255,255,255,0.16)"}}>
+                  <span style={{fontSize:10.5,fontWeight:800,letterSpacing:"0.6px",textTransform:"uppercase",color:"#FFF7F2",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Manual Sync</span>
                 </div>
-                <div style={{padding:"2px 7px",borderRadius:999,fontSize:10,fontWeight:700,color:"#FDF6F1",background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.14)",fontFamily:"'Plus Jakarta Sans',sans-serif",flexShrink:0}}>
-                  Manual
+                <div style={{fontSize:11.5,color:"rgba(255,255,255,0.82)",fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.45}}>
+                  {pendingUnsyncedCount>0?`${pendingUnsyncedCount} pending update${pendingUnsyncedCount===1?"":"s"}`:"No pending updates"}
                 </div>
               </div>
             )}
@@ -3218,7 +3223,7 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile})=>{
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.53 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.54 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
