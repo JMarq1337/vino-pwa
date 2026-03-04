@@ -56,6 +56,33 @@ const db = {
       return{name:p.name,description:p.description,avatar:p.avatar||null,surname:p.surname||"",cellarName:p.cellar_name||"",bio:p.bio||"",country:p.country||"",profileBg:p.profile_bg||""};
     }
     catch{return null;}
+  },
+  async listAudits(){
+    try{
+      const r=await fetch(`${supa("audits")}?order=updated_at.desc`,{headers:BH});
+      if(!r.ok) return {ok:false,rows:[],error:await r.text()};
+      return {ok:true,rows:await r.json()};
+    }catch(e){
+      return {ok:false,rows:[],error:String(e)};
+    }
+  },
+  async upsertAudit(row){
+    try{
+      const r=await fetch(supa("audits"),{method:"POST",headers:UH,body:JSON.stringify(row)});
+      if(!r.ok) return {ok:false,error:await r.text()};
+      return {ok:true};
+    }catch(e){
+      return {ok:false,error:String(e)};
+    }
+  },
+  async delAudit(id){
+    try{
+      const r=await fetch(`${supa("audits")}?id=eq.${encodeURIComponent(id)}`,{method:"DELETE",headers:BH});
+      if(!r.ok) return {ok:false,error:await r.text()};
+      return {ok:true};
+    }catch(e){
+      return {ok:false,error:String(e)};
+    }
   }
 };
 
@@ -252,6 +279,56 @@ const readDeletedWines=()=>{
       .map(item=>({wine:item.wine,deletedAt:item.deletedAt||""}));
   }catch{return[];}
 };
+const normalizeAuditItem = item => {
+  if(!item||!item.wineId) return null;
+  return {
+    ...item,
+    decision:item.decision==="present"||item.decision==="missing"?item.decision:"pending",
+    countType:item.countType==="boxes"?"boxes":"bottles",
+    countedAmount:Math.max(0,Math.round(safeNum(item.countedAmount)||0)),
+    missingAction:item.missingAction==="remove"?"remove":"keep",
+    synced:!!item.synced,
+    beforeWine:item.beforeWine&&item.beforeWine.id?item.beforeWine:null,
+  };
+};
+const normalizeAuditRecord = a => {
+  const rawItems=Object.entries(a.items||{})
+    .map(([key,item])=>[key,normalizeAuditItem(item)])
+    .filter(([,item])=>!!item);
+  return {
+    id:a.id,
+    name:a.name||"Audit",
+    createdAt:a.createdAt||new Date().toISOString(),
+    updatedAt:a.updatedAt||a.createdAt||new Date().toISOString(),
+    completedAt:a.completedAt||"",
+    status:a.status==="completed"?"completed":a.status==="revoked"?"revoked":"in_progress",
+    realtimeSync:!!a.realtimeSync,
+    locations:Array.isArray(a.locations)?dedupeLocations(a.locations):[],
+    items:Object.fromEntries(rawItems),
+  };
+};
+const fromDbAudit = row => normalizeAuditRecord({
+  id:row.id,
+  name:row.name,
+  createdAt:row.created_at,
+  updatedAt:row.updated_at,
+  completedAt:row.completed_at||"",
+  status:row.status,
+  realtimeSync:!!row.realtime_sync,
+  locations:Array.isArray(row.locations)?row.locations:[],
+  items:row.items&&typeof row.items==="object"?row.items:{},
+});
+const toDbAudit = audit => ({
+  id:audit.id,
+  name:audit.name,
+  status:audit.status,
+  realtime_sync:!!audit.realtimeSync,
+  locations:Array.isArray(audit.locations)?audit.locations:[],
+  items:audit.items||{},
+  created_at:audit.createdAt||new Date().toISOString(),
+  updated_at:new Date().toISOString(),
+  completed_at:audit.completedAt||null,
+});
 const readAudits=()=>{
   try{
     const raw=localStorage.getItem(AUDITS_KEY);
@@ -260,32 +337,7 @@ const readAudits=()=>{
     if(!Array.isArray(parsed)) return [];
     return parsed
       .filter(a=>a&&a.id&&a.items&&typeof a.items==="object")
-      .map(a=>({
-        id:a.id,
-        name:a.name||"Audit",
-        createdAt:a.createdAt||new Date().toISOString(),
-        updatedAt:a.updatedAt||a.createdAt||new Date().toISOString(),
-        completedAt:a.completedAt||"",
-        status:a.status==="completed"?"completed":a.status==="revoked"?"revoked":"in_progress",
-        realtimeSync:!!a.realtimeSync,
-        locations:Array.isArray(a.locations)?dedupeLocations(a.locations):[],
-        items:Object.fromEntries(
-          Object.entries(a.items||{})
-            .filter(([,item])=>item&&item.wineId)
-            .map(([key,item])=>[
-              key,
-              {
-                ...item,
-                decision:item.decision==="present"||item.decision==="missing"?item.decision:"pending",
-                countType:item.countType==="boxes"?"boxes":"bottles",
-                countedAmount:Math.max(0,Math.round(safeNum(item.countedAmount)||0)),
-                missingAction:item.missingAction==="remove"?"remove":"keep",
-                synced:!!item.synced,
-                beforeWine:item.beforeWine&&item.beforeWine.id?item.beforeWine:null,
-              }
-            ])
-        ),
-      }));
+      .map(normalizeAuditRecord);
   }catch{return[];}
 };
 
@@ -1542,6 +1594,7 @@ const AuditScreen=({wines,desktop,onSetWineBottles,onRemoveWine,onRevokeAudit})=
   const [audits,setAudits]=useState(()=>readAudits());
   const [activeId,setActiveId]=useState(null);
   const [showIntro,setShowIntro]=useState(true);
+  const [syncState,setSyncState]=useState("checking"); // checking | ready | unavailable
   const [setupOpen,setSetupOpen]=useState(false);
   const [setupName,setSetupName]=useState("");
   const [setupAll,setSetupAll]=useState(true);
@@ -1586,6 +1639,32 @@ const AuditScreen=({wines,desktop,onSetWineBottles,onRemoveWine,onRevokeAudit})=
     try{localStorage.setItem(AUDITS_KEY,JSON.stringify(audits.slice(0,60)))}catch{}
   },[audits]);
   useEffect(()=>{
+    let cancelled=false;
+    const localAudits=readAudits();
+    setAudits(localAudits);
+    async function loadRemote(){
+      const res=await db.listAudits();
+      if(cancelled) return;
+      if(!res.ok){
+        setSyncState("unavailable");
+        return;
+      }
+      setSyncState("ready");
+      const remote=(res.rows||[]).map(fromDbAudit).filter(a=>a&&a.id);
+      const mergedById=new Map(remote.map(a=>[a.id,a]));
+      const localOnly=localAudits.filter(a=>!mergedById.has(a.id));
+      if(localOnly.length){
+        await Promise.all(localOnly.map(a=>db.upsertAudit(toDbAudit(a))));
+        localOnly.forEach(a=>mergedById.set(a.id,a));
+      }
+      if(cancelled) return;
+      const merged=[...mergedById.values()].sort((a,b)=>(b.updatedAt||"").localeCompare(a.updatedAt||""));
+      setAudits(merged);
+    }
+    loadRemote();
+    return()=>{cancelled=true;};
+  },[]);
+  useEffect(()=>{
     if(activeId&&!audits.some(a=>a.id===activeId)) setActiveId(null);
   },[audits,activeId]);
   useEffect(()=>{
@@ -1594,7 +1673,23 @@ const AuditScreen=({wines,desktop,onSetWineBottles,onRemoveWine,onRevokeAudit})=
     return()=>clearTimeout(t);
   },[statusMsg]);
 
-  const upsertAudit=(auditId,updater)=>setAudits(prev=>prev.map(a=>a.id===auditId?updater(a):a));
+  const syncAuditRow=async audit=>{
+    if(syncState!=="ready") return;
+    const res=await db.upsertAudit(toDbAudit(audit));
+    if(!res.ok){
+      console.error("audit sync failed",res.error);
+      setSyncState("unavailable");
+    }
+  };
+  const upsertAudit=(auditId,updater)=>{
+    let nextAudit=null;
+    setAudits(prev=>prev.map(a=>{
+      if(a.id!==auditId) return a;
+      nextAudit=updater(a);
+      return nextAudit;
+    }));
+    if(nextAudit) syncAuditRow(nextAudit);
+  };
   const patchAuditItem=(auditId,wineId,patch)=>{
     upsertAudit(auditId,audit=>{
       const nextItem={...(audit.items?.[wineId]||{}),...patch,updatedAt:new Date().toISOString()};
@@ -1681,14 +1776,22 @@ const AuditScreen=({wines,desktop,onSetWineBottles,onRemoveWine,onRevokeAudit})=
       items,
     };
     setAudits(prev=>[created,...prev]);
+    syncAuditRow(created);
     setActiveId(created.id);
     setSetupOpen(false);
     setStatusMsg(`Started ${created.name}.`);
   };
-  const deleteAudit=()=>{
+  const deleteAudit=async()=>{
     if(!confirmDeleteId) return;
     setAudits(prev=>prev.filter(a=>a.id!==confirmDeleteId));
     if(activeId===confirmDeleteId) setActiveId(null);
+    if(syncState==="ready"){
+      const res=await db.delAudit(confirmDeleteId);
+      if(!res.ok){
+        console.error("audit delete sync failed",res.error);
+        setSyncState("unavailable");
+      }
+    }
     setStatusMsg("Audit deleted.");
     setConfirmDeleteId(null);
   };
@@ -1827,6 +1930,13 @@ const AuditScreen=({wines,desktop,onSetWineBottles,onRemoveWine,onRevokeAudit})=
       {statusMsg&&(
         <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:"10px 12px",marginBottom:12,fontSize:12,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
           {statusMsg}
+        </div>
+      )}
+      {syncState!=="ready"&&(
+        <div style={{background:"rgba(184,50,50,0.08)",border:"1px solid rgba(184,50,50,0.22)",borderRadius:12,padding:"10px 12px",marginBottom:12,fontSize:12,color:"#9C2B2B",fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.55}}>
+          {syncState==="checking"
+            ? "Checking audit cloud sync…"
+            : "Audit cloud sync is unavailable. Audits are saving locally on this device until the Supabase audits table is configured."}
         </div>
       )}
 
@@ -3064,7 +3174,7 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile})=>{
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.49 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.50 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
