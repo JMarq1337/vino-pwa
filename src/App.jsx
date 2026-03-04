@@ -1390,41 +1390,6 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAdjustConsumption,deskt
   );
 };
 
-/* ── WISHLIST ─────────────────────────────────────────────────── */
-const WishlistScreen=({wishlist,onAdd,onUpdate,onDelete,onMove,desktop})=>{
-  const [sel,setSel]=useState(null);
-  const [editing,setEditing]=useState(false);
-  const [adding,setAdding]=useState(false);
-  return(
-    <div>
-      <div style={{marginBottom:24}}>
-        <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"2px",textTransform:"uppercase",marginBottom:4}}>Wishlist</div>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end"}}>
-          <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:34,fontWeight:800,color:"var(--text)",lineHeight:1,letterSpacing:"-1px"}}>
-            {wishlist.length} <span style={{fontSize:18,color:"var(--sub)",fontWeight:400}}>to try</span>
-          </div>
-          <button onClick={()=>setAdding(true)} style={{width:44,height:44,borderRadius:14,background:"var(--accent)",border:"none",display:"flex",alignItems:"center",justifyContent:"center",color:"white",boxShadow:"0 4px 16px rgba(var(--accentRgb),0.35)",cursor:"pointer"}}><Icon n="plus" size={20}/></button>
-        </div>
-      </div>
-      {wishlist.length===0
-        ? <Empty icon="heart" text="Add wines you dream of trying."/>
-        : <div style={{display:desktop?"grid":"block",gridTemplateColumns:desktop?"repeat(auto-fill,minmax(290px,1fr))":"none",gap:desktop?12:0}}>
-            {wishlist.map(w=><WineCard key={w.id} wine={w} onClick={()=>{setSel(w);setEditing(false);}}/>)}
-          </div>
-      }
-      <Modal show={!!sel&&!editing} onClose={()=>setSel(null)} wide>
-        {sel&&<WineDetail wine={sel} onEdit={()=>setEditing(true)} onDelete={()=>{onDelete(sel.id);setSel(null);}} onMove={()=>{onMove(sel.id);setSel(null);}}/>}
-      </Modal>
-      <Modal show={editing} onClose={()=>setEditing(false)} wide>
-        <WineForm initial={sel} isWishlist onSave={w=>{onUpdate(w);setSel(w);setEditing(false);}} onClose={()=>setEditing(false)}/>
-      </Modal>
-      <Modal show={adding} onClose={()=>setAdding(false)} wide>
-        <WineForm isWishlist onSave={w=>{onAdd({...w,wishlist:true});setAdding(false);}} onClose={()=>setAdding(false)}/>
-      </Modal>
-    </div>
-  );
-};
-
 /* ── AI ───────────────────────────────────────────────────────── */
 const AIScreen=({wines})=>{
   const [msgs,setMsgs]=useState([{r:"a",t:"Hello. I'm Vinology — your personal sommelier.\n\nAsk me anything about your collection, food pairings, what to open tonight, or recommendations."}]);
@@ -2268,10 +2233,9 @@ const SettingsPanel=({onBack,profile,setProfile,theme,setTheme})=>{
 };
 
 /* ── PROFILE ──────────────────────────────────────────────────── */
-const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>{
+const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile})=>{
   const [view,setView]=useState("main"); // main | settings | explore
   const [exportOpen,setExportOpen]=useState(false);
-  const [includeWishlistExport,setIncludeWishlistExport]=useState(true);
   const [includeNotesExport,setIncludeNotesExport]=useState(false);
   const col=wines.filter(w=>!w.wishlist);
   const bottles=col.reduce((s,w)=>s+(w.bottles||0),0);
@@ -2387,13 +2351,10 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.41 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.42 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
-          <button onClick={()=>setIncludeWishlistExport(v=>!v)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"10px 12px",borderRadius:12,border:`1.5px solid ${includeWishlistExport?"var(--accent)":"var(--border)"}`,background:includeWishlistExport?"rgba(var(--accentRgb),0.08)":"var(--inputBg)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:14,color:"var(--text)",fontWeight:600}}>
-            <span>Include wishlist sheet</span><span style={{fontSize:16,color:includeWishlistExport?"var(--accent)":"var(--sub)"}}>{includeWishlistExport?"✓":"○"}</span>
-          </button>
           <button onClick={()=>setIncludeNotesExport(v=>!v)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"10px 12px",borderRadius:12,border:`1.5px solid ${includeNotesExport?"var(--accent)":"var(--border)"}`,background:includeNotesExport?"rgba(var(--accentRgb),0.08)":"var(--inputBg)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:14,color:"var(--text)",fontWeight:600}}>
             <span>Include tasting notes sheet</span><span style={{fontSize:16,color:includeNotesExport?"var(--accent)":"var(--sub)"}}>{includeNotesExport?"✓":"○"}</span>
           </button>
@@ -2403,7 +2364,7 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
         </div>
         <div style={{display:"flex",gap:8}}>
           <Btn variant="secondary" onClick={()=>setExportOpen(false)} full>Cancel</Btn>
-          <Btn onClick={()=>{exportToExcel(wines,wishlist,notes,{includeWishlist:includeWishlistExport,includeNotes:includeNotesExport});setExportOpen(false);}} full icon="export">Export</Btn>
+          <Btn onClick={()=>{exportToExcel(wines,[],notes,{includeWishlist:false,includeNotes:includeNotesExport});setExportOpen(false);}} full icon="export">Export</Btn>
         </div>
       </Modal>
     </div>
@@ -2411,7 +2372,7 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
 };
 
 /* ── TABS ─────────────────────────────────────────────────────── */
-const TABS=[{id:"collection",label:"Cellar",ic:"wine"},{id:"wishlist",label:"Wishlist",ic:"heart"},{id:"ai",label:"Sommelier",ic:"chat"},{id:"notes",label:"Journal",ic:"note"},{id:"profile",label:"Winery",ic:"user"}];
+const TABS=[{id:"collection",label:"Cellar",ic:"wine"},{id:"ai",label:"Sommelier",ic:"chat"},{id:"notes",label:"Journal",ic:"note"},{id:"profile",label:"Winery",ic:"user"}];
 
 /* ── APP ──────────────────────────────────────────────────────── */
 export default function App(){
@@ -2419,7 +2380,6 @@ export default function App(){
   const [sysDark,setSysDark]=useState(()=>window.matchMedia?.("(prefers-color-scheme:dark)").matches??false);
   const [tab,setTab]=useState("collection");
   const [wines,setWines]=useState([]);
-  const [wishlist,setWishlist]=useState([]);
   const [notes,setNotes]=useState([]);
   const [profile,setProfileState]=useState(DEFAULT_PROFILE);
   const [savedLocations,setSavedLocations]=useState(()=>readSavedLocations());
@@ -2447,25 +2407,29 @@ export default function App(){
   useEffect(()=>{
     async function load(){
       const cache=readCache();
+      const normalizeLegacyWineRows=rows=>(rows||[]).map(w=>{
+        if(!w || !w.wishlist) return w;
+        const legacyBottles=Math.max(1,Math.round(safeNum(w.bottles)||0)||1);
+        return {...w,wishlist:false,bottles:legacyBottles};
+      });
       try{
         const [wineRows,noteRows,prof]=await Promise.all([db.get("wines"),db.get("tasting_notes"),db.getProfile()]);
         console.log("DB: wines",wineRows.length,"notes",noteRows.length);
         if(wineRows.length===0){
           if(cache?.wines?.length){
-            setWines(cache.wines||[]);
-            setWishlist(cache.wishlist||[]);
+            setWines(normalizeLegacyWineRows([...(cache.wines||[]),...(cache.wishlist||[])]));
             setNotes(cache.notes||[]);
             if(cache.profile)setProfileState(cache.profile);
             setIsNewUser(!(cache.profile?.name));
           }else{
-            await Promise.all([...SEED_WINES,...SEED_WISHLIST].map(w=>db.upsert("wines",toDb.wine(w))));
+            await Promise.all(SEED_WINES.map(w=>db.upsert("wines",toDb.wine(w))));
             await Promise.all(SEED_NOTES.map(n=>db.upsert("tasting_notes",toDb.note(n))));
-            setWines(SEED_WINES);setWishlist(SEED_WISHLIST);setNotes(SEED_NOTES);
+            setWines(SEED_WINES);setNotes(SEED_NOTES);
             try{localStorage.setItem(EXCEL_IMPORT_FLAG,"1");}catch{}
             setIsNewUser(true);
           }
         }else{
-          let all=wineRows.map(fromDb.wine);
+          let all=normalizeLegacyWineRows(wineRows.map(fromDb.wine));
           const importedOnce=(()=>{try{return localStorage.getItem(EXCEL_IMPORT_FLAG)==="1";}catch{return false;}})();
           if(!importedOnce){
             const ids=new Set(all.map(w=>w.id));
@@ -2633,7 +2597,6 @@ export default function App(){
             try{localStorage.setItem(EXCEL_RESTORE_FLAG,"1");}catch{}
           }
           setWines(all.filter(w=>!w.wishlist));
-          setWishlist(all.filter(w=>w.wishlist));
           setNotes(noteRows.length?noteRows.map(fromDb.note):(cache?.notes||[]));
           if(prof){
             // Remote profile is authoritative for cross-device sync.
@@ -2653,10 +2616,10 @@ export default function App(){
       }catch(e){
         console.error("Load error:",e);
         if(cache?.wines?.length){
-          setWines(cache.wines||[]);setWishlist(cache.wishlist||[]);setNotes(cache.notes||[]);
+          setWines(normalizeLegacyWineRows([...(cache.wines||[]),...(cache.wishlist||[])]));setNotes(cache.notes||[]);
           if(cache.profile)setProfileState(cache.profile);
         }else{
-          setWines(SEED_WINES);setWishlist(SEED_WISHLIST);setNotes(SEED_NOTES);
+          setWines(SEED_WINES);setNotes(SEED_NOTES);
         }
       }
       setReady(true);
@@ -2681,9 +2644,9 @@ export default function App(){
   });
   useEffect(()=>{
     try{
-      localStorage.setItem(CACHE_KEY,JSON.stringify({wines,wishlist,notes,profile}));
+      localStorage.setItem(CACHE_KEY,JSON.stringify({wines,notes,profile}));
     }catch{}
-  },[wines,wishlist,notes,profile]);
+  },[wines,notes,profile]);
 
   const addWine=async w=>{setWines(p=>[...p,w]);await db.upsert("wines",toDb.wine(w));};
   const updWine=async w=>{setWines(p=>p.map(x=>x.id===w.id?w:x));await db.upsert("wines",toDb.wine(w));};
@@ -2709,16 +2672,6 @@ export default function App(){
     return dedupeLocations([...prev,normalized]);
   });
   const removeSavedLocation=loc=>setSavedLocations(prev=>prev.filter(x=>locationKey(x)!==locationKey(loc)));
-  const addWish=async w=>{setWishlist(p=>[...p,w]);await db.upsert("wines",toDb.wine(w));};
-  const updWish=async w=>{setWishlist(p=>p.map(x=>x.id===w.id?w:x));await db.upsert("wines",toDb.wine(w));};
-  const delWish=async id=>{setWishlist(p=>p.filter(x=>x.id!==id));await db.del("wines",id);};
-  const moveToCol=async id=>{
-    const w=wishlist.find(x=>x.id===id);if(!w)return;
-    const m={...w,wishlist:false,bottles:1,rating:0};
-    setWishlist(p=>p.filter(x=>x.id!==id));
-    setWines(p=>[...p,m]);
-    await db.upsert("wines",toDb.wine(m));
-  };
   const addNote=async n=>{setNotes(p=>[...p,n]);await db.upsert("tasting_notes",toDb.note(n));};
   const delNote=async id=>{setNotes(p=>p.filter(x=>x.id!==id));await db.del("tasting_notes",id);};
   const setProfile=async p=>{
@@ -2787,7 +2740,7 @@ export default function App(){
               </button>
             </div>
             <div style={{marginTop:16,fontSize:12,color:"rgba(237,230,224,0.2)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
-              {wines.length>0?`${wines.filter(w=>!w.wishlist).length} wines in your cellar`:"Building your cellar…"}
+              {wines.length>0?`${wines.length} wines in your cellar`:"Building your cellar…"}
             </div>
           </div>
         )}
@@ -2850,10 +2803,9 @@ export default function App(){
   const screens=(
     <>
       {tab==="collection"&&<CollectionScreen wines={wines} onAdd={addWine} onUpdate={updWine} onDelete={delWine} onAdjustConsumption={adjustWineConsumption} desktop={isDesktop} savedLocations={savedLocations} onSaveLocation={addSavedLocation} onRemoveLocation={removeSavedLocation}/>}
-      {tab==="wishlist"&&<WishlistScreen wishlist={wishlist} onAdd={addWish} onUpdate={updWish} onDelete={delWish} onMove={moveToCol} desktop={isDesktop}/>}
       {tab==="ai"&&<AIScreen wines={wines}/>}
       {tab==="notes"&&<JournalScreen wines={wines} onUpdate={updWine} desktop={isDesktop}/>}
-      {tab==="profile"&&<ProfileScreen wines={wines} wishlist={wishlist} notes={notes} theme={themeMode} setTheme={setThemeMode} profile={profile} setProfile={setProfile}/>}
+      {tab==="profile"&&<ProfileScreen wines={wines} notes={notes} theme={themeMode} setTheme={setThemeMode} profile={profile} setProfile={setProfile}/>}
     </>
   );
 
