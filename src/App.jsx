@@ -362,37 +362,71 @@ const fuzzySearch = q=>{
 const LOCATIONS=PRESET_LOCATIONS;
 const fmt=d=>d?new Date(d).toLocaleDateString("en-AU",{month:"short",year:"numeric"}):null;
 const COUNTRY_SET=new Set(["Australia","Austria","France","Germany","Italy","Spain","Portugal","New Zealand","USA","Argentina","Chile","South Africa"]);
+const COUNTRY_ALIAS_MAP={
+  "United States":"USA",
+  "United States of America":"USA",
+  "US":"USA",
+  "U.S.":"USA",
+  "U.S.A.":"USA",
+  "NZ":"New Zealand",
+  "S. Africa":"South Africa",
+};
 const REGION_ALIAS_MAP={
   "Coonwarra":"Coonawarra",
   "Langhorne Creet":"Langhorne Creek",
   "Mornington":"Mornington Peninsula",
   "Bellarine":"Geelong",
   "Cotes du Rhone":"Cotes du Rhone",
+  "Rhone Valley":"Rhone",
+  "St Emilion":"Saint-Émilion",
+  "Saint Emilion":"Saint-Émilion",
 };
 const REGION_COUNTRY_MAP={
   "Adelaide Hills":"Australia","Barossa":"Australia","Clare Valley":"Australia","Coonawarra":"Australia","Eden Valley":"Australia","Geelong":"Australia","Gippsland":"Australia","Grampians":"Australia","Great Southern":"Australia","Heathcote":"Australia","Hunter Valley":"Australia","Kangaroo Island":"Australia","King Valley":"Australia","Langhorne Creek":"Australia","Macedon Ranges":"Australia","Margaret River":"Australia","McLaren Vale":"Australia","Mornington Peninsula":"Australia","Mudgee":"Australia","Tasmania":"Australia","Yarra Valley":"Australia","3608":"Australia",
-  "Bordeaux":"France","Champagne":"France","Cotes du Rhone":"France","Pessac-Leognan":"France","Provence":"France",
-  "Marlborough":"New Zealand","Martinborough":"New Zealand",
+  "Bordeaux":"France","Pomerol":"France","Pauillac":"France","Saint-Émilion":"France","Burgundy":"France","Champagne":"France","Cotes du Rhone":"France","Rhone":"France","Pessac-Leognan":"France","Provence":"France","Sauternes":"France",
+  "Marlborough":"New Zealand","Martinborough":"New Zealand","Central Otago":"New Zealand",
   "Wachau":"Austria",
+  "Piedmont":"Italy","Tuscany":"Italy","Bolgheri":"Italy",
+  "Rioja":"Spain","Ribera del Duero":"Spain",
+  "Napa Valley":"USA","Santa Cruz Mountains":"USA",
+  "Mendoza":"Argentina",
+  "Maipo Valley":"Chile",
+  "Mosel":"Germany",
+  "Douro":"Portugal",
+  "Stellenbosch":"South Africa",
 };
 const normalizeRegionName = (value="") => REGION_ALIAS_MAP[(value||"").trim()] || (value||"").trim();
+const normalizeCountryName = (value="") => {
+  const trimmed=(value||"").trim();
+  if(!trimmed) return "";
+  const canonical=COUNTRY_ALIAS_MAP[trimmed]||trimmed;
+  return COUNTRY_SET.has(canonical)?canonical:"";
+};
 const splitOrigin = (origin="") => (origin||"").split(",").map(s=>s.trim()).filter(Boolean);
 const deriveRegionCountry = (input="") => {
   const parts = splitOrigin(input);
   if(parts.length===0) return { region:"", country:"", origin:"" };
   if(parts.length===1){
     const one = normalizeRegionName(parts[0]);
-    if(COUNTRY_SET.has(one)) return { region:"", country:one, origin:one };
+    const oneCountry = normalizeCountryName(one);
+    if(oneCountry) return { region:"", country:oneCountry, origin:oneCountry };
     const mappedCountry = REGION_COUNTRY_MAP[one] || "";
     return { region:one, country:mappedCountry, origin:[one,mappedCountry].filter(Boolean).join(", ") };
   }
   let region = normalizeRegionName(parts[0]);
-  let country = parts[parts.length-1];
-  if(COUNTRY_SET.has(region) && COUNTRY_SET.has(country) && region!==country){
-    country = region;
+  let country = normalizeCountryName(parts[parts.length-1]);
+  const mappedCountry = REGION_COUNTRY_MAP[region] || "";
+  if(!country && COUNTRY_SET.has(region)){
+    country = normalizeCountryName(region);
+    region = normalizeRegionName(parts[parts.length-1]||"");
+  }
+  if(mappedCountry){
+    country = mappedCountry;
+  } else if(!country && parts.length>1){
+    country = normalizeCountryName(parts[1]);
+  }
+  if(COUNTRY_SET.has(region) && country===region){
     region = "";
-  } else if(!COUNTRY_SET.has(country)){
-    country = REGION_COUNTRY_MAP[region] || "";
   }
   return { region, country, origin:[region,country].filter(Boolean).join(", ") };
 };
@@ -2351,7 +2385,7 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile})=>{
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.42 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.43 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
@@ -2468,6 +2502,21 @@ export default function App(){
             await Promise.all(repairedLoc.map(w=>db.upsert("wines",toDb.wine(w))));
             const locById=Object.fromEntries(repairedLoc.map(w=>[w.id,w.location]));
             all=all.map(w=>locById[w.id]?{...w,location:locById[w.id]}:w);
+          }
+          const toRepairOriginCountry=all.filter(w=>{
+            const raw=(w.origin||"").toString().trim();
+            if(!raw) return false;
+            const normalized=deriveRegionCountry(raw).origin||raw;
+            return normalized!==raw;
+          });
+          if(toRepairOriginCountry.length){
+            const repairedOrigins=toRepairOriginCountry.map(w=>{
+              const raw=(w.origin||"").toString().trim();
+              return {...w,origin:deriveRegionCountry(raw).origin||raw};
+            });
+            await Promise.all(repairedOrigins.map(w=>db.upsert("wines",toDb.wine(w))));
+            const byId=Object.fromEntries(repairedOrigins.map(w=>[w.id,w.origin]));
+            all=all.map(w=>byId[w.id]?{...w,origin:byId[w.id]}:w);
           }
           const toRepairBottleTotals=all.filter(w=>{
             const left=Math.max(0,safeNum(w.bottles)||0);
