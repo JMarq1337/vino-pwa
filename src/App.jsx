@@ -457,6 +457,14 @@ const SEED_WISHLIST=[
   {id:"w2",name:"Dom Pérignon",origin:"Champagne, France",grape:"Chardonnay / Pinot Noir",alcohol:12.5,vintage:2013,notes:"For a very special celebration.",wishlist:true,color:"#8B7355",photo:null,wineType:"Sparkling"},
 ];
 const SEED_TOTAL_BY_ID=Object.fromEntries(SEED_WINES.map(w=>[w.id,safeNum(w.cellarMeta?.totalPurchased)]));
+const SEED_PRICING_BY_ID=Object.fromEntries(SEED_WINES.map(w=>[
+  w.id,
+  {
+    paidPerBottle:safeNum(w.cellarMeta?.pricePerBottle),
+    rrpPerBottle:safeNum(w.cellarMeta?.rrp),
+    totalPaid:safeNum(w.cellarMeta?.totalPaid),
+  }
+]));
 const SEED_NOTES=[
   {id:"n1",wineId:"s1",title:"Christmas Dinner 2023",content:"Opened with family. Paired with slow-roasted lamb. Absolutely magical.",date:"2023-12-25"},
   {id:"n2",wineId:"s3",title:"Summer BBQ Pairings",content:"Incredible with fresh prawns on the barbie. Also tried with grilled snapper — even better.",date:"2023-11-12"},
@@ -711,10 +719,13 @@ const WineCard=({wine,onClick})=>{
   const geo=deriveRegionCountry(wine.origin||"");
   const yearTag=wine.vintage?String(wine.vintage):null;
   const locationTag=formatWineLocation(wine)||null;
-  const priceTag=safeNum(wine.cellarMeta?.pricePerBottle);
+  const paidPerBottle=safeNum(wine.cellarMeta?.pricePerBottle);
+  const rrpPerBottle=safeNum(wine.cellarMeta?.rrp);
   const bottleRgb=hexToRgb(tc.dot)||"139,26,26";
   const readinessTag=!wine.wishlist&&ready.key!=="none"?ready.label:null;
-  const priceText=!wine.wishlist&&priceTag!=null&&priceTag>0?`$${priceTag.toFixed(2)}`:null;
+  const rrpText=!wine.wishlist&&rrpPerBottle!=null&&rrpPerBottle>0?`RRP $${rrpPerBottle.toFixed(2)}`:null;
+  const paidText=!wine.wishlist&&paidPerBottle!=null&&paidPerBottle>0?`Paid $${paidPerBottle.toFixed(2)}`:null;
+  const showPaidTag=!!paidText&&(!rrpPerBottle||Math.abs(rrpPerBottle-paidPerBottle)>0.009);
   const footerText=[locationTag||geo.country].filter(Boolean).join(" · ");
   const quickTagStyle={padding:"3px 8px",borderRadius:20,fontSize:11,fontWeight:700,color:"var(--text)",background:"var(--inputBg)",fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap"};
   return(
@@ -737,8 +748,9 @@ const WineCard=({wine,onClick})=>{
         <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
           <WineTypePill type={type} label={varietal}/>
           {yearTag&&<span style={quickTagStyle}>{yearTag}</span>}
+          {rrpText&&<span style={{...quickTagStyle,background:"rgba(var(--accentRgb),0.13)",color:"var(--accent)",fontWeight:800}}>{rrpText}</span>}
+          {showPaidTag&&<span style={{...quickTagStyle,background:"var(--card)",border:"1px solid var(--border)"}}>{paidText}</span>}
           {readinessTag&&<span style={{...quickTagStyle,color:"#fff",background:ready.color}}>{ready.key==="ready"?"Ready":ready.label}</span>}
-          {priceText&&<span style={{...quickTagStyle,background:"rgba(var(--accentRgb),0.12)"}}>{priceText}</span>}
         </div>
         {(footerText||wine.rating>0)&&(
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,minWidth:0}}>
@@ -765,7 +777,8 @@ const WineDetail=({wine,onEdit,onDelete,onMove,onAdjustConsumption})=>{
   const bottlesLeft=Math.max(0,Math.round(safeNum(wine.bottles)||0));
   const consumedCount=getConsumedBottles(wine);
   const drinkWindow=(m.drinkStart||m.drinkEnd)?`${m.drinkStart||"?"} - ${m.drinkEnd||"?"}`:null;
-  const pricePerBottle=safeNum(m.pricePerBottle);
+  const paidPerBottle=safeNum(m.pricePerBottle);
+  const rrpPerBottle=safeNum(m.rrp);
   return(
     <div>
       <div style={{borderRadius:16,background:`linear-gradient(140deg,${tc.dot} 0%,rgba(0,0,0,.24) 90%)`,padding:"20px",marginBottom:16,position:"relative",overflow:"hidden",minHeight:108,boxShadow:"inset 0 1px 0 rgba(255,255,255,.2)"}}>
@@ -800,7 +813,7 @@ const WineDetail=({wine,onEdit,onDelete,onMove,onAdjustConsumption})=>{
         </div>
       )}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
-        {[["Varietal",varietal],["Alcohol",wine.alcohol?`${wine.alcohol}%`:null],!wine.wishlist&&["Readiness",ready.label],!wine.wishlist&&["Drink Window",drinkWindow],!wine.wishlist&&["Price / Bottle",pricePerBottle?`$${pricePerBottle.toFixed(2)}`:null],!wine.wishlist&&["Location",formatWineLocation(wine)||null],["Purchased Date",fmt(wine.datePurchased)]].filter(x=>x&&x[1]).map(([l,v])=>(
+        {[["Varietal",varietal],["Alcohol",wine.alcohol?`${wine.alcohol}%`:null],!wine.wishlist&&["Readiness",ready.label],!wine.wishlist&&["Drink Window",drinkWindow],!wine.wishlist&&["RRP / Bottle",rrpPerBottle?`$${rrpPerBottle.toFixed(2)}`:null],!wine.wishlist&&["Paid / Bottle",paidPerBottle?`$${paidPerBottle.toFixed(2)}`:null],!wine.wishlist&&["Location",formatWineLocation(wine)||null],["Purchased Date",fmt(wine.datePurchased)]].filter(x=>x&&x[1]).map(([l,v])=>(
           <div key={l} style={{background:"var(--inputBg)",borderRadius:12,padding:"11px 13px"}}>
             <div style={{fontSize:10,color:"var(--sub)",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:3,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{l}</div>
             <div style={{fontSize:14,color:"var(--text)",fontWeight:500,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{v}</div>
@@ -994,8 +1007,8 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
                 <Field label="Supplier" value={f.supplier} onChange={v=>set("supplier",v)} placeholder="WS / Local shop" optional/>
               </div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
-                <Field label="Price / Bottle" value={f.pricePerBottle} onChange={v=>set("pricePerBottle",v)} type="number" placeholder="29.9" optional/>
-                <Field label="RRP" value={f.rrp} onChange={v=>set("rrp",v)} type="number" placeholder="40" optional/>
+                <Field label="Paid / Bottle" value={f.pricePerBottle} onChange={v=>set("pricePerBottle",v)} type="number" placeholder="29.9" optional/>
+                <Field label="RRP / Bottle" value={f.rrp} onChange={v=>set("rrp",v)} type="number" placeholder="40" optional/>
                 <Field label="Total Paid" value={f.totalPaid} onChange={v=>set("totalPaid",v)} type="number" placeholder="179.5" optional/>
               </div>
             </>
@@ -1540,7 +1553,7 @@ const exportToExcel=async(wines,wishlist,notes,{includeWishlist=true,includeNote
     r++;
 
     // Column headers
-    const HDRS=["Wine Name","Varietal / Blend","Origin / Region","Varietal","Vintage","Bottles","Rating","Alc %","Drink From","Drink By","Price/Btl","RRP","Total Paid","Insured","Supplier","Location","Section","Box","Tasting Notes"];
+    const HDRS=["Wine Name","Varietal / Blend","Origin / Region","Varietal","Vintage","Bottles","Rating","Alc %","Drink From","Drink By","Paid/Btl","RRP/Btl","Total Paid","Insured","Supplier","Location","Section","Box","Tasting Notes"];
     HDRS.forEach((h,ci)=>{
       const addr=X.utils.encode_cell({r,c:ci});
       ws1[addr]={t:"s",v:h,s:{
@@ -2190,7 +2203,7 @@ const ProfileScreen=({wines,wishlist,notes,theme,setTheme,profile,setProfile})=>
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.33 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.34 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
@@ -2320,6 +2333,38 @@ export default function App(){
             }));
             await Promise.all(repairedTotals.map(w=>db.upsert("wines",toDb.wine(w))));
             const byId=Object.fromEntries(repairedTotals.map(w=>[w.id,w.cellarMeta]));
+            all=all.map(w=>byId[w.id]?{...w,cellarMeta:byId[w.id]}:w);
+          }
+          const toRepairPricing=all.filter(w=>{
+            const seed=SEED_PRICING_BY_ID[w.id];
+            if(!seed) return false;
+            const paid=safeNum(w.cellarMeta?.pricePerBottle);
+            const rrp=safeNum(w.cellarMeta?.rrp);
+            const totalPaid=safeNum(w.cellarMeta?.totalPaid);
+            const needsPaid=(paid==null||paid<=0) && (seed.paidPerBottle||0)>0;
+            const needsRrp=(rrp==null||rrp<=0) && (seed.rrpPerBottle||0)>0;
+            const needsTotal=(totalPaid==null||totalPaid<=0) && (seed.totalPaid||0)>0;
+            return needsPaid||needsRrp||needsTotal;
+          });
+          if(toRepairPricing.length){
+            const repairedPricing=toRepairPricing.map(w=>{
+              const seed=SEED_PRICING_BY_ID[w.id]||{};
+              const m=w.cellarMeta||{};
+              const paid=safeNum(m.pricePerBottle);
+              const rrp=safeNum(m.rrp);
+              const totalPaid=safeNum(m.totalPaid);
+              return{
+                ...w,
+                cellarMeta:{
+                  ...m,
+                  pricePerBottle:(paid==null||paid<=0)?(seed.paidPerBottle??m.pricePerBottle):m.pricePerBottle,
+                  rrp:(rrp==null||rrp<=0)?(seed.rrpPerBottle??m.rrp):m.rrp,
+                  totalPaid:(totalPaid==null||totalPaid<=0)?(seed.totalPaid??m.totalPaid):m.totalPaid,
+                }
+              };
+            });
+            await Promise.all(repairedPricing.map(w=>db.upsert("wines",toDb.wine(w))));
+            const byId=Object.fromEntries(repairedPricing.map(w=>[w.id,w.cellarMeta]));
             all=all.map(w=>byId[w.id]?{...w,cellarMeta:byId[w.id]}:w);
           }
           const restoredFromExcel=(()=>{try{return localStorage.getItem(EXCEL_RESTORE_FLAG)==="1";}catch{return false;}})();
