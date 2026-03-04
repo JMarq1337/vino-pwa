@@ -406,27 +406,33 @@ const splitOrigin = (origin="") => (origin||"").split(",").map(s=>s.trim()).filt
 const deriveRegionCountry = (input="") => {
   const parts = splitOrigin(input);
   if(parts.length===0) return { region:"", country:"", origin:"" };
-  if(parts.length===1){
-    const one = normalizeRegionName(parts[0]);
-    const oneCountry = normalizeCountryName(one);
-    if(oneCountry) return { region:"", country:oneCountry, origin:oneCountry };
-    const mappedCountry = REGION_COUNTRY_MAP[one] || "";
-    return { region:one, country:mappedCountry, origin:[one,mappedCountry].filter(Boolean).join(", ") };
+  const normalizedParts=parts.map(normalizeRegionName);
+  const countries=normalizedParts.map(normalizeCountryName);
+  const explicitCountry=countries.find(Boolean)||"";
+  const firstCountry=countries[0]||"";
+
+  let region=normalizedParts.find((part,idx)=>!countries[idx])||"";
+  let country=(region?REGION_COUNTRY_MAP[region]:"")||explicitCountry;
+
+  if(firstCountry && normalizedParts[1] && !countries[1]){
+    region=normalizedParts[1];
+    country=(REGION_COUNTRY_MAP[region]||firstCountry);
   }
-  let region = normalizeRegionName(parts[0]);
-  let country = normalizeCountryName(parts[parts.length-1]);
-  const mappedCountry = REGION_COUNTRY_MAP[region] || "";
-  if(!country && COUNTRY_SET.has(region)){
-    country = normalizeCountryName(region);
-    region = normalizeRegionName(parts[parts.length-1]||"");
+  if(normalizeCountryName(region)){
+    region="";
   }
-  if(mappedCountry){
-    country = mappedCountry;
-  } else if(!country && parts.length>1){
-    country = normalizeCountryName(parts[1]);
+  if(region && !country){
+    country=REGION_COUNTRY_MAP[region]||"";
   }
-  if(COUNTRY_SET.has(region) && country===region){
-    region = "";
+  if(!region && !country){
+    const one=normalizedParts[0]||"";
+    const oneCountry=normalizeCountryName(one);
+    if(oneCountry){
+      country=oneCountry;
+    }else{
+      region=one;
+      country=REGION_COUNTRY_MAP[one]||"";
+    }
   }
   return { region, country, origin:[region,country].filter(Boolean).join(", ") };
 };
@@ -1252,7 +1258,11 @@ const FilterPanel=({filters,setFilters,wines,onClose})=>{
       .filter(Boolean)
   ]);
   const varietals=[...new Set(col.map(resolveVarietal).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
-  const regions=[...new Set(col.map(w=>deriveRegionCountry(w.origin||"").region).filter(Boolean))].sort();
+  const regions=[...new Set(col
+    .map(w=>deriveRegionCountry(w.origin||"").region)
+    .filter(Boolean)
+    .filter(r=>!normalizeCountryName(r))
+  )].sort();
   const countries=[...new Set(col.map(w=>deriveRegionCountry(w.origin||"").country).filter(Boolean))].sort();
   const [local,setLocal]=useState({...filters});
   const chip=(active)=>({padding:"7px 13px",borderRadius:20,border:active?"1.5px solid var(--accent)":"1.5px solid var(--border)",background:active?"rgba(var(--accentRgb),0.1)":"var(--inputBg)",color:active?"var(--accent)":"var(--text)",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',sans-serif",transition:"all 0.15s"});
@@ -2385,7 +2395,7 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile})=>{
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.43 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.44 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
