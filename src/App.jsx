@@ -1082,10 +1082,10 @@ const ReviewerInput=({label,value,onChange,suggestions=[]})=>{
   );
 };
 const ReviewEntryEditor=({title,entry,onChange,suggestions=[],onRemove})=>(
-  <div style={{background:"var(--card)",borderRadius:12,padding:"10px 12px",marginBottom:10,border:"1px solid var(--border)"}}>
+  <div style={{background:"linear-gradient(180deg,rgba(var(--accentRgb),0.08),var(--card))",borderRadius:13,padding:"11px 12px",marginBottom:11,border:"1.5px solid rgba(var(--accentRgb),0.24)",boxShadow:"0 10px 18px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.35)"}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,marginBottom:8}}>
-      <div style={{fontSize:11,fontWeight:700,color:"var(--sub)",letterSpacing:"0.7px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{title}</div>
-      {onRemove&&<button type="button" onClick={onRemove} style={{border:"none",background:"none",color:"var(--sub)",fontSize:18,lineHeight:1}}>×</button>}
+      <div style={{fontSize:11,fontWeight:800,color:"var(--accent)",letterSpacing:"0.8px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{title}</div>
+      {onRemove&&<button type="button" onClick={onRemove} style={{border:"1px solid var(--border)",background:"var(--inputBg)",color:"var(--sub)",fontSize:15,lineHeight:1,width:22,height:22,borderRadius:8,display:"inline-flex",alignItems:"center",justifyContent:"center"}}>×</button>}
     </div>
     <div style={{display:"grid",gridTemplateColumns:"1.4fr 0.8fr",gap:8}}>
       <ReviewerInput label="Reviewer" value={entry?.reviewer||""} onChange={v=>onChange("reviewer",v)} suggestions={suggestions}/>
@@ -1560,6 +1560,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
   const sectionTitleStyle={display:"flex",alignItems:"center",gap:8,fontSize:10,color:"var(--accent)",fontWeight:800,textTransform:"uppercase",letterSpacing:"0.95px",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"};
   const sectionTitleDotStyle={width:7,height:7,borderRadius:"50%",background:"var(--accent)",boxShadow:"0 0 0 3px rgba(var(--accentRgb),0.15)"};
   const sectionHintStyle={fontSize:12,color:"var(--sub)",marginBottom:10,fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.45,fontWeight:600};
+  const journalBlockStyle={background:"linear-gradient(180deg,rgba(var(--accentRgb),0.08),var(--card))",border:"1.5px solid rgba(var(--accentRgb),0.22)",borderRadius:13,padding:"11px 12px",boxShadow:"0 10px 18px rgba(0,0,0,0.07), inset 0 1px 0 rgba(255,255,255,0.3)"};
   const sectionTitle=(label)=>(
     <div style={sectionTitleStyle}>
       <span style={sectionTitleDotStyle}/>
@@ -1831,7 +1832,9 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
                 onChange={(k,v)=>set(k==="text"?"review":k==="reviewer"?"reviewPrimaryReviewer":"reviewPrimaryRating",v)}
                 suggestions={reviewerSuggestions}
               />
-              <div style={{fontSize:11,fontWeight:700,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Other Reviews</div>
+              <div style={{...journalBlockStyle,marginBottom:10,padding:"9px 11px"}}>
+                <div style={{fontSize:11,fontWeight:800,color:"var(--accent)",letterSpacing:"0.85px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Other Reviews</div>
+              </div>
               {(f.otherReviews||[]).map((entry,idx)=>(
                 <ReviewEntryEditor
                   key={idx}
@@ -1842,10 +1845,12 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
                   onRemove={(f.otherReviews||[]).length>1?()=>removeOtherReviewSlot(idx):undefined}
                 />
               ))}
-              <button type="button" onClick={addOtherReviewSlot} style={{width:"100%",marginBottom:12,padding:"8px 10px",borderRadius:10,border:"1.5px dashed var(--border)",background:"none",color:"var(--accent)",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+              <button type="button" onClick={addOtherReviewSlot} style={{width:"100%",marginBottom:12,padding:"9px 11px",borderRadius:11,border:"1.5px dashed rgba(var(--accentRgb),0.38)",background:"linear-gradient(180deg,rgba(var(--accentRgb),0.11),rgba(var(--accentRgb),0.04))",color:"var(--accent)",fontSize:12,fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif",boxShadow:"0 8px 14px rgba(var(--accentRgb),0.16)"}}>
                 + Add Another Review
               </button>
-              <Field label="Personal Notes" value={f.notes} onChange={v=>set("notes",v)} placeholder="Your own notes..." rows={3} optional/>
+              <div style={journalBlockStyle}>
+                <Field label="Personal Notes" value={f.notes} onChange={v=>set("notes",v)} placeholder="Your own notes..." rows={3} optional/>
+              </div>
             </>
           )}
           {usesStepTabs&&step==="details"&&(
@@ -3969,7 +3974,7 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile})=>{
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.86 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.87 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
