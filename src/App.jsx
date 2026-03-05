@@ -893,9 +893,9 @@ const Icon=({n,size=20,color="currentColor",fill="none",sw=1.5})=>{
   if(n==="star")return(<svg width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>);
   if(n==="search")return(<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>);
   if(n==="rewind")return(
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="miter">
-      <path d="M20 12a8 8 0 1 1-2.8-6"/>
-      <path d="M17.2 6.1l0.8-3.1-3.1 0.8" strokeLinecap="butt"/>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 12a9 9 0 1 0 3-6.7"/>
+      <path d="M3 12l2.8-2.3M3 12l2.8 2.3"/>
     </svg>
   );
   return(<svg width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><path d={IC[n]}/></svg>);
