@@ -1068,62 +1068,148 @@ const Btn=({children,onClick,variant="primary",full,disabled,icon})=>{
   );
 };
 
-const WHITE_BG_CACHE = new Map();
-const detectLikelyWhiteBg = src => new Promise(resolve=>{
-  if(!src){resolve(false);return;}
-  if(WHITE_BG_CACHE.has(src)){resolve(!!WHITE_BG_CACHE.get(src));return;}
+const PHOTO_RENDER_CACHE = new Map();
+const PHOTO_RENDER_PROMISES = new Map();
+const loadImageForPhoto = src => new Promise((resolve,reject)=>{
   const img=new Image();
   img.decoding="async";
-  img.onload=()=>{
-    try{
-      const size=36;
-      const canvas=document.createElement("canvas");
-      canvas.width=size;
-      canvas.height=size;
-      const ctx=canvas.getContext("2d",{willReadFrequently:true});
-      if(!ctx){WHITE_BG_CACHE.set(src,false);resolve(false);return;}
-      ctx.drawImage(img,0,0,size,size);
-      const px=ctx.getImageData(0,0,size,size).data;
-      let opaque=0;
-      let nearWhite=0;
-      for(let i=0;i<px.length;i+=4){
-        const a=px[i+3];
-        if(a<170) continue;
-        opaque++;
-        const r=px[i],g=px[i+1],b=px[i+2];
-        if(r>242&&g>242&&b>242) nearWhite++;
-      }
-      const ratio=opaque?nearWhite/opaque:0;
-      const result=ratio>0.3;
-      WHITE_BG_CACHE.set(src,result);
-      resolve(result);
-    }catch{
-      WHITE_BG_CACHE.set(src,false);
-      resolve(false);
-    }
-  };
-  img.onerror=()=>{WHITE_BG_CACHE.set(src,false);resolve(false);};
+  img.onload=()=>resolve(img);
+  img.onerror=()=>reject(new Error("image-load-failed"));
   img.src=src;
 });
+const isLightNeutral = (r,g,b) => (r>210&&g>210&&b>210&&(Math.max(r,g,b)-Math.min(r,g,b))<36);
+const removeWhiteBackground = async src => {
+  if(!src) return src;
+  try{
+    const img=await loadImageForPhoto(src);
+    const maxDim=1200;
+    const scale=Math.min(1,maxDim/Math.max(img.width||1,img.height||1));
+    const w=Math.max(1,Math.round((img.width||1)*scale));
+    const h=Math.max(1,Math.round((img.height||1)*scale));
+    const canvas=document.createElement("canvas");
+    canvas.width=w;
+    canvas.height=h;
+    const ctx=canvas.getContext("2d",{willReadFrequently:true});
+    if(!ctx) return src;
+    ctx.drawImage(img,0,0,w,h);
+    const imageData=ctx.getImageData(0,0,w,h);
+    const px=imageData.data;
+    const idx=(x,y)=>(y*w+x);
+    const edgeSeed=(x,y)=>{
+      const i=idx(x,y)*4;
+      const a=px[i+3];
+      if(a<20) return true;
+      return isLightNeutral(px[i],px[i+1],px[i+2]);
+    };
 
+    let edgeSamples=0;
+    let edgeWhite=0;
+    for(let x=0;x<w;x++){
+      edgeSamples+=2;
+      if(edgeSeed(x,0)) edgeWhite++;
+      if(edgeSeed(x,h-1)) edgeWhite++;
+    }
+    for(let y=1;y<h-1;y++){
+      edgeSamples+=2;
+      if(edgeSeed(0,y)) edgeWhite++;
+      if(edgeSeed(w-1,y)) edgeWhite++;
+    }
+    if(edgeSamples===0 || (edgeWhite/edgeSamples)<0.28) return src;
+
+    const bgMask=new Uint8Array(w*h);
+    const qx=new Int32Array(w*h);
+    const qy=new Int32Array(w*h);
+    let head=0,tail=0;
+    const push=(x,y)=>{
+      const p=idx(x,y);
+      if(bgMask[p]) return;
+      const i=p*4;
+      const a=px[i+3];
+      if(a<16 || isLightNeutral(px[i],px[i+1],px[i+2])){
+        bgMask[p]=1;
+        qx[tail]=x;
+        qy[tail]=y;
+        tail++;
+      }
+    };
+    for(let x=0;x<w;x++){push(x,0);push(x,h-1);}
+    for(let y=1;y<h-1;y++){push(0,y);push(w-1,y);}
+    while(head<tail){
+      const x=qx[head],y=qy[head];head++;
+      if(x>0) push(x-1,y);
+      if(x<w-1) push(x+1,y);
+      if(y>0) push(x,y-1);
+      if(y<h-1) push(x,y+1);
+    }
+
+    let changed=false;
+    for(let p=0;p<bgMask.length;p++){
+      const i=p*4;
+      const r=px[i],g=px[i+1],b=px[i+2],a=px[i+3];
+      if(a===0) continue;
+      const hi=Math.max(r,g,b);
+      const lo=Math.min(r,g,b);
+      const neutral=(hi-lo)<28;
+      if(bgMask[p]){
+        if(hi>238 && neutral){
+          px[i+3]=0;
+          changed=true;
+          continue;
+        }
+        if(hi>224 && neutral){
+          const next=Math.round(a*Math.max(0.08,Math.min(0.88,(245-hi)/22)));
+          if(next!==a){px[i+3]=next;changed=true;}
+        }
+      }else if(hi>242 && neutral){
+        const next=Math.round(a*0.82);
+        if(next!==a){px[i+3]=next;changed=true;}
+      }
+    }
+    if(!changed) return src;
+    ctx.putImageData(imageData,0,0);
+    return canvas.toDataURL("image/png");
+  }catch{
+    return src;
+  }
+};
+const getPreparedPhotoSrc = async src => {
+  if(!src) return src;
+  if(PHOTO_RENDER_CACHE.has(src)) return PHOTO_RENDER_CACHE.get(src);
+  if(PHOTO_RENDER_PROMISES.has(src)) return PHOTO_RENDER_PROMISES.get(src);
+  const p=(async()=>{
+    const processed=await removeWhiteBackground(src);
+    PHOTO_RENDER_CACHE.set(src,processed||src);
+    PHOTO_RENDER_PROMISES.delete(src);
+    return processed||src;
+  })();
+  PHOTO_RENDER_PROMISES.set(src,p);
+  return p;
+};
 const WinePhotoImage=({src,alt,style={}})=>{
-  const [whiteBg,setWhiteBg]=useState(()=>!!WHITE_BG_CACHE.get(src));
+  const [displaySrc,setDisplaySrc]=useState(()=>PHOTO_RENDER_CACHE.get(src)||src);
   useEffect(()=>{
     let alive=true;
-    detectLikelyWhiteBg(src).then(result=>{if(alive)setWhiteBg(!!result);});
+    setDisplaySrc(PHOTO_RENDER_CACHE.get(src)||src);
+    getPreparedPhotoSrc(src).then(next=>{if(alive&&next)setDisplaySrc(next);});
     return()=>{alive=false;};
   },[src]);
-  const merged={...style};
-  if(whiteBg){
-    merged.mixBlendMode="multiply";
-    merged.filter=`${merged.filter?`${merged.filter} `:""}saturate(1.04) contrast(1.03)`;
-  }
-  return <img src={src} alt={alt} style={merged}/>;
+  return <img src={displaySrc||src} alt={alt} style={style}/>;
 };
 
 const PhotoPicker=({value,onChange,size=80,round})=>{
   const ref=useRef();
-  const handle=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>onChange(ev.target.result);r.readAsDataURL(f);};
+  const handle=e=>{
+    const f=e.target.files[0];
+    if(!f) return;
+    const r=new FileReader();
+    r.onload=async ev=>{
+      const raw=ev?.target?.result;
+      if(typeof raw!=="string"){onChange(raw);return;}
+      const cleaned=await getPreparedPhotoSrc(raw);
+      onChange(cleaned||raw);
+    };
+    r.readAsDataURL(f);
+  };
   return(
     <div onClick={()=>ref.current.click()} style={{width:size,height:size,borderRadius:round?"50%":14,background:"var(--inputBg)",border:"1.5px dashed var(--border)",cursor:"pointer",overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",flexShrink:0,transition:"border-color 0.2s"}}
       onMouseEnter={e=>e.currentTarget.style.borderColor="var(--accent)"}
@@ -1238,23 +1324,22 @@ const WineDetail=({wine,onEdit,onDelete,onMove,onAdjustConsumption})=>{
   const hasPhoto=!!wine.photo;
   return(
     <div>
-      <div style={{position:"relative",marginBottom:hasPhoto?58:16}}>
-        <div style={{borderRadius:20,background:`linear-gradient(160deg,${tc.dot} 0%,rgba(9,9,12,.9) 100%)`,position:"relative",overflow:"hidden",minHeight:hasPhoto?188:132,border:"1px solid rgba(255,255,255,0.16)",boxShadow:"0 18px 34px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,.18)",animation:"heroGlassIn .28s cubic-bezier(0.2,0.85,0.2,1)"}}>
-          <div style={{position:"absolute",inset:0,background:"linear-gradient(180deg,rgba(255,255,255,.14) 0%,rgba(255,255,255,0) 40%,rgba(0,0,0,.34) 100%)",pointerEvents:"none"}}/>
-          {!hasPhoto&&<div style={{position:"absolute",right:-20,bottom:-20,opacity:0.12,pointerEvents:"none"}}><BrandLogo size={124} variant="mono"/></div>}
-          <div style={{position:"absolute",left:16,right:16,top:14,zIndex:2,paddingRight:hasPhoto?6:0}}>
-            <div style={{marginBottom:8}}>
-              <WineTypePill type={type} label={varietal}/>
-            </div>
-            <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:22,fontWeight:800,color:"#fff",lineHeight:1.2,textShadow:"0 2px 10px rgba(0,0,0,.28)"}}>{wine.name}</div>
-            {(wine.vintage||geo.region||geo.country)&&<div style={{fontSize:14,color:"rgba(255,255,255,.86)",marginTop:2,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{[wine.vintage,geo.region||geo.country,geo.country&&geo.region?geo.country:null].filter(Boolean).join(" · ")}</div>}
-          </div>
-        </div>
+      <div style={{position:"relative",marginBottom:16,paddingTop:hasPhoto?140:0}}>
         {hasPhoto&&(
-          <div style={{position:"absolute",left:"50%",bottom:-44,transform:"translateX(-50%)",width:"clamp(178px,56vw,300px)",height:"clamp(210px,50vh,320px)",borderRadius:18,background:"linear-gradient(180deg,rgba(255,255,255,.82),rgba(255,255,255,.36))",border:"1px solid rgba(255,255,255,0.56)",overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",boxShadow:"0 24px 36px rgba(0,0,0,.32), inset 0 1px 0 rgba(255,255,255,.78)",pointerEvents:"none",isolation:"isolate"}}>
-            <WinePhotoImage src={wine.photo} alt={wine.name} style={{width:"100%",height:"100%",objectFit:"contain",objectPosition:"center",padding:"12px 10px 10px",filter:"drop-shadow(0 12px 24px rgba(0,0,0,.35))",animation:"heroPhotoFloat .34s ease-out both"}}/>
+          <div style={{position:"absolute",left:"50%",top:0,transform:"translateX(-50%)",width:"min(82%,340px)",height:220,zIndex:3,pointerEvents:"none",display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+            <div style={{position:"absolute",left:"8%",right:"8%",bottom:2,height:92,background:`linear-gradient(180deg,rgba(0,0,0,0) 0%,${tc.dot}BB 66%,${tc.dot} 100%)`,filter:"blur(11px)",opacity:0.95}}/>
+            <WinePhotoImage src={wine.photo} alt={wine.name} style={{width:"100%",height:"100%",objectFit:"contain",objectPosition:"center",filter:"drop-shadow(0 18px 24px rgba(0,0,0,.34))",animation:"heroPhotoFloat .34s ease-out both"}}/>
           </div>
         )}
+        <div style={{borderRadius:16,background:`linear-gradient(140deg,${tc.dot} 0%,rgba(0,0,0,.24) 90%)`,padding:"20px",position:"relative",overflow:"hidden",minHeight:108,boxShadow:"inset 0 1px 0 rgba(255,255,255,.2)",animation:"heroGlassIn .25s ease-out"}}>
+          <div style={{position:"absolute",right:-18,bottom:-18,opacity:0.12,pointerEvents:"none"}}><BrandLogo size={120} variant="mono"/></div>
+          {hasPhoto&&<div style={{position:"absolute",left:0,right:0,top:0,height:52,background:`linear-gradient(180deg,${tc.dot} 0%,rgba(0,0,0,0) 100%)`,opacity:0.55,pointerEvents:"none"}}/>}
+          <div style={{position:"relative",zIndex:1}}>
+            <WineTypePill type={type} label={varietal}/>
+          </div>
+          <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:22,fontWeight:800,color:"#fff",marginTop:8,lineHeight:1.2,position:"relative",zIndex:1,textShadow:"0 2px 10px rgba(0,0,0,.28)"}}>{wine.name}</div>
+          {(wine.vintage||geo.region||geo.country)&&<div style={{fontSize:14,color:"rgba(255,255,255,.86)",marginTop:2,fontFamily:"'Plus Jakarta Sans',sans-serif",position:"relative",zIndex:1}}>{[wine.vintage,geo.region||geo.country,geo.country&&geo.region?geo.country:null].filter(Boolean).join(" · ")}</div>}
+        </div>
       </div>
       {!wine.wishlist&&(
         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:8}}>
@@ -3665,7 +3750,7 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile})=>{
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.62 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.63 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
