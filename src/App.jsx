@@ -894,8 +894,8 @@ const Icon=({n,size=20,color="currentColor",fill="none",sw=1.5})=>{
   if(n==="search")return(<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>);
   if(n==="rewind")return(
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="miter">
-      <path d="M20 12a8 8 0 1 0-8-8"/>
-      <path d="M12 4l-3 3M12 4l3 3" strokeLinecap="butt"/>
+      <path d="M20 12a8 8 0 1 1-2.8-6"/>
+      <path d="M17.2 6.1l0.8-3.1-3.1 0.8" strokeLinecap="butt"/>
     </svg>
   );
   return(<svg width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><path d={IC[n]}/></svg>);
