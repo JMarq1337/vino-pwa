@@ -87,7 +87,6 @@ const db = {
 };
 
 const META_PREFIX = "[[VINO_META]]";
-const YEAR_NOW = new Date().getFullYear();
 const EXCEL_IMPORT_FLAG = "vino_excel_seed_v1";
 const EXCEL_RESTORE_FLAG = "vino_excel_restore_v1";
 const CACHE_KEY = "vino_local_cache_v2";
@@ -231,12 +230,13 @@ const encodeWineNotes = (plain,meta) => {
   return `${META_PREFIX}${JSON.stringify(meta)}${clean?`\n${clean}`:""}`;
 };
 const wineReadiness = w => {
+  const currentYear = new Date().getFullYear();
   const m=w.cellarMeta||{};
   const s=safeNum(m.drinkStart);
   const e=safeNum(m.drinkEnd);
   if(!s&&!e) return {key:"none",label:"No window",color:"var(--sub)"};
-  if(s&&YEAR_NOW<s) return {key:"early",label:`Wait until ${s}`,color:"#2A5AB8"};
-  if(e&&YEAR_NOW>e) return {key:"late",label:`Past ${e}`,color:"#B83232"};
+  if(s&&currentYear<s) return {key:"early",label:`Wait until ${s}`,color:"#2A5AB8"};
+  if(e&&currentYear>e) return {key:"late",label:`Past ${e}`,color:"#B83232"};
   return {key:"ready",label:"Ready to drink",color:"#2F855A"};
 };
 const getTotalPurchased = wine => {
@@ -451,6 +451,18 @@ const resolveVarietal = wine => {
   if(type==="Red") return "Red Blend";
   if(type==="White") return "White Blend";
   return "Unknown";
+};
+const wineIdentitySignature = wine => {
+  const section = normalizeKennardsSection(wine?.cellarMeta?.locationSection||"");
+  return [
+    normalizeWineText(wine?.name||""),
+    String(wine?.vintage||""),
+    normalizeWineText(wine?.origin||""),
+    normalizeWineText(resolveVarietal(wine)||wine?.grape||""),
+    locationKey(wine?.location||""),
+    normalizeWineText(section),
+    normalizeWineText((wine?.locationSlot||"").toString()),
+  ].join("|");
 };
 
 /* ── HELPERS ──────────────────────────────────────────────────── */
@@ -1169,13 +1181,12 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
                   {locationMode==="custom"&&(
                     <div style={{marginBottom:12,marginTop:-4,padding:"10px 11px",borderRadius:12,background:"var(--card)",border:"1px solid var(--border)"}}>
                       <Field label="Custom Location" value={customLocation} onChange={setCustomLocation} placeholder="e.g. Events Cellar" optional/>
-                      <button
-                        type="button"
-                        onClick={()=>setRememberLocation(v=>!v)}
-                        style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"8px 2px 2px",border:"none",background:"transparent",fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:12,color:"var(--text)",fontWeight:600,width:"100%",cursor:"pointer"}}
-                      >
+                      <button type="button" onClick={()=>setRememberLocation(v=>!v)}
+                        style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"8px 2px 2px",border:"none",background:"transparent",fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:12,color:"var(--text)",fontWeight:600,width:"100%",cursor:"pointer"}}>
                         <span style={{color:"var(--sub)"}}>Save this location for future wines</span>
-                        <span style={{fontSize:14,color:rememberLocation?"var(--accent)":"var(--sub)"}}>{rememberLocation?"✓":"○"}</span>
+                        <span style={{width:40,height:22,borderRadius:999,background:rememberLocation?"var(--accent)":"var(--inputBg)",border:rememberLocation?"1.5px solid rgba(var(--accentRgb),0.55)":"1.5px solid var(--border)",position:"relative",transition:"all .16s",display:"inline-flex"}}>
+                          <span style={{position:"absolute",top:2,left:rememberLocation?20:2,width:16,height:16,borderRadius:"50%",background:"#fff",boxShadow:"0 1px 4px rgba(0,0,0,.28)",transition:"left .16s"}}/>
+                        </span>
                       </button>
                     </div>
                   )}
@@ -1350,14 +1361,13 @@ const applyFilters=(wines,f,s)=>{
 
 const FilterPanel=({filters,setFilters,wines,onClose})=>{
   const col=wines.filter(w=>!w.wishlist);
-  const locs=dedupeLocations([...LOCATIONS,...col.map(w=>w.location)]);
-  const sections=dedupeLocations([
-    ...KENNARDS_SECTIONS,
-    ...col
+  const locs=dedupeLocations(col.map(w=>w.location));
+  const sections=dedupeLocations(
+    col
       .filter(w=>normalizeLocation(w.location)==="Kennards")
       .map(w=>normalizeKennardsSection(w.cellarMeta?.locationSection||""))
       .filter(Boolean)
-  ]);
+  );
   const varietals=[...new Set(col.map(resolveVarietal).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
   const regions=[...new Set(col
     .map(w=>deriveRegionCountry(w.origin||"").region)
@@ -3169,7 +3179,7 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile})=>{
 
       {/* Stats */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:10}}>
-        {[["Wines",col.length],["Bottles",bottles],["Notes",notes.length]].map(([l,v])=>(
+        {[["Wines",col.length],["Bottles",bottles],["Ready",readyCount]].map(([l,v])=>(
           <div key={l} style={{background:"var(--card)",borderRadius:16,padding:"14px 10px",textAlign:"center",border:"1px solid var(--border)"}}>
             <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:26,fontWeight:800,color:"var(--text)",lineHeight:1}}>{v}</div>
             <div style={{fontSize:10,color:"var(--sub)",fontWeight:600,marginTop:3,textTransform:"uppercase",letterSpacing:"0.7px",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{l}</div>
@@ -3230,7 +3240,7 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile})=>{
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.58 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.59 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
@@ -3314,7 +3324,8 @@ export default function App(){
           const importedOnce=(()=>{try{return localStorage.getItem(EXCEL_IMPORT_FLAG)==="1";}catch{return false;}})();
           if(!importedOnce){
             const ids=new Set(all.map(w=>w.id));
-            const toImport=SEED_WINES.filter(w=>!ids.has(w.id));
+            const signatures=new Set(all.filter(w=>!w.wishlist).map(wineIdentitySignature));
+            const toImport=SEED_WINES.filter(w=>!ids.has(w.id)&&!signatures.has(wineIdentitySignature(w)));
             if(toImport.length){
               await Promise.all(toImport.map(w=>db.upsert("wines",toDb.wine(w))));
               all=[...all,...toImport];
@@ -3440,13 +3451,12 @@ export default function App(){
           const restoredFromExcel=(()=>{try{return localStorage.getItem(EXCEL_RESTORE_FLAG)==="1";}catch{return false;}})();
           if(!restoredFromExcel){
             const byId=new Map(all.map(w=>[w.id,w]));
-            const sigOf=w=>`${normalizeWineText(w.name||"")}|${w.vintage||""}|${normalizeWineText(w.origin||"")}`;
-            const signatures=new Set(all.filter(w=>!w.wishlist).map(sigOf));
+            const signatures=new Set(all.filter(w=>!w.wishlist).map(wineIdentitySignature));
             const repaired=[];
             for(const seed of SEED_WINES){
               const existing=byId.get(seed.id);
               if(!existing){
-                const seedSig=sigOf(seed);
+                const seedSig=wineIdentitySignature(seed);
                 if(signatures.has(seedSig)) continue;
                 repaired.push(seed);
                 all.push(seed);
@@ -3491,6 +3501,23 @@ export default function App(){
               await Promise.all(repaired.map(w=>db.upsert("wines",toDb.wine(w))));
             }
             try{localStorage.setItem(EXCEL_RESTORE_FLAG,"1");}catch{}
+          }
+          const seenSignatures=new Map();
+          const duplicateIds=[];
+          for(const wine of all){
+            if(wine?.wishlist) continue;
+            const sig=wineIdentitySignature(wine);
+            if(!sig) continue;
+            if(!seenSignatures.has(sig)){
+              seenSignatures.set(sig,wine.id);
+              continue;
+            }
+            duplicateIds.push(wine.id);
+          }
+          if(duplicateIds.length){
+            const dropSet=new Set(duplicateIds);
+            await Promise.all(duplicateIds.map(id=>db.del("wines",id)));
+            all=all.filter(w=>!dropSet.has(w.id));
           }
           setWines(all.filter(w=>!w.wishlist));
           setNotes(noteRows.length?noteRows.map(fromDb.note):(cache?.notes||[]));
