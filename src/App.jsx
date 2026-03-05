@@ -344,6 +344,30 @@ const wineAddedTimestamp = wine => {
   const ts=Date.parse(`${raw}T00:00:00`);
   return Number.isFinite(ts)?ts:0;
 };
+const dayStart = d => new Date(d.getFullYear(),d.getMonth(),d.getDate());
+const daysSinceWineAdded = wine => {
+  const raw=(wine?.cellarMeta?.addedDate||wine?.datePurchased||"").toString().slice(0,10);
+  if(!raw) return Number.POSITIVE_INFINITY;
+  const added=new Date(`${raw}T00:00:00`);
+  if(Number.isNaN(added.getTime())) return Number.POSITIVE_INFINITY;
+  const delta=Math.floor((dayStart(new Date())-dayStart(added))/86400000);
+  return Math.max(0,delta);
+};
+const classifyRecentBucket = wine => {
+  const days=daysSinceWineAdded(wine);
+  if(days===0) return "today";
+  if(days===1) return "yesterday";
+  if(days<=7) return "week";
+  if(days<=30) return "month";
+  return "older";
+};
+const RECENT_BUCKETS = [
+  { key:"today", label:"Added Today" },
+  { key:"yesterday", label:"Added Yesterday" },
+  { key:"week", label:"Added Within 7 Days" },
+  { key:"month", label:"Added Within 30 Days" },
+  { key:"older", label:"Added Earlier" },
+];
 const todayIsoLocal = ()=>{
   const d=new Date();
   const y=d.getFullYear();
@@ -664,6 +688,7 @@ const fuzzySearch = q=>{
 };
 const LOCATIONS=PRESET_LOCATIONS;
 const fmt=d=>d?new Date(d).toLocaleDateString("en-AU",{month:"short",year:"numeric"}):null;
+const fmtWithDay=d=>d?new Date(d).toLocaleDateString("en-AU",{day:"numeric",month:"short",year:"numeric"}):null;
 const COUNTRY_SET=new Set(["Australia","Austria","France","Germany","Italy","Spain","Portugal","New Zealand","USA","Argentina","Chile","South Africa"]);
 const COUNTRY_ALIAS_MAP={
   "United States":"USA",
@@ -867,6 +892,12 @@ const IC={
 const Icon=({n,size=20,color="currentColor",fill="none",sw=1.5})=>{
   if(n==="star")return(<svg width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>);
   if(n==="search")return(<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>);
+  if(n==="rewind")return(
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="miter">
+      <path d="M20 12a8 8 0 1 1-2.8-6.1"/>
+      <path d="M7.6 3.7L4 5.9l3.8 2.2"/>
+    </svg>
+  );
   return(<svg width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><path d={IC[n]}/></svg>);
 };
 
@@ -1282,7 +1313,7 @@ const WineCard=({wine,onClick})=>{
   const geo=deriveRegionCountry(wine.origin||"");
   const yearTag=wine.vintage?String(wine.vintage):null;
   const locationTag=formatWineLocation(wine)||null;
-  const addedTag=!wine.wishlist&&wine.cellarMeta?.addedDate?(fmt(wine.cellarMeta.addedDate)?`Added ${fmt(wine.cellarMeta.addedDate)}`:null):null;
+  const addedTag=!wine.wishlist&&wine.cellarMeta?.addedDate?(fmtWithDay(wine.cellarMeta.addedDate)?`Added ${fmtWithDay(wine.cellarMeta.addedDate)}`:null):null;
   const paidPerBottle=safeNum(wine.cellarMeta?.pricePerBottle);
   const rrpPerBottle=safeNum(wine.cellarMeta?.rrp);
   const readinessTag=!wine.wishlist&&ready.key!=="none"?ready.label:null;
@@ -1604,7 +1635,19 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
         Draft autosave is on{draftRestored?" · restored previous draft":""}.
       </div>
       <div style={{display:"flex",justifyContent:"center",marginBottom:18}}>
-        <PhotoPicker value={f.photo} onChange={v=>set("photo",v)} size={76}/>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <PhotoPicker value={f.photo} onChange={v=>set("photo",v)} size={76}/>
+          {f.photo&&(
+            <button
+              type="button"
+              onClick={()=>set("photo",null)}
+              style={{height:34,padding:"0 11px",borderRadius:11,border:"1.5px solid var(--border)",background:"var(--card)",color:"var(--text)",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",display:"inline-flex",alignItems:"center",gap:6,cursor:"pointer"}}
+            >
+              <Icon n="trash" size={13}/>
+              Remove photo
+            </button>
+          )}
+        </div>
       </div>
       <div style={{marginBottom:14,position:"relative"}}>
         <label style={{display:"block",fontSize:11,fontWeight:700,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:6,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Search wine database</label>
@@ -1811,7 +1854,7 @@ const SORTS=[
   {value:"costAsc",label:"Least Expensive"},
   {value:"recent",label:"Recently Added"},
 ];
-const DEFAULT_FILTERS={sort:"name",varietal:"",location:"",section:"",readiness:"",region:"",country:"",priceBand:""};
+const DEFAULT_FILTERS={sort:"name",sortDir:"desc",varietal:"",location:"",section:"",readiness:"",region:"",country:"",priceBand:""};
 const hasFilters=f=>f.sort!=="name"||f.varietal||f.location||f.section||f.readiness||f.region||f.country||f.priceBand;
 const applyFilters=(wines,f,s)=>{
   let r=wines.filter(w=>!w.wishlist);
@@ -1833,7 +1876,7 @@ const applyFilters=(wines,f,s)=>{
   }
   if(f.priceBand){
     r=r.filter(w=>{
-      const p=safeNum(w.cellarMeta?.pricePerBottle)||0;
+      const p=safeNum(w.cellarMeta?.rrp)||0;
       if(f.priceBand==="budget")return p>0&&p<25;
       if(f.priceBand==="mid")return p>=25&&p<60;
       if(f.priceBand==="premium")return p>=60&&p<120;
@@ -1842,14 +1885,20 @@ const applyFilters=(wines,f,s)=>{
     });
   }
   return r.sort((a,b)=>{
-    if(f.sort==="vintage")return(b.vintage||0)-(a.vintage||0);
-    if(f.sort==="bottles")return(b.bottles||0)-(a.bottles||0);
+    if(f.sort==="vintage"){
+      const dir=f.sortDir==="asc"?1:-1;
+      return dir*((a.vintage||0)-(b.vintage||0));
+    }
+    if(f.sort==="bottles"){
+      const dir=f.sortDir==="asc"?1:-1;
+      return dir*((a.bottles||0)-(b.bottles||0));
+    }
     if(f.sort==="costDesc")return (safeNum(b.cellarMeta?.pricePerBottle)||0)-(safeNum(a.cellarMeta?.pricePerBottle)||0);
     if(f.sort==="costAsc")return (safeNum(a.cellarMeta?.pricePerBottle)||0)-(safeNum(b.cellarMeta?.pricePerBottle)||0);
     if(f.sort==="recent"){
       const delta=wineAddedTimestamp(b)-wineAddedTimestamp(a);
       if(delta!==0) return delta;
-      return (b.name||"").localeCompare(a.name||"");
+      return (a.name||"").localeCompare(b.name||"");
     }
     return a.name.localeCompare(b.name);
   });
@@ -1872,14 +1921,68 @@ const FilterPanel=({filters,setFilters,wines,onClose})=>{
   )].sort();
   const countries=[...new Set(col.map(w=>deriveRegionCountry(w.origin||"").country).filter(Boolean))].sort();
   const [local,setLocal]=useState({...filters});
+  const sortSupportsDirection=local.sort==="vintage"||local.sort==="bottles";
   const chip=(active)=>({padding:"7px 13px",borderRadius:20,border:active?"1.5px solid var(--accent)":"1.5px solid var(--border)",background:active?"rgba(var(--accentRgb),0.1)":"var(--inputBg)",color:active?"var(--accent)":"var(--text)",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',sans-serif",transition:"all 0.15s"});
   return(
     <div>
       <ModalHeader title="Filter & Sort" onClose={onClose}/>
       <div style={{fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Sort By</div>
       <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:18}}>
-        {SORTS.map(o=><button key={o.value} onClick={()=>setLocal(p=>({...p,sort:o.value}))} style={chip(local.sort===o.value)}>{o.label}</button>)}
+        {SORTS.map(o=>(
+          <button
+            key={o.value}
+            onClick={()=>setLocal(p=>({
+              ...p,
+              sort:o.value,
+              sortDir:(o.value==="vintage"||o.value==="bottles")
+                ? (p.sort===o.value?p.sortDir||"desc":"desc")
+                : p.sortDir
+            }))}
+            style={chip(local.sort===o.value)}
+          >
+            {o.label}
+          </button>
+        ))}
       </div>
+      {sortSupportsDirection&&(
+        <div style={{marginBottom:18}}>
+          <div style={{fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Sort Direction</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+            <button
+              onClick={()=>setLocal(p=>({...p,sortDir:"desc"}))}
+              style={{
+                padding:"9px 10px",
+                borderRadius:12,
+                border:local.sortDir!=="asc"?"1.5px solid var(--accent)":"1.5px solid var(--border)",
+                background:local.sortDir!=="asc"?"rgba(var(--accentRgb),0.11)":"var(--inputBg)",
+                color:local.sortDir!=="asc"?"var(--accent)":"var(--text)",
+                fontSize:12,
+                fontWeight:700,
+                fontFamily:"'Plus Jakarta Sans',sans-serif",
+                cursor:"pointer"
+              }}
+            >
+              {local.sort==="vintage"?"Highest Vintage":"Most Bottles"}
+            </button>
+            <button
+              onClick={()=>setLocal(p=>({...p,sortDir:"asc"}))}
+              style={{
+                padding:"9px 10px",
+                borderRadius:12,
+                border:local.sortDir==="asc"?"1.5px solid var(--accent)":"1.5px solid var(--border)",
+                background:local.sortDir==="asc"?"rgba(var(--accentRgb),0.11)":"var(--inputBg)",
+                color:local.sortDir==="asc"?"var(--accent)":"var(--text)",
+                fontSize:12,
+                fontWeight:700,
+                fontFamily:"'Plus Jakarta Sans',sans-serif",
+                cursor:"pointer"
+              }}
+            >
+              {local.sort==="vintage"?"Lowest Vintage":"Fewest Bottles"}
+            </button>
+          </div>
+        </div>
+      )}
       <div style={{fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Varietal</div>
       <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:18}}>
         {varietals.map(v=>(
@@ -1892,7 +1995,7 @@ const FilterPanel=({filters,setFilters,wines,onClose})=>{
       <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:18}}>
         {[{id:"ready",label:"Ready"},{id:"notReady",label:"Not Ready"},{id:"past",label:"Past Peak"},{id:"noWindow",label:"No Window"}].map(o=><button key={o.id} onClick={()=>setLocal(p=>({...p,readiness:p.readiness===o.id?"":o.id}))} style={chip(local.readiness===o.id)}>{o.label}</button>)}
       </div>
-      <div style={{fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Price Band</div>
+      <div style={{fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Price Band (RRP / bottle)</div>
       <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:18}}>
         {[{id:"budget",label:"<$25"},{id:"mid",label:"$25-$59"},{id:"premium",label:"$60-$119"},{id:"luxury",label:"$120+"}].map(o=><button key={o.id} onClick={()=>setLocal(p=>({...p,priceBand:p.priceBand===o.id?"":o.id}))} style={chip(local.priceBand===o.id)}>{o.label}</button>)}
       </div>
@@ -1963,6 +2066,12 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAdjustConsumption,deskt
   const locationOptions=dedupeLocations(col.map(w=>w.location));
   const reviewerSuggestions=reviewerSuggestionsFromWines(col);
   const filt=applyFilters(wines,filters,search);
+  const recentGrouped=filters.sort==="recent"
+    ? RECENT_BUCKETS.map(bucket=>({
+        ...bucket,
+        wines:filt.filter(w=>classifyRecentBucket(w)===bucket.key)
+      })).filter(bucket=>bucket.wines.length>0)
+    : [];
   const bottles=col.reduce((s,w)=>s+(w.bottles||0),0);
   const active=hasFilters(filters);
   useEffect(()=>{
@@ -2001,6 +2110,17 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAdjustConsumption,deskt
       {active&&(
         <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
           {filters.sort!=="name"&&<Chip label={SORTS.find(o=>o.value===filters.sort)?.label} onX={()=>setFilters(p=>({...p,sort:"name"}))}/>}
+          {(filters.sort==="vintage"||filters.sort==="bottles")&&(
+            <button
+              onClick={()=>setFilters(p=>({...p,sortDir:p.sortDir==="asc"?"desc":"asc"}))}
+              style={{padding:"4px 10px",borderRadius:20,border:"1.5px solid var(--accent)",background:"rgba(var(--accentRgb),0.12)",color:"var(--accent)",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',sans-serif"}}
+              title="Toggle sort direction"
+            >
+              {filters.sort==="vintage"
+                ? (filters.sortDir==="asc"?"Lowest Vintage":"Highest Vintage")
+                : (filters.sortDir==="asc"?"Fewest Bottles":"Most Bottles")}
+            </button>
+          )}
           {filters.varietal&&<Chip label={filters.varietal} onX={()=>setFilters(p=>({...p,varietal:""}))}/>}
           {filters.readiness&&<Chip label={{ready:"Ready",notReady:"Not Ready",past:"Past Peak",noWindow:"No Window"}[filters.readiness]||filters.readiness} onX={()=>setFilters(p=>({...p,readiness:""}))}/>}
           {filters.priceBand&&<Chip label={{budget:"<$25",mid:"$25-$59",premium:"$60-$119",luxury:"$120+"}[filters.priceBand]||filters.priceBand} onX={()=>setFilters(p=>({...p,priceBand:""}))}/>}
@@ -2024,9 +2144,23 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAdjustConsumption,deskt
       )}
       {filt.length===0
         ? <Empty icon="wine" text={search||active?"No wines match your filters.":"Your cellar is empty. Add your first wine."}/>
-        : <div style={{display:desktop?"grid":"block",gridTemplateColumns:desktop?"repeat(auto-fill,minmax(290px,1fr))":"none",gap:desktop?12:0}}>
-            {filt.map(w=><WineCard key={w.id} wine={w} onClick={()=>{setSel(w);setEditing(false);}}/>)}
-          </div>
+        : filters.sort==="recent"
+          ? <div style={{display:"grid",gap:14}}>
+              {recentGrouped.map(group=>(
+                <section key={group.key}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8,padding:"0 2px"}}>
+                    <div style={{fontSize:12,fontWeight:800,color:"var(--text)",letterSpacing:"0.6px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{group.label}</div>
+                    <div style={{padding:"2px 8px",borderRadius:999,background:"var(--inputBg)",border:"1px solid var(--border)",fontSize:11,fontWeight:700,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{group.wines.length}</div>
+                  </div>
+                  <div style={{display:desktop?"grid":"block",gridTemplateColumns:desktop?"repeat(auto-fill,minmax(290px,1fr))":"none",gap:desktop?12:0}}>
+                    {group.wines.map(w=><WineCard key={w.id} wine={w} onClick={()=>{setSel(w);setEditing(false);}}/>)}
+                  </div>
+                </section>
+              ))}
+            </div>
+          : <div style={{display:desktop?"grid":"block",gridTemplateColumns:desktop?"repeat(auto-fill,minmax(290px,1fr))":"none",gap:desktop?12:0}}>
+              {filt.map(w=><WineCard key={w.id} wine={w} onClick={()=>{setSel(w);setEditing(false);}}/>)}
+            </div>
       }
       <Modal show={!!sel&&!editing} onClose={()=>setSel(null)} wide>
         {sel&&<WineDetail wine={sel} onEdit={()=>setEditing(true)} onDelete={async()=>{const deletedId=await onDelete(sel.id);setRecentDelete({id:deletedId||sel.id,name:sel.name||"Wine"});setSel(null);}} onAdjustConsumption={async delta=>{const updated=await onAdjustConsumption?.(sel.id,delta);if(updated)setSel(updated);}}/>}
@@ -3805,7 +3939,7 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile})=>{
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.83 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.84 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
