@@ -132,7 +132,7 @@ const EXCEL_STORAGE_LOCATION_MAP = Object.fromEntries(
     .map(([code,label])=>[(code||"").toUpperCase(),(label||"").trim()])
 );
 const STORAGE_CODE_ALIASES = { K:"WS", O:"OWS" };
-const PRESET_LOCATIONS = ["Home Wine Fridge","Office","Kennards"];
+const PRESET_LOCATIONS = ["Home","Office","Kennards"];
 const KENNARDS_SECTIONS = ["Cube","Top shelf","Bottom shelf"];
 const labelForStorageCode = rawCode => {
   const code=(rawCode||"").trim().toUpperCase();
@@ -144,7 +144,7 @@ const canonicalLocationLabel = value => {
   if(!key) return "";
   if(["ws","k","wine storage unit","kennards","cellar"].includes(key)) return "Kennards";
   if(["o","ows","office"].includes(key)) return "Office";
-  if(["h","home wine fridge","home fridge"].includes(key)) return "Home Wine Fridge";
+  if(["h","home","home wine fridge","home fridge"].includes(key)) return "Home";
   return "";
 };
 const normalizeKennardsSection = value => {
