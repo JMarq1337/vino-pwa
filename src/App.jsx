@@ -83,6 +83,24 @@ const db = {
     }catch(e){
       return {ok:false,error:String(e)};
     }
+  },
+  async listGrapeAliases(){
+    try{
+      const r=await fetch(`${supa("grape_aliases")}?select=alias,wine_type`,{headers:BH});
+      if(!r.ok) return {ok:false,rows:[],error:await r.text()};
+      return {ok:true,rows:await r.json()};
+    }catch(e){
+      return {ok:false,rows:[],error:String(e)};
+    }
+  },
+  async upsertGrapeAlias(row){
+    try{
+      const r=await fetch(supa("grape_aliases"),{method:"POST",headers:UH,body:JSON.stringify(row)});
+      if(!r.ok) return {ok:false,error:await r.text()};
+      return {ok:true};
+    }catch(e){
+      return {ok:false,error:String(e)};
+    }
   }
 };
 
@@ -415,7 +433,53 @@ const normalizeWineText = (text="") => (text||"")
   .replace(/[^a-z0-9]+/g," ")
   .trim();
 const hasAnyHint = (text,hints=[]) => hints.some(h => text.includes(h));
-const guessWineType = (grape="",name="") => {
+const WINE_TYPES = ["Red","White","Rosé","Sparkling","Dessert","Fortified","Other"];
+const WINE_TYPES_SET = new Set(WINE_TYPES);
+let GRAPE_ALIAS_CACHE = {};
+const setGrapeAliasCache = map => { GRAPE_ALIAS_CACHE = map||{}; };
+const splitGrapeAliases = (raw="") => {
+  const base=normalizeWineText(raw);
+  if(!base) return [];
+  const parts=base
+    .split(/\s*\/\s*|\s*&\s*|\s*\+\s*|\s*,\s*|\s*;\s*|\sand\s|\swith\s/i)
+    .map(s=>normalizeWineText(s))
+    .filter(Boolean);
+  return [...new Set([base,...parts].filter(Boolean))];
+};
+const buildAliasMapFromRows = rows => {
+  const map={};
+  (rows||[]).forEach(row=>{
+    const alias=normalizeWineText(row?.alias||"");
+    const type=(row?.wine_type||"").trim();
+    if(!alias||!WINE_TYPES_SET.has(type)||type==="Other") return;
+    map[alias]=type;
+  });
+  return map;
+};
+const deriveAliasMapFromWines = wines => {
+  const map={};
+  (wines||[]).forEach(w=>{
+    const aliases=splitGrapeAliases(w?.grape||"");
+    if(!aliases.length) return;
+    const inferred=guessWineType(w?.grape||"",w?.name||"",map);
+    if(!inferred||inferred==="Other") return;
+    aliases.forEach(alias=>{if(!map[alias]) map[alias]=inferred;});
+  });
+  return map;
+};
+const aliasWineTypeFromMap = (grape="",name="",aliasMap={}) => {
+  const map=aliasMap||{};
+  const aliases=splitGrapeAliases(grape);
+  if(normalizeWineText(name).includes("champagne")) aliases.push("champagne");
+  for(const alias of aliases){
+    const type=map[alias];
+    if(WINE_TYPES_SET.has(type) && type!=="Other") return type;
+  }
+  return "";
+};
+const guessWineType = (grape="",name="",aliasMap=GRAPE_ALIAS_CACHE) => {
+  const aliasType=aliasWineTypeFromMap(grape,name,aliasMap);
+  if(aliasType) return aliasType;
   const g=normalizeWineText(`${grape} ${name}`);
   if(!g)return"Other";
   const sparklingHints=["champagne","sparkling","prosecco","cava","cremant","blanc de blancs","blanc de noirs"];
@@ -3270,6 +3334,9 @@ export default function App(){
   const [tab,setTab]=useState("collection");
   const [wines,setWines]=useState([]);
   const [notes,setNotes]=useState([]);
+  const [grapeAliasMap,setGrapeAliasMap]=useState({});
+  const grapeAliasMapRef=useRef({});
+  const aliasSyncEnabledRef=useRef(false);
   const [deletedWines,setDeletedWines]=useState(()=>readDeletedWines());
   const [profile,setProfileState]=useState(DEFAULT_PROFILE);
   const [savedLocations,setSavedLocations]=useState(()=>readSavedLocations());
@@ -3284,6 +3351,10 @@ export default function App(){
   useEffect(()=>{try{localStorage.setItem("vino_theme",themeMode)}catch{}},[themeMode]);
   useEffect(()=>{try{localStorage.setItem(SAVED_LOCATIONS_KEY,JSON.stringify(savedLocations))}catch{}},[savedLocations]);
   useEffect(()=>{try{localStorage.setItem(DELETED_WINES_KEY,JSON.stringify(deletedWines.slice(0,40)))}catch{}},[deletedWines]);
+  useEffect(()=>{
+    grapeAliasMapRef.current=grapeAliasMap||{};
+    setGrapeAliasCache(grapeAliasMapRef.current);
+  },[grapeAliasMap]);
   useEffect(()=>{
     const mq=window.matchMedia?.("(prefers-color-scheme:dark)");
     const h=e=>setSysDark(e.matches);
@@ -3304,7 +3375,18 @@ export default function App(){
         return {...w,wishlist:false,bottles:legacyBottles};
       });
       try{
-        const [wineRows,noteRows,prof]=await Promise.all([db.get("wines"),db.get("tasting_notes"),db.getProfile()]);
+        const [wineRows,noteRows,prof,aliasRes]=await Promise.all([db.get("wines"),db.get("tasting_notes"),db.getProfile(),db.listGrapeAliases()]);
+        const builtInAliasMap=deriveAliasMapFromWines(SEED_WINES);
+        const learnedAliasMap=deriveAliasMapFromWines(normalizeLegacyWineRows(wineRows.map(fromDb.wine)));
+        const remoteAliasMap=aliasRes.ok?buildAliasMapFromRows(aliasRes.rows||[]):{};
+        const mergedAliasMap={...builtInAliasMap,...learnedAliasMap,...remoteAliasMap};
+        setGrapeAliasMap(mergedAliasMap);
+        grapeAliasMapRef.current=mergedAliasMap;
+        setGrapeAliasCache(mergedAliasMap);
+        aliasSyncEnabledRef.current=!!aliasRes.ok;
+        if(aliasRes.ok && !Object.keys(remoteAliasMap).length && Object.keys(builtInAliasMap).length){
+          await Promise.all(Object.entries(builtInAliasMap).map(([alias,wine_type])=>db.upsertGrapeAlias({alias,wine_type,source:"bootstrap"})));
+        }
         console.log("DB: wines",wineRows.length,"notes",noteRows.length);
         if(wineRows.length===0){
           if(cache?.wines?.length){
@@ -3347,12 +3429,20 @@ export default function App(){
             const staleIds=new Set(stalePlaceholders.map(w=>w.id));
             all=all.filter(w=>!staleIds.has(w.id));
           }
-          const toReclassify=all.filter(w=>(w.wineType||"Other")==="Other");
+          const toReclassify=all.filter(w=>{
+            const inferred=guessWineType(w?.grape||"",w?.name||"",grapeAliasMapRef.current);
+            if(!inferred||inferred==="Other") return false;
+            return (w.wineType||"Other")!==inferred;
+          });
           if(toReclassify.length){
-            const repaired=toReclassify.map(w=>({...w,wineType:resolveWineType(w)}));
+            const repaired=toReclassify.map(w=>{
+              const inferred=guessWineType(w?.grape||"",w?.name||"",grapeAliasMapRef.current);
+              const tc=WINE_TYPE_COLORS[inferred]||WINE_TYPE_COLORS.Other;
+              return {...w,wineType:inferred,color:tc.dot};
+            });
             await Promise.all(repaired.map(w=>db.upsert("wines",toDb.wine(w))));
-            const repairedById=Object.fromEntries(repaired.map(w=>[w.id,w.wineType]));
-            all=all.map(w=>repairedById[w.id]?{...w,wineType:repairedById[w.id]}:w);
+            const repairedById=Object.fromEntries(repaired.map(w=>[w.id,{wineType:w.wineType,color:w.color}]));
+            all=all.map(w=>repairedById[w.id]?{...w,wineType:repairedById[w.id].wineType,color:repairedById[w.id].color}:w);
           }
           const toNormalizeLocation=all.filter(w=>normalizeLocation(w.location)!==(w.location||""));
           if(toNormalizeLocation.length){
@@ -3571,8 +3661,43 @@ export default function App(){
     }catch{}
   },[wines,notes,profile]);
 
-  const addWine=async w=>{setWines(p=>[...p,w]);await db.upsert("wines",toDb.wine(w));};
-  const updWine=async w=>{setWines(p=>p.map(x=>x.id===w.id?w:x));await db.upsert("wines",toDb.wine(w));};
+  const applyWineTypeAndLearnAliases = useCallback(async wineInput=>{
+    const inferred=guessWineType(wineInput?.grape||"",wineInput?.name||"",grapeAliasMapRef.current);
+    const finalType=inferred||"Other";
+    const color=(WINE_TYPE_COLORS[finalType]||WINE_TYPE_COLORS.Other).dot;
+    const nextWine={...wineInput,wineType:finalType,color};
+    const aliases=splitGrapeAliases(wineInput?.grape||"");
+    if(finalType==="Other"||aliases.length===0) return nextWine;
+    let nextAliasMap=grapeAliasMapRef.current;
+    let changed=false;
+    aliases.forEach(alias=>{
+      if(!nextAliasMap[alias]){
+        if(!changed) nextAliasMap={...nextAliasMap};
+        nextAliasMap[alias]=finalType;
+        changed=true;
+      }
+    });
+    if(changed){
+      grapeAliasMapRef.current=nextAliasMap;
+      setGrapeAliasMap(nextAliasMap);
+      setGrapeAliasCache(nextAliasMap);
+      if(aliasSyncEnabledRef.current){
+        await Promise.all(aliases.map(alias=>db.upsertGrapeAlias({alias,wine_type:finalType,source:"app"})));
+      }
+    }
+    return nextWine;
+  },[]);
+
+  const addWine=async w=>{
+    const next=await applyWineTypeAndLearnAliases(w);
+    setWines(p=>[...p,next]);
+    await db.upsert("wines",toDb.wine(next));
+  };
+  const updWine=async w=>{
+    const next=await applyWineTypeAndLearnAliases(w);
+    setWines(p=>p.map(x=>x.id===next.id?next:x));
+    await db.upsert("wines",toDb.wine(next));
+  };
   const delWine=async id=>{
     let removed=null;
     setWines(prev=>{
