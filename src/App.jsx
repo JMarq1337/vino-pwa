@@ -1464,6 +1464,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
   const [rememberLocation,setRememberLocation]=useState(false);
   const [priceBottlesManual,setPriceBottlesManual]=useState(false);
   const isTwoStepNewCellar=!initial&&!isWishlist;
+  const usesStepTabs=!isWishlist&&(isTwoStepNewCellar||!!initial);
   const [step,setStep]=useState("details");
   const set=(k,v)=>setF(p=>({...p,[k]:v}));
   const setOtherReview=(idx,key,value)=>setF(p=>({
@@ -1522,8 +1523,8 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
       : (finalPricePerBottle!=null&&paidForBottles>0?Number((finalPricePerBottle*paidForBottles).toFixed(2)):null));
   const invalidCustomLocation=!isWishlist&&locationMode==="custom"&&!normalizeLocation(customLocation);
   const canSubmit=!!f.name&&!invalidCustomLocation;
-  const showDetailsStep=!isTwoStepNewCellar||step==="details";
-  const showJournalStep=isTwoStepNewCellar&&step==="journal";
+  const showDetailsStep=!usesStepTabs||step==="details";
+  const showJournalStep=usesStepTabs&&step==="journal";
   useEffect(()=>{
     const draft=readWineFormDraft(draftKey);
     if(!draft?.form) return;
@@ -1635,10 +1636,10 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
       </div>
       {showFields&&(
         <div>
-          {isTwoStepNewCellar&&(
+          {usesStepTabs&&(
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
-              <button type="button" onClick={()=>setStep("details")} style={{padding:"8px 10px",borderRadius:10,border:step==="details"?"1.5px solid var(--accent)":"1.5px solid var(--border)",background:step==="details"?"rgba(var(--accentRgb),0.1)":"var(--inputBg)",color:step==="details"?"var(--accent)":"var(--sub)",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>1. Wine Details</button>
-              <button type="button" onClick={()=>setStep("journal")} disabled={!canSubmit} style={{padding:"8px 10px",borderRadius:10,border:step==="journal"?"1.5px solid var(--accent)":"1.5px solid var(--border)",background:step==="journal"?"rgba(var(--accentRgb),0.1)":"var(--inputBg)",color:step==="journal"?"var(--accent)":"var(--sub)",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:canSubmit?1:0.5}}>2. Journal Notes</button>
+              <button type="button" onClick={()=>setStep("details")} style={{padding:"8px 10px",borderRadius:10,border:step==="details"?"1.5px solid var(--accent)":"1.5px solid var(--border)",background:step==="details"?"rgba(var(--accentRgb),0.1)":"var(--inputBg)",color:step==="details"?"var(--accent)":"var(--sub)",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>1. Main Stats</button>
+              <button type="button" onClick={()=>setStep("journal")} disabled={!canSubmit} style={{padding:"8px 10px",borderRadius:10,border:step==="journal"?"1.5px solid var(--accent)":"1.5px solid var(--border)",background:step==="journal"?"rgba(var(--accentRgb),0.1)":"var(--inputBg)",color:step==="journal"?"var(--accent)":"var(--sub)",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:canSubmit?1:0.5}}>2. Journal</button>
             </div>
           )}
           {showDetailsStep&&(
@@ -1777,48 +1778,19 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
               <Field label="Personal Notes" value={f.notes} onChange={v=>set("notes",v)} placeholder="Your own notes..." rows={3} optional/>
             </>
           )}
-          {!showJournalStep&&!isTwoStepNewCellar&&!initial&&(
-            <>
-              {!isWishlist&&(
-                <>
-                  <ReviewEntryEditor
-                    title="Review"
-                    entry={{reviewer:f.reviewPrimaryReviewer,rating:f.reviewPrimaryRating,text:f.review}}
-                    onChange={(k,v)=>set(k==="text"?"review":k==="reviewer"?"reviewPrimaryReviewer":"reviewPrimaryRating",v)}
-                    suggestions={reviewerSuggestions}
-                  />
-                  <div style={{fontSize:11,fontWeight:700,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Other Reviews</div>
-                  {(f.otherReviews||[]).map((entry,idx)=>(
-                    <ReviewEntryEditor
-                      key={idx}
-                      title={`Other Review ${idx+1}`}
-                      entry={entry}
-                      onChange={(k,v)=>setOtherReview(idx,k,v)}
-                      suggestions={reviewerSuggestions}
-                      onRemove={(f.otherReviews||[]).length>1?()=>removeOtherReviewSlot(idx):undefined}
-                    />
-                  ))}
-                  <button type="button" onClick={addOtherReviewSlot} style={{width:"100%",marginBottom:12,padding:"8px 10px",borderRadius:10,border:"1.5px dashed var(--border)",background:"none",color:"var(--accent)",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
-                    + Add Another Review
-                  </button>
-                  <Field label="Personal Notes" value={f.notes} onChange={v=>set("notes",v)} placeholder="Your own notes..." rows={3} optional/>
-                </>
-              )}
-            </>
-          )}
-          {isTwoStepNewCellar&&step==="details"&&(
+          {usesStepTabs&&step==="details"&&(
             <div style={{display:"flex",gap:8,marginTop:4}}>
               <Btn variant="secondary" onClick={onClose} full>Cancel</Btn>
               <Btn onClick={()=>setStep("journal")} full disabled={!canSubmit}>Continue</Btn>
             </div>
           )}
-          {isTwoStepNewCellar&&step==="journal"&&(
+          {usesStepTabs&&step==="journal"&&(
             <div style={{display:"flex",gap:8,marginTop:4}}>
               <Btn variant="secondary" onClick={()=>setStep("details")} full>Back</Btn>
               <Btn onClick={save} full disabled={!canSubmit}>Save Wine</Btn>
             </div>
           )}
-          {!isTwoStepNewCellar&&(
+          {!usesStepTabs&&(
             <div style={{display:"flex",gap:8,marginTop:4}}>
               <Btn variant="secondary" onClick={onClose} full>Cancel</Btn>
               <Btn onClick={save} full disabled={!canSubmit}>Save Wine</Btn>
@@ -3833,7 +3805,7 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile})=>{
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.82 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.83 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
