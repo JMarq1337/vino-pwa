@@ -1556,6 +1556,9 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
   const canSubmit=!!f.name&&!invalidCustomLocation;
   const showDetailsStep=!usesStepTabs||step==="details";
   const showJournalStep=usesStepTabs&&step==="journal";
+  const sectionCardStyle={background:"var(--card)",border:"1px solid var(--border)",borderRadius:14,padding:"12px 12px 10px",marginBottom:12};
+  const sectionTitleStyle={fontSize:10,color:"var(--sub)",fontWeight:800,textTransform:"uppercase",letterSpacing:"0.8px",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"};
+  const sectionHintStyle={fontSize:12,color:"var(--sub)",marginBottom:10,fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.45};
   useEffect(()=>{
     const draft=readWineFormDraft(draftKey);
     if(!draft?.form) return;
@@ -1688,86 +1691,106 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
           )}
           {showDetailsStep&&(
             <>
-              <Field label="Wine Name" value={f.name} onChange={v=>set("name",v)} placeholder="e.g. Penfolds Grange"/>
-              <Field label="Origin" value={f.origin} onChange={v=>set("origin",v)} placeholder="Region, Country" optional/>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
-                <Field label="Varietal" value={f.grape} onChange={v=>set("grape",v)} placeholder="Shiraz" optional/>
-                <Field label="Vintage" value={f.vintage} onChange={v=>set("vintage",v)} type="number" placeholder="2019" optional/>
-                <Field label="Alc %" value={f.alcohol} onChange={v=>set("alcohol",v)} type="number" placeholder="14.5" optional/>
+              {!isWishlist&&(
+                <div style={sectionCardStyle}>
+                  <div style={sectionTitleStyle}>Timeline</div>
+                  <div style={sectionHintStyle}>Set purchase and inventory dates first.</div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                    <Field label="Date Purchased" value={f.datePurchased} onChange={v=>set("datePurchased",v)} type="date" optional/>
+                    <Field label="Added to Inventory" value={f.addedDate} onChange={v=>set("addedDate",v)} type="date" optional/>
+                  </div>
+                </div>
+              )}
+              <div style={sectionCardStyle}>
+                <div style={sectionTitleStyle}>Wine Details</div>
+                <Field label="Wine Name" value={f.name} onChange={v=>set("name",v)} placeholder="e.g. Penfolds Grange"/>
+                <Field label="Origin" value={f.origin} onChange={v=>set("origin",v)} placeholder="Region, Country" optional/>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+                  <Field label="Varietal" value={f.grape} onChange={v=>set("grape",v)} placeholder="Shiraz" optional/>
+                  <Field label="Vintage" value={f.vintage} onChange={v=>set("vintage",v)} type="number" placeholder="2019" optional/>
+                  <Field label="Alc %" value={f.alcohol} onChange={v=>set("alcohol",v)} type="number" placeholder="14.5" optional/>
+                </div>
               </div>
               {!isWishlist&&(
                 <>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 2fr 1fr",gap:10}}>
-                    <Field label="Bottles" value={f.bottles} onChange={handleBottlesChange} type="number" placeholder="1" optional/>
-                    <SelField
-                      label="Location"
-                      value={selectedLocationValue}
-                      onChange={handleLocationSelect}
-                      options={[...selectableLocations.map(loc=>({value:loc,label:loc})),{value:CUSTOM_LOCATION_OPTION,label:"Custom location…"}]}
-                    />
-                    <Field label={isKennardsLocation?"Box No.":"Slot"} value={f.locationSlot} onChange={v=>set("locationSlot",v)} placeholder={isKennardsLocation?"e.g. 12":"A3"} optional/>
-                  </div>
-                  {isKennardsLocation&&(
-                    <SelField
-                      label="Kennards Placement"
-                      value={normalizeKennardsSection(f.locationSection)||"Cube"}
-                      onChange={v=>set("locationSection",normalizeKennardsSection(v))}
-                      options={KENNARDS_SECTIONS}
-                    />
-                  )}
-                  {locationMode==="custom"&&(
-                    <div style={{marginBottom:12,marginTop:-4,padding:"10px 11px",borderRadius:12,background:"var(--card)",border:"1px solid var(--border)"}}>
-                      <Field label="Custom Location" value={customLocation} onChange={setCustomLocation} placeholder="e.g. Events Cellar" optional/>
-                      <button type="button" onClick={()=>setRememberLocation(v=>!v)}
-                        style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"8px 2px 2px",border:"none",background:"transparent",fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:12,color:"var(--text)",fontWeight:600,width:"100%",cursor:"pointer"}}>
-                        <span style={{color:"var(--sub)"}}>Save this location for future wines</span>
-                        <span style={{width:40,height:22,borderRadius:999,background:rememberLocation?"var(--accent)":"var(--inputBg)",border:rememberLocation?"1.5px solid rgba(var(--accentRgb),0.55)":"1.5px solid var(--border)",position:"relative",transition:"all .16s",display:"inline-flex"}}>
-                          <span style={{position:"absolute",top:2,left:rememberLocation?20:2,width:16,height:16,borderRadius:"50%",background:"#fff",boxShadow:"0 1px 4px rgba(0,0,0,.28)",transition:"left .16s"}}/>
-                        </span>
-                      </button>
+                  <div style={sectionCardStyle}>
+                    <div style={sectionTitleStyle}>Storage & Inventory</div>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 2fr 1fr",gap:10}}>
+                      <Field label="Bottles" value={f.bottles} onChange={handleBottlesChange} type="number" placeholder="1" optional/>
+                      <SelField
+                        label="Location"
+                        value={selectedLocationValue}
+                        onChange={handleLocationSelect}
+                        options={[...selectableLocations.map(loc=>({value:loc,label:loc})),{value:CUSTOM_LOCATION_OPTION,label:"Custom location…"}]}
+                      />
+                      <Field label={isKennardsLocation?"Box No.":"Slot"} value={f.locationSlot} onChange={v=>set("locationSlot",v)} placeholder={isKennardsLocation?"e.g. 12":"A3"} optional/>
                     </div>
-                  )}
-                  <div style={{background:"var(--card)",borderRadius:12,padding:"10px 12px",marginBottom:12,border:"1px solid var(--border)"}}>
-                    <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Bottle Tracker</div>
-                    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:8}}>
-                      {[["Purchased",projectedPurchased],["Left",projectedLeft],["Consumed",projectedConsumed]].map(([label,val])=>(
-                        <div key={label} style={{background:"var(--inputBg)",borderRadius:10,padding:"7px 8px",border:"1px solid var(--border)"}}>
-                          <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:1,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{label}</div>
-                          <div style={{fontSize:15,color:"var(--text)",fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.2}}>{val}</div>
-                        </div>
-                      ))}
-                    </div>
-                    {initial&&<Field label="Add Newly Purchased Bottles" value={f.addPurchased} onChange={v=>set("addPurchased",v.replace(/[^0-9]/g,""))} type="number" placeholder="0" optional/>}
-                  </div>
-                  {savedLocations.length>0&&(
-                    <div style={{marginBottom:14,marginTop:-4}}>
-                      <div style={{fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Saved Locations</div>
-                      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                        {savedLocations.map(loc=>(
-                          <button
-                            key={loc}
-                            type="button"
-                            onClick={()=>onRemoveLocation?.(loc)}
-                            style={{display:"inline-flex",alignItems:"center",gap:6,padding:"6px 10px",borderRadius:20,border:"1.5px solid var(--border)",background:"var(--inputBg)",color:"var(--text)",fontSize:12,fontWeight:600,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:"pointer"}}
-                          >
-                            <span>{loc}</span>
-                            <span style={{color:"var(--sub)",lineHeight:1}}>×</span>
-                          </button>
+                    {isKennardsLocation&&(
+                      <SelField
+                        label="Kennards Placement"
+                        value={normalizeKennardsSection(f.locationSection)||"Cube"}
+                        onChange={v=>set("locationSection",normalizeKennardsSection(v))}
+                        options={KENNARDS_SECTIONS}
+                      />
+                    )}
+                    {locationMode==="custom"&&(
+                      <div style={{marginBottom:12,marginTop:-4,padding:"10px 11px",borderRadius:12,background:"var(--inputBg)",border:"1px solid var(--border)"}}>
+                        <Field label="Custom Location" value={customLocation} onChange={setCustomLocation} placeholder="e.g. Events Cellar" optional/>
+                        <button type="button" onClick={()=>setRememberLocation(v=>!v)}
+                          style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"8px 2px 2px",border:"none",background:"transparent",fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:12,color:"var(--text)",fontWeight:600,width:"100%",cursor:"pointer"}}>
+                          <span style={{color:"var(--sub)"}}>Save this location for future wines</span>
+                          <span style={{width:40,height:22,borderRadius:999,background:rememberLocation?"var(--accent)":"var(--card)",border:rememberLocation?"1.5px solid rgba(var(--accentRgb),0.55)":"1.5px solid var(--border)",position:"relative",transition:"all .16s",display:"inline-flex"}}>
+                            <span style={{position:"absolute",top:2,left:rememberLocation?20:2,width:16,height:16,borderRadius:"50%",background:"#fff",boxShadow:"0 1px 4px rgba(0,0,0,.28)",transition:"left .16s"}}/>
+                          </span>
+                        </button>
+                      </div>
+                    )}
+                    <div style={{background:"var(--inputBg)",borderRadius:12,padding:"10px 12px",marginBottom:12,border:"1px solid var(--border)"}}>
+                      <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Bottle Tracker</div>
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:8}}>
+                        {[["Purchased",projectedPurchased],["Left",projectedLeft],["Consumed",projectedConsumed]].map(([label,val])=>(
+                          <div key={label} style={{background:"var(--card)",borderRadius:10,padding:"7px 8px",border:"1px solid var(--border)"}}>
+                            <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:1,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{label}</div>
+                            <div style={{fontSize:15,color:"var(--text)",fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.2}}>{val}</div>
+                          </div>
                         ))}
                       </div>
+                      {initial&&<Field label="Add Newly Purchased Bottles" value={f.addPurchased} onChange={v=>set("addPurchased",v.replace(/[^0-9]/g,""))} type="number" placeholder="0" optional/>}
                     </div>
-                  )}
+                    {savedLocations.length>0&&(
+                      <div style={{marginBottom:6}}>
+                        <div style={{fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Saved Locations</div>
+                        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                          {savedLocations.map(loc=>(
+                            <button
+                              key={loc}
+                              type="button"
+                              onClick={()=>onRemoveLocation?.(loc)}
+                              style={{display:"inline-flex",alignItems:"center",gap:6,padding:"6px 10px",borderRadius:20,border:"1.5px solid var(--border)",background:"var(--inputBg)",color:"var(--text)",fontSize:12,fontWeight:600,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:"pointer"}}
+                            >
+                              <span>{loc}</span>
+                              <span style={{color:"var(--sub)",lineHeight:1}}>×</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </>
               )}
               {!isWishlist&&(
                 <>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
-                    <Field label="Drink From" value={f.drinkStart} onChange={v=>set("drinkStart",v)} type="number" placeholder="2026" optional/>
-                    <Field label="Drink By" value={f.drinkEnd} onChange={v=>set("drinkEnd",v)} type="number" placeholder="2034" optional/>
-                    <Field label="Supplier" value={f.supplier} onChange={v=>set("supplier",v)} placeholder="WS / Local shop" optional/>
+                  <div style={sectionCardStyle}>
+                    <div style={sectionTitleStyle}>Drinking Window</div>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+                      <Field label="Drink From" value={f.drinkStart} onChange={v=>set("drinkStart",v)} type="number" placeholder="2026" optional/>
+                      <Field label="Drink By" value={f.drinkEnd} onChange={v=>set("drinkEnd",v)} type="number" placeholder="2034" optional/>
+                      <Field label="Supplier" value={f.supplier} onChange={v=>set("supplier",v)} placeholder="WS / Local shop" optional/>
+                    </div>
                   </div>
-                  <div style={{background:"var(--card)",borderRadius:12,padding:"10px 12px",marginBottom:12,border:"1px solid var(--border)"}}>
-                    <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Price Setup</div>
+                  <div style={sectionCardStyle}>
+                    <div style={sectionTitleStyle}>Pricing</div>
+                    <div style={sectionHintStyle}>Set what you paid and optionally override bottle RRP.</div>
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
                       <Field label="Amount Paid" value={f.totalPaid} onChange={v=>set("totalPaid",v)} type="number" placeholder="179.5" optional/>
                       <Field label="Bottles Paid For" value={f.priceForBottles} onChange={handlePriceForBottlesChange} type="number" placeholder="6" optional/>
@@ -1784,10 +1807,6 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
                     <div style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.55}}>
                       If RRP is left blank, it will use the calculated paid per bottle automatically.
                     </div>
-                  </div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                    <Field label="Date Purchased" value={f.datePurchased} onChange={v=>set("datePurchased",v)} type="date" optional/>
-                    <Field label="Added to Inventory" value={f.addedDate} onChange={v=>set("addedDate",v)} type="date" optional/>
                   </div>
                 </>
               )}
@@ -3943,7 +3962,7 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile})=>{
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.84 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.85 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
