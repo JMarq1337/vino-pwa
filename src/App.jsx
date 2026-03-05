@@ -1352,8 +1352,7 @@ const WineDetail=({wine,onEdit,onDelete,onMove,onAdjustConsumption})=>{
     <div style={desktopFloatingAside?{maxWidth:760,margin:"0 auto",display:"grid",gridTemplateColumns:"190px minmax(0,1fr)",gap:14,alignItems:"start"}:{}}>
       {desktopFloatingAside&&(
         <div style={{height:518,pointerEvents:"none",zIndex:3,display:"flex",alignItems:"flex-end",justifyContent:"center",position:"relative"}}>
-          <div style={{position:"absolute",left:"12%",right:"12%",bottom:14,height:46,borderRadius:"999px",background:"radial-gradient(ellipse at center, rgba(0,0,0,0.38) 0%, rgba(0,0,0,0.2) 38%, rgba(0,0,0,0.08) 58%, rgba(0,0,0,0) 82%)",boxShadow:"0 8px 22px rgba(0,0,0,0.18)",opacity:0.98,transform:"scaleX(0.9)"}}/>
-          <WinePhotoImage src={wine.photo} alt={wine.name} style={{width:"100%",height:"100%",maxHeight:500,objectFit:"contain",objectPosition:"center",animation:"heroPhotoFloat .3s ease-out both"}}/>
+          <WinePhotoImage src={wine.photo} alt={wine.name} style={{width:"100%",height:"100%",maxHeight:500,objectFit:"contain",objectPosition:"center",filter:"drop-shadow(0 18px 22px rgba(0,0,0,.34)) drop-shadow(0 4px 8px rgba(0,0,0,.22))",animation:"heroPhotoFloat .3s ease-out both"}}/>
         </div>
       )}
       <div style={desktopFloatingAside?{background:"var(--card)",border:"1px solid var(--border)",borderRadius:20,padding:14,boxShadow:"0 10px 28px var(--shadow)"}:{}}>
@@ -1363,8 +1362,7 @@ const WineDetail=({wine,onEdit,onDelete,onMove,onAdjustConsumption})=>{
           <div style={{position:"relative",marginBottom:16}}>
             {hasPhoto&&(
               <div style={{position:"absolute",left:"50%",top:-26,transform:"translateX(-50%)",width:"min(92%,330px)",height:196,zIndex:3,pointerEvents:"none",display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
-                <div style={{position:"absolute",left:"12%",right:"12%",bottom:6,height:40,borderRadius:"999px",background:"radial-gradient(ellipse at center, rgba(0,0,0,0.36) 0%, rgba(0,0,0,0.18) 42%, rgba(0,0,0,0.08) 58%, rgba(0,0,0,0) 82%)",boxShadow:"0 6px 18px rgba(0,0,0,0.16)",opacity:0.98,transform:"scaleX(0.88)"}}/>
-                <WinePhotoImage src={wine.photo} alt={wine.name} style={{width:"100%",height:"100%",objectFit:"contain",objectPosition:"center",animation:"heroPhotoFloat .34s ease-out both"}}/>
+                <WinePhotoImage src={wine.photo} alt={wine.name} style={{width:"100%",height:"100%",objectFit:"contain",objectPosition:"center",filter:"drop-shadow(0 14px 20px rgba(0,0,0,.34)) drop-shadow(0 3px 7px rgba(0,0,0,.2))",animation:"heroPhotoFloat .34s ease-out both"}}/>
               </div>
             )}
             <div style={{borderRadius:16,background:`linear-gradient(140deg,${tc.dot} 0%,rgba(0,0,0,.24) 90%)`,padding:hasPhoto?"168px 20px 20px":"20px",position:"relative",overflow:"hidden",minHeight:hasPhoto?228:108,boxShadow:"inset 0 1px 0 rgba(255,255,255,.2)",animation:"heroGlassIn .25s ease-out"}}>
@@ -3787,7 +3785,7 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile})=>{
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.77 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.78 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
