@@ -3403,8 +3403,8 @@ export default function App(){
           }
         }else{
           let all=normalizeLegacyWineRows(wineRows.map(fromDb.wine));
-          const importedOnce=(()=>{try{return localStorage.getItem(EXCEL_IMPORT_FLAG)==="1";}catch{return false;}})();
-          if(!importedOnce){
+          {
+            // Always run non-destructive reconciliation so missing seed wines are restored.
             const ids=new Set(all.map(w=>w.id));
             const signatures=new Set(all.filter(w=>!w.wishlist).map(wineIdentitySignature));
             const toImport=SEED_WINES.filter(w=>!ids.has(w.id)&&!signatures.has(wineIdentitySignature(w)));
@@ -3417,18 +3417,6 @@ export default function App(){
           // Repair older imports:
           // 1) Remove empty placeholder rows from the old spreadsheet conversion.
           // 2) Reclassify wines that were previously persisted as "Other".
-          const stalePlaceholders=all.filter(w=>
-            String(w.id||"").startsWith("xl-") &&
-            /^Wine \d+$/i.test((w.name||"").trim()) &&
-            !(w.grape||"").trim() &&
-            !(w.origin||"").trim() &&
-            (safeNum(w.bottles)||0)===0
-          );
-          if(stalePlaceholders.length){
-            await Promise.all(stalePlaceholders.map(w=>db.del("wines",w.id)));
-            const staleIds=new Set(stalePlaceholders.map(w=>w.id));
-            all=all.filter(w=>!staleIds.has(w.id));
-          }
           const toReclassify=all.filter(w=>{
             const inferred=guessWineType(w?.grape||"",w?.name||"",grapeAliasMapRef.current);
             if(!inferred||inferred==="Other") return false;
@@ -3591,23 +3579,6 @@ export default function App(){
               await Promise.all(repaired.map(w=>db.upsert("wines",toDb.wine(w))));
             }
             try{localStorage.setItem(EXCEL_RESTORE_FLAG,"1");}catch{}
-          }
-          const seenSignatures=new Map();
-          const duplicateIds=[];
-          for(const wine of all){
-            if(wine?.wishlist) continue;
-            const sig=wineIdentitySignature(wine);
-            if(!sig) continue;
-            if(!seenSignatures.has(sig)){
-              seenSignatures.set(sig,wine.id);
-              continue;
-            }
-            duplicateIds.push(wine.id);
-          }
-          if(duplicateIds.length){
-            const dropSet=new Set(duplicateIds);
-            await Promise.all(duplicateIds.map(id=>db.del("wines",id)));
-            all=all.filter(w=>!dropSet.has(w.id));
           }
           setWines(all.filter(w=>!w.wishlist));
           setNotes(noteRows.length?noteRows.map(fromDb.note):(cache?.notes||[]));
