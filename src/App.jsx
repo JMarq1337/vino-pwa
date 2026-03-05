@@ -247,6 +247,79 @@ const encodeWineNotes = (plain,meta) => {
   if(!hasMeta) return clean;
   return `${META_PREFIX}${JSON.stringify(meta)}${clean?`\n${clean}`:""}`;
 };
+const REVIEWER_INITIALS_MAP = Object.fromEntries(
+  (wineHoldings2021.reviewers||[])
+    .slice(1)
+    .map(row=>[(row?.[0]||"").toString().trim().toUpperCase(),(row?.[1]||"").toString().trim()])
+    .filter(([k,v])=>k&&v)
+);
+const normalizeReviewEntry = entry => ({
+  reviewer:(entry?.reviewer||"").toString().trim(),
+  rating:(entry?.rating||"").toString().trim(),
+  text:(entry?.text||"").toString().trim(),
+});
+const hasReviewEntryValue = entry => {
+  const e=normalizeReviewEntry(entry);
+  return !!(e.reviewer||e.rating||e.text);
+};
+const normalizeOtherReviews = entries => (entries||[]).map(normalizeReviewEntry).filter(hasReviewEntryValue);
+const parseOtherRatingsString = raw => {
+  const txt=(raw||"").toString().trim();
+  if(!txt) return [];
+  return txt
+    .split(/\s*[;|]\s*/)
+    .map(token=>token.trim())
+    .filter(Boolean)
+    .map(token=>{
+      const dashMatch=token.match(/^(.+?)\s*-\s*(.+)$/);
+      let rating="",reviewer="";
+      if(dashMatch){
+        rating=(dashMatch[1]||"").trim();
+        reviewer=(dashMatch[2]||"").trim();
+      }else{
+        reviewer=token;
+      }
+      const upper=reviewer.toUpperCase();
+      if(REVIEWER_INITIALS_MAP[upper]) reviewer=REVIEWER_INITIALS_MAP[upper];
+      return normalizeReviewEntry({reviewer,rating,text:""});
+    })
+    .filter(hasReviewEntryValue);
+};
+const serializeOtherRatings = entries => normalizeOtherReviews(entries)
+  .map(entry=>[entry.rating,entry.reviewer].filter(Boolean).join(" - "))
+  .filter(Boolean)
+  .join("; ");
+const toJournalState = wine => {
+  const primary=normalizeReviewEntry({
+    reviewer:wine?.reviewPrimaryReviewer||"",
+    rating:wine?.reviewPrimaryRating||"",
+    text:wine?.review||"",
+  });
+  const otherReviews=normalizeOtherReviews(
+    (Array.isArray(wine?.otherReviews)&&wine.otherReviews.length)
+      ? wine.otherReviews
+      : parseOtherRatingsString(wine?.tastingNotes||"")
+  );
+  const personalNotes=(wine?.notes||"").toString();
+  return { primary, otherReviews, personalNotes };
+};
+const reviewerSuggestionsFromWines = wines => {
+  const names=new Map();
+  Object.values(REVIEWER_INITIALS_MAP).forEach(name=>{
+    const v=(name||"").toString().trim();
+    if(v) names.set(v.toLowerCase(),v);
+  });
+  (wines||[]).forEach(w=>{
+    const journal=toJournalState(w);
+    const primary=(journal.primary?.reviewer||"").toString().trim();
+    if(primary) names.set(primary.toLowerCase(),primary);
+    (journal.otherReviews||[]).forEach(r=>{
+      const reviewer=(r?.reviewer||"").toString().trim();
+      if(reviewer) names.set(reviewer.toLowerCase(),reviewer);
+    });
+  });
+  return [...names.values()].sort((a,b)=>a.localeCompare(b));
+};
 const wineReadiness = w => {
   const currentYear = new Date().getFullYear();
   const m=w.cellarMeta||{};
@@ -362,17 +435,51 @@ const readAudits=()=>{
 const fromDb = {
   wine: r=>{
     const parsed=parseWineMetaFromNotes(r.notes);
-    const meta={...(parsed.meta||{})};
+    const metaRaw={...(parsed.meta||{})};
+    const journalRaw=metaRaw.journal||{};
+    const legacyPrimaryRating = safeNum(metaRaw.hallidayScore);
+    const legacyPrimaryReviewer = (legacyPrimaryRating!=null || (r.review||"").trim()) ? "Halliday" : "";
+    const legacyOther = parseOtherRatingsString(r.tasting_notes||"");
+    const meta={...metaRaw};
+    delete meta.journal;
     if(!meta.addedDate){
       if(typeof r.date_purchased==="string"&&r.date_purchased.length>=10) meta.addedDate=r.date_purchased.slice(0,10);
       else if(typeof r.created_at==="string"&&r.created_at.length>=10) meta.addedDate=r.created_at.slice(0,10);
     }
-    return ({ id:r.id,name:r.name,origin:r.origin,grape:r.grape,alcohol:r.alcohol,vintage:r.vintage,bottles:r.bottles,rating:r.rating,notes:parsed.plain,cellarMeta:meta,review:r.review,tastingNotes:r.tasting_notes,datePurchased:r.date_purchased,wishlist:r.wishlist,color:r.color,photo:r.photo,location:normalizeLocation(r.location),locationSlot:r.location_slot,wineType:r.wine_type });
+    const primary=normalizeReviewEntry({
+      reviewer:journalRaw?.primary?.reviewer||legacyPrimaryReviewer,
+      rating:journalRaw?.primary?.rating||((legacyPrimaryRating!=null)?String(legacyPrimaryRating):""),
+      text:journalRaw?.primary?.text||r.review||"",
+    });
+    const otherReviews=normalizeOtherReviews(
+      Array.isArray(journalRaw?.otherReviews)&&journalRaw.otherReviews.length
+        ? journalRaw.otherReviews
+        : legacyOther
+    );
+    const personalNotes=(journalRaw?.personalNotes??parsed.plain??"").toString();
+    return ({
+      id:r.id,name:r.name,origin:r.origin,grape:r.grape,alcohol:r.alcohol,vintage:r.vintage,bottles:r.bottles,rating:r.rating,
+      notes:personalNotes,cellarMeta:meta,review:primary.text,tastingNotes:r.tasting_notes,datePurchased:r.date_purchased,wishlist:r.wishlist,color:r.color,photo:r.photo,
+      location:normalizeLocation(r.location),locationSlot:r.location_slot,wineType:r.wine_type,
+      reviewPrimaryReviewer:primary.reviewer,reviewPrimaryRating:primary.rating,otherReviews
+    });
   },
   note: r=>({ id:r.id,wineId:r.wine_id,title:r.title,content:r.content,date:r.date })
 };
 const toDb = {
-  wine: w=>({ id:w.id,name:w.name,origin:w.origin,grape:w.grape,alcohol:w.alcohol,vintage:w.vintage,bottles:w.bottles,rating:w.rating,notes:encodeWineNotes(w.notes,w.cellarMeta),review:w.review,tasting_notes:w.tastingNotes,date_purchased:w.datePurchased,wishlist:w.wishlist||false,color:w.color,photo:w.photo,location:normalizeLocation(w.location),location_slot:w.locationSlot,wine_type:w.wineType }),
+  wine: w=>{
+    const otherReviews=normalizeOtherReviews(w.otherReviews||[]);
+    const meta={...(w.cellarMeta||{}),journal:{
+      primary:normalizeReviewEntry({reviewer:w.reviewPrimaryReviewer||"",rating:w.reviewPrimaryRating||"",text:w.review||""}),
+      otherReviews,
+      personalNotes:w.notes||"",
+    }};
+    return {
+      id:w.id,name:w.name,origin:w.origin,grape:w.grape,alcohol:w.alcohol,vintage:w.vintage,bottles:w.bottles,rating:w.rating,
+      notes:encodeWineNotes(w.notes,meta),review:w.review,tasting_notes:serializeOtherRatings(otherReviews),date_purchased:w.datePurchased,wishlist:w.wishlist||false,
+      color:w.color,photo:w.photo,location:normalizeLocation(w.location),location_slot:w.locationSlot,wine_type:w.wineType
+    };
+  },
   note: n=>({ id:n.id,wine_id:n.wineId,title:n.title,content:n.content,date:n.date })
 };
 
@@ -635,6 +742,18 @@ const SEED_WINES=SOURCE_CELLAR_ROWS.map((r,i)=>{
   const purchaseDate = r.p_date ? excelSerialToIso(r.p_date) : (r.acquired_date_iso||"");
   const wineType=guessWineType(grape,name);
   const typeColor=(WINE_TYPE_COLORS[wineType]||WINE_TYPE_COLORS.Other).dot;
+  const hallidayScore=safeNum(r.halliday);
+  const otherRatingsParsed=parseOtherRatingsString(r.other_ratings||"");
+  const otherReviewTexts=[r.other_review_1||"",r.other_review_2||"",r.other_review_3||""].map(v=>v.toString().trim());
+  const otherReviewCount=Math.max(otherRatingsParsed.length,otherReviewTexts.filter(Boolean).length);
+  const otherReviews=Array.from({length:otherReviewCount}).map((_,idx)=>{
+    const base=otherRatingsParsed[idx]||{};
+    return normalizeReviewEntry({
+      reviewer:base.reviewer||"",
+      rating:base.rating||"",
+      text:otherReviewTexts[idx]||"",
+    });
+  }).filter(hasReviewEntryValue);
   const cellarMeta={
     drinkStart:safeNum(r.drink_start_num??r.drinking_window_start),
     drinkEnd:safeNum(r.drink_end_num??r.drinking_window_end),
@@ -644,7 +763,7 @@ const SEED_WINES=SOURCE_CELLAR_ROWS.map((r,i)=>{
     insuranceValue:safeNum(r.total_insurance_num??r.total_ins_value),
     supplier:r.supplier||r.from||"",
     sourceStorage:r.where_stored||"",
-    hallidayScore:safeNum(r.halliday),
+    hallidayScore,
     otherRatings:r.other_ratings||"",
     rawReviewLink:r.reviews||r.webpage||"",
     pDateRaw:r.p_date||"",
@@ -652,13 +771,6 @@ const SEED_WINES=SOURCE_CELLAR_ROWS.map((r,i)=>{
     totalPurchased:totalPurchasedSeed,
     addedDate:purchaseDate||todayIsoLocal(),
   };
-  const extraNotes=[
-    r.notes||"",
-    r.halliday_review||"",
-    r.other_review_1||"",
-    r.other_review_2||"",
-    r.other_review_3||"",
-  ].filter(Boolean).join("\n\n");
   const geo = deriveRegionCountry(r.region||"");
   return{
     id:`xl-${r.row_index||i+1}`,
@@ -669,10 +781,13 @@ const SEED_WINES=SOURCE_CELLAR_ROWS.map((r,i)=>{
     vintage:year||null,
     bottles:remaining,
     rating:ratingFromHalliday(r.halliday),
-    notes:extraNotes,
+    notes:(r.notes||"").toString(),
     cellarMeta,
     review:r.halliday_review||"",
-    tastingNotes:r.other_ratings||"",
+    reviewPrimaryReviewer:(hallidayScore!=null||((r.halliday_review||"").trim()))?"Halliday":"",
+    reviewPrimaryRating:hallidayScore!=null?String(hallidayScore):"",
+    otherReviews,
+    tastingNotes:serializeOtherRatings(otherReviews),
     datePurchased:purchaseDate,
     wishlist:false,
     color:typeColor,
@@ -893,6 +1008,40 @@ const SelField=({label,value,onChange,options})=>(
     <select value={value} onChange={e=>onChange(e.target.value)}>{options.map(o=><option key={o.value??o} value={o.value??o}>{o.label??o}</option>)}</select>
   </div>
 );
+const ReviewerInput=({label,value,onChange,suggestions=[]})=>{
+  const query=(value||"").trim().toLowerCase();
+  const matches=(suggestions||[])
+    .filter(name=>query&&name.toLowerCase().includes(query)&&name.toLowerCase()!==query)
+    .slice(0,6);
+  return(
+    <div style={{marginBottom:10}}>
+      <label style={{display:"block",fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:6,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{label}</label>
+      <input value={value||""} onChange={e=>onChange(e.target.value)} placeholder="Reviewer name"/>
+      {matches.length>0&&(
+        <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:7}}>
+          {matches.map(name=>(
+            <button key={name} type="button" onClick={()=>onChange(name)} style={{padding:"4px 10px",borderRadius:999,border:"1px solid var(--border)",background:"var(--inputBg)",color:"var(--sub)",fontSize:11,fontWeight:600,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+              {name}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+const ReviewEntryEditor=({title,entry,onChange,suggestions=[],onRemove})=>(
+  <div style={{background:"var(--card)",borderRadius:12,padding:"10px 12px",marginBottom:10,border:"1px solid var(--border)"}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,marginBottom:8}}>
+      <div style={{fontSize:11,fontWeight:700,color:"var(--sub)",letterSpacing:"0.7px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{title}</div>
+      {onRemove&&<button type="button" onClick={onRemove} style={{border:"none",background:"none",color:"var(--sub)",fontSize:18,lineHeight:1}}>×</button>}
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"1.4fr 0.8fr",gap:8}}>
+      <ReviewerInput label="Reviewer" value={entry?.reviewer||""} onChange={v=>onChange("reviewer",v)} suggestions={suggestions}/>
+      <Field label="Rating" value={entry?.rating||""} onChange={v=>onChange("rating",v)} placeholder="e.g. 96 or A+" optional/>
+    </div>
+    <Field label="Review" value={entry?.text||""} onChange={v=>onChange("text",v)} placeholder="Write review..." rows={3} optional/>
+  </div>
+);
 
 const Btn=({children,onClick,variant="primary",full,disabled,icon})=>{
   const s={
@@ -1071,7 +1220,7 @@ const WineDetail=({wine,onEdit,onDelete,onMove,onAdjustConsumption})=>{
 
 /* ── WINE FORM ────────────────────────────────────────────────── */
 const CUSTOM_LOCATION_OPTION = "__custom_location__";
-const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocations=[],onSaveLocation,onRemoveLocation})=>{
+const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocations=[],onSaveLocation,onRemoveLocation,reviewerSuggestions=[]})=>{
   const knownLocations=dedupeLocations([...LOCATIONS,...locationOptions,...savedLocations,initial?.location]);
   const defaultLocation=knownLocations[0]||LOCATIONS[0]||"Kennards";
   const initialLocation=canonicalLocation(initial?.location||defaultLocation,knownLocations)||defaultLocation;
@@ -1086,8 +1235,16 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
     const purchased=getTotalPurchased(initial);
     return purchased>0?String(purchased):"";
   })();
-  const blank={name:"",origin:"",grape:"",alcohol:"",vintage:"",bottles:"1",addPurchased:"",rating:0,notes:"",review:"",tastingNotes:"",datePurchased:"",addedDate:todayIsoLocal(),wishlist:!!isWishlist,photo:null,location:defaultLocation,locationSlot:"",locationSection:"",drinkStart:"",drinkEnd:"",pricePerBottle:"",rrp:"",totalPaid:"",priceForBottles:"1",insuranceValue:"",supplier:""};
-  const [f,setF]=useState(initial?{...blank,...initial,location:initialLocation,alcohol:initial.alcohol?.toString()||"",vintage:initial.vintage?.toString()||"",bottles:initial.bottles?.toString()||"",addPurchased:"",locationSlot:initial.locationSlot||"",locationSection:normalizeKennardsSection(initial.cellarMeta?.locationSection||""),drinkStart:initial.cellarMeta?.drinkStart?.toString()||"",drinkEnd:initial.cellarMeta?.drinkEnd?.toString()||"",pricePerBottle:initial.cellarMeta?.pricePerBottle?.toString()||"",rrp:initial.cellarMeta?.rrp?.toString()||"",totalPaid:initial.cellarMeta?.totalPaid?.toString()||"",priceForBottles:inferredPriceForBottles,insuranceValue:initial.cellarMeta?.insuranceValue?.toString()||"",supplier:initial.cellarMeta?.supplier||"",addedDate:initial.cellarMeta?.addedDate||todayIsoLocal()}:blank);
+  const blank={name:"",origin:"",grape:"",alcohol:"",vintage:"",bottles:"1",addPurchased:"",rating:0,notes:"",review:"",reviewPrimaryReviewer:"",reviewPrimaryRating:"",otherReviews:[normalizeReviewEntry({})],tastingNotes:"",datePurchased:"",addedDate:todayIsoLocal(),wishlist:!!isWishlist,photo:null,location:defaultLocation,locationSlot:"",locationSection:"",drinkStart:"",drinkEnd:"",pricePerBottle:"",rrp:"",totalPaid:"",priceForBottles:"1",insuranceValue:"",supplier:""};
+  const [f,setF]=useState(initial?{
+    ...blank,...initial,
+    reviewPrimaryReviewer:(initial.reviewPrimaryReviewer||"").toString(),
+    reviewPrimaryRating:(initial.reviewPrimaryRating||"").toString(),
+    otherReviews:normalizeOtherReviews(initial.otherReviews||[]).length?normalizeOtherReviews(initial.otherReviews||[]):[normalizeReviewEntry({})],
+    location:initialLocation,alcohol:initial.alcohol?.toString()||"",vintage:initial.vintage?.toString()||"",bottles:initial.bottles?.toString()||"",addPurchased:"",
+    locationSlot:initial.locationSlot||"",locationSection:normalizeKennardsSection(initial.cellarMeta?.locationSection||""),drinkStart:initial.cellarMeta?.drinkStart?.toString()||"",drinkEnd:initial.cellarMeta?.drinkEnd?.toString()||"",
+    pricePerBottle:initial.cellarMeta?.pricePerBottle?.toString()||"",rrp:initial.cellarMeta?.rrp?.toString()||"",totalPaid:initial.cellarMeta?.totalPaid?.toString()||"",priceForBottles:inferredPriceForBottles,insuranceValue:initial.cellarMeta?.insuranceValue?.toString()||"",supplier:initial.cellarMeta?.supplier||"",addedDate:initial.cellarMeta?.addedDate||todayIsoLocal()
+  }:blank);
   const [locationMode,setLocationMode]=useState("preset");
   const [customLocation,setCustomLocation]=useState("");
   const [rememberLocation,setRememberLocation]=useState(false);
@@ -1095,6 +1252,15 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
   const isTwoStepNewCellar=!initial&&!isWishlist;
   const [step,setStep]=useState("details");
   const set=(k,v)=>setF(p=>({...p,[k]:v}));
+  const setOtherReview=(idx,key,value)=>setF(p=>({
+    ...p,
+    otherReviews:(p.otherReviews||[]).map((entry,i)=>i===idx?normalizeReviewEntry({...entry,[key]:value}):entry)
+  }));
+  const addOtherReviewSlot=()=>setF(p=>({...p,otherReviews:[...(p.otherReviews||[]),normalizeReviewEntry({})]}));
+  const removeOtherReviewSlot=idx=>setF(p=>{
+    const next=(p.otherReviews||[]).filter((_,i)=>i!==idx);
+    return {...p,otherReviews:next.length?next:[normalizeReviewEntry({})]};
+  });
   const handleBottlesChange=v=>{
     const clean=v.replace(/[^0-9]/g,"");
     setF(p=>({
@@ -1164,11 +1330,23 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
     const finalAddedDate=f.addedDate||initial?.cellarMeta?.addedDate||todayIsoLocal();
     const wt=guessWineType(f.grape,f.name);
     const tc=WINE_TYPE_COLORS[wt]||WINE_TYPE_COLORS.Other;
+    const normalizedOtherReviews=normalizeOtherReviews(f.otherReviews||[]);
+    const reviewPrimaryRating=(f.reviewPrimaryRating||"").toString().trim();
+    const hallidayNumeric=safeNum(reviewPrimaryRating);
+    const computedStars=hallidayNumeric!=null?ratingFromHalliday(hallidayNumeric):(f.rating||0);
     const {addPurchased:_addIgnore,locationSection:_locSectionIgnore,addedDate:_addedIgnore,priceForBottles:_priceCountIgnore,pricePerBottle:_pricePerBottleIgnore,...payload}=f;
     if(!isWishlist&&locationMode==="custom"&&rememberLocation&&finalLocation){
       onSaveLocation?.(finalLocation);
     }
-    onSave({...payload,id:f.id||uid(),alcohol:parseFloat(f.alcohol)||0,vintage:parseInt(f.vintage)||null,bottles:projectedLeft,location:finalLocation,locationSlot:f.locationSlot||null,wineType:wt,color:tc.dot,cellarMeta:{...(initial?.cellarMeta||{}),drinkStart:parseInt(f.drinkStart)||null,drinkEnd:parseInt(f.drinkEnd)||null,pricePerBottle:finalPricePerBottle,rrp:finalRrp,totalPaid:finalTotalPaid,insuranceValue:parseFloat(f.insuranceValue)||null,supplier:f.supplier||"",locationSection:finalSection,totalPurchased:projectedPurchased,addedDate:finalAddedDate}});
+    onSave({
+      ...payload,id:f.id||uid(),alcohol:parseFloat(f.alcohol)||0,vintage:parseInt(f.vintage)||null,bottles:projectedLeft,location:finalLocation,locationSlot:f.locationSlot||null,wineType:wt,color:tc.dot,
+      rating:computedStars,
+      reviewPrimaryReviewer:(f.reviewPrimaryReviewer||"").toString().trim(),
+      reviewPrimaryRating:reviewPrimaryRating,
+      otherReviews:normalizedOtherReviews,
+      tastingNotes:serializeOtherRatings(normalizedOtherReviews),
+      cellarMeta:{...(initial?.cellarMeta||{}),drinkStart:parseInt(f.drinkStart)||null,drinkEnd:parseInt(f.drinkEnd)||null,pricePerBottle:finalPricePerBottle,rrp:finalRrp,totalPaid:finalTotalPaid,insuranceValue:parseFloat(f.insuranceValue)||null,supplier:f.supplier||"",locationSection:finalSection,totalPurchased:projectedPurchased,addedDate:finalAddedDate}
+    });
     onClose();
   };
   return(
@@ -1323,30 +1501,58 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
           {showJournalStep&&(
             <>
               <div style={{background:"var(--card)",borderRadius:12,padding:"10px 12px",marginBottom:12,border:"1px solid var(--border)"}}>
-                <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:6,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Journal Notes (Optional)</div>
-                <div style={{fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Add your review and impressions now, or leave blank and edit later in the Journal tab.</div>
+                <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:6,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Journal (Optional)</div>
+                <div style={{fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Set critic reviews and personal notes now, or leave blank and edit later in Journal.</div>
               </div>
-              <div style={{marginBottom:14}}>
-                <div style={{fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Journal Rating</div>
-                <Stars value={f.rating} onChange={v=>set("rating",v)} size={22}/>
-              </div>
-              <Field label="Review" value={f.review} onChange={v=>set("review",v)} placeholder="Overall opinion..." rows={3} optional/>
-              <Field label="Personal Notes" value={f.notes} onChange={v=>set("notes",v)} placeholder="Memories, pairings, context..." rows={3} optional/>
-              <Field label="Tasting Notes" value={f.tastingNotes} onChange={v=>set("tastingNotes",v)} placeholder="Aromas, palate, finish..." rows={3} optional/>
+              <ReviewEntryEditor
+                title="Review"
+                entry={{reviewer:f.reviewPrimaryReviewer,rating:f.reviewPrimaryRating,text:f.review}}
+                onChange={(k,v)=>set(k==="text"?"review":k==="reviewer"?"reviewPrimaryReviewer":"reviewPrimaryRating",v)}
+                suggestions={reviewerSuggestions}
+              />
+              <div style={{fontSize:11,fontWeight:700,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Other Reviews</div>
+              {(f.otherReviews||[]).map((entry,idx)=>(
+                <ReviewEntryEditor
+                  key={idx}
+                  title={`Other Review ${idx+1}`}
+                  entry={entry}
+                  onChange={(k,v)=>setOtherReview(idx,k,v)}
+                  suggestions={reviewerSuggestions}
+                  onRemove={(f.otherReviews||[]).length>1?()=>removeOtherReviewSlot(idx):undefined}
+                />
+              ))}
+              <button type="button" onClick={addOtherReviewSlot} style={{width:"100%",marginBottom:12,padding:"8px 10px",borderRadius:10,border:"1.5px dashed var(--border)",background:"none",color:"var(--accent)",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+                + Add Another Review
+              </button>
+              <Field label="Personal Notes" value={f.notes} onChange={v=>set("notes",v)} placeholder="Your own notes..." rows={3} optional/>
             </>
           )}
           {!showJournalStep&&!isTwoStepNewCellar&&!initial&&(
             <>
-              <Field label="Tasting Notes" value={f.tastingNotes} onChange={v=>set("tastingNotes",v)} placeholder="Dark plum, cedar…" optional/>
-              <Field label="Personal Notes" value={f.notes} onChange={v=>set("notes",v)} placeholder="Pairings, memories…" rows={2} optional/>
               {!isWishlist&&(
-                <div>
-                  <div style={{marginBottom:14}}>
-                    <div style={{fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Rating</div>
-                    <Stars value={f.rating} onChange={v=>set("rating",v)} size={22}/>
-                  </div>
-                  <Field label="Review" value={f.review} onChange={v=>set("review",v)} placeholder="Your thoughts…" rows={2} optional/>
-                </div>
+                <>
+                  <ReviewEntryEditor
+                    title="Review"
+                    entry={{reviewer:f.reviewPrimaryReviewer,rating:f.reviewPrimaryRating,text:f.review}}
+                    onChange={(k,v)=>set(k==="text"?"review":k==="reviewer"?"reviewPrimaryReviewer":"reviewPrimaryRating",v)}
+                    suggestions={reviewerSuggestions}
+                  />
+                  <div style={{fontSize:11,fontWeight:700,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Other Reviews</div>
+                  {(f.otherReviews||[]).map((entry,idx)=>(
+                    <ReviewEntryEditor
+                      key={idx}
+                      title={`Other Review ${idx+1}`}
+                      entry={entry}
+                      onChange={(k,v)=>setOtherReview(idx,k,v)}
+                      suggestions={reviewerSuggestions}
+                      onRemove={(f.otherReviews||[]).length>1?()=>removeOtherReviewSlot(idx):undefined}
+                    />
+                  ))}
+                  <button type="button" onClick={addOtherReviewSlot} style={{width:"100%",marginBottom:12,padding:"8px 10px",borderRadius:10,border:"1.5px dashed var(--border)",background:"none",color:"var(--accent)",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+                    + Add Another Review
+                  </button>
+                  <Field label="Personal Notes" value={f.notes} onChange={v=>set("notes",v)} placeholder="Your own notes..." rows={3} optional/>
+                </>
               )}
             </>
           )}
@@ -1529,6 +1735,7 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAdjustConsumption,deskt
   const [filterOpen,setFilterOpen]=useState(false);
   const col=wines.filter(w=>!w.wishlist);
   const locationOptions=dedupeLocations(col.map(w=>w.location));
+  const reviewerSuggestions=reviewerSuggestionsFromWines(col);
   const filt=applyFilters(wines,filters,search);
   const bottles=col.reduce((s,w)=>s+(w.bottles||0),0);
   const active=hasFilters(filters);
@@ -1607,6 +1814,7 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAdjustConsumption,deskt
           savedLocations={savedLocations}
           onSaveLocation={onSaveLocation}
           onRemoveLocation={onRemoveLocation}
+          reviewerSuggestions={reviewerSuggestions}
         />
       </Modal>
       <Modal show={adding} onClose={()=>setAdding(false)} wide>
@@ -1617,6 +1825,7 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAdjustConsumption,deskt
           savedLocations={savedLocations}
           onSaveLocation={onSaveLocation}
           onRemoveLocation={onRemoveLocation}
+          reviewerSuggestions={reviewerSuggestions}
         />
       </Modal>
       <Modal show={filterOpen} onClose={()=>setFilterOpen(false)}>
@@ -2401,7 +2610,8 @@ const JournalWineCard=({wine,onClick})=>{
   const varietal=resolveVarietal(wine);
   const tc=WINE_TYPE_COLORS[type]||WINE_TYPE_COLORS.Other;
   const geo=deriveRegionCountry(wine.origin||"");
-  const hasJournalText=!!((wine.tastingNotes||"").trim()||(wine.review||"").trim()||(wine.notes||"").trim());
+  const journal=toJournalState(wine);
+  const hasJournalText=hasReviewEntryValue(journal.primary)||journal.otherReviews.length>0||journal.personalNotes.trim();
   const journalStatusStyle={
     border:"1px solid var(--border)",
     background:"var(--surface)",
@@ -2436,56 +2646,118 @@ const JournalWineDetail=({wine,onEdit})=>{
   const type=resolveWineType(wine);
   const varietal=resolveVarietal(wine);
   const geo=deriveRegionCountry(wine.origin||"");
-  const sections=[["Review",wine.review,true],["Personal Notes",wine.notes,false],["Tasting Notes",wine.tastingNotes,false]];
-  const hasContent=sections.some(([,value])=>(value||"").trim());
+  const journal=toJournalState(wine);
+  const primary=normalizeReviewEntry(journal.primary);
+  const otherReviews=normalizeOtherReviews(journal.otherReviews);
+  const personalNotes=(journal.personalNotes||"").trim();
+  const hasContent=hasReviewEntryValue(primary)||otherReviews.length>0||!!personalNotes;
   return(
     <div>
       <div style={{borderRadius:16,background:"linear-gradient(135deg,rgba(var(--accentRgb),0.2) 0%,rgba(var(--accentRgb),0.08) 100%)",padding:"18px 18px",marginBottom:14,border:"1px solid rgba(var(--accentRgb),0.2)"}}>
         <WineTypePill type={type} label={varietal}/>
         <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:22,fontWeight:800,color:"var(--text)",marginTop:8,lineHeight:1.2}}>{wine.name}</div>
         {(wine.vintage||geo.region||geo.country)&&<div style={{fontSize:13,color:"var(--sub)",marginTop:3,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{[wine.vintage,geo.region||geo.country,geo.country&&geo.region?geo.country:null].filter(Boolean).join(" · ")}</div>}
-        <div style={{marginTop:8}}>
-          <Stars value={wine.rating||0} size={18}/>
-        </div>
       </div>
       {!hasContent&&(
         <div style={{background:"var(--inputBg)",borderRadius:13,padding:"14px",marginBottom:12,border:"1px solid var(--border)",fontSize:13,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
           No review notes yet for this wine.
         </div>
       )}
-      {sections.map(([label,value,italic])=>value?(
-        <div key={label} style={{background:"linear-gradient(180deg,var(--inputBg),rgba(var(--accentRgb),0.03))",borderRadius:14,padding:"12px 14px",marginBottom:8,border:"1px solid var(--border)"}}>
-          <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:6,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{label}</div>
-          <div style={{fontSize:14,color:"var(--text)",lineHeight:1.7,fontStyle:italic?"italic":"normal",fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"pre-wrap"}}>{italic?`"${value}"`:value}</div>
+      {hasReviewEntryValue(primary)&&(
+        <div style={{background:"linear-gradient(180deg,var(--inputBg),rgba(var(--accentRgb),0.03))",borderRadius:14,padding:"12px 14px",marginBottom:8,border:"1px solid var(--border)"}}>
+          <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:6,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Review</div>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:6}}>
+            {primary.reviewer&&<span style={{padding:"3px 8px",borderRadius:999,background:"var(--card)",border:"1px solid var(--border)",fontSize:11,fontWeight:700,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{primary.reviewer}</span>}
+            {primary.rating&&<span style={{padding:"3px 8px",borderRadius:999,background:"rgba(var(--accentRgb),0.12)",border:"1px solid rgba(var(--accentRgb),0.22)",fontSize:11,fontWeight:700,color:"var(--accent)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{primary.rating}</span>}
+          </div>
+          {!!primary.text&&<div style={{fontSize:14,color:"var(--text)",lineHeight:1.7,fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"pre-wrap"}}>{primary.text}</div>}
         </div>
-      ):null)}
+      )}
+      {otherReviews.length>0&&(
+        <div style={{background:"linear-gradient(180deg,var(--inputBg),rgba(var(--accentRgb),0.02))",borderRadius:14,padding:"12px 14px",marginBottom:8,border:"1px solid var(--border)"}}>
+          <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Other Reviews</div>
+          <div style={{display:"grid",gap:8}}>
+            {otherReviews.map((entry,idx)=>(
+              <div key={idx} style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:10,padding:"9px 10px"}}>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:4}}>
+                  {entry.reviewer&&<span style={{padding:"2px 7px",borderRadius:999,background:"var(--inputBg)",fontSize:11,fontWeight:700,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{entry.reviewer}</span>}
+                  {entry.rating&&<span style={{padding:"2px 7px",borderRadius:999,background:"rgba(var(--accentRgb),0.12)",color:"var(--accent)",fontSize:11,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{entry.rating}</span>}
+                </div>
+                {!!entry.text&&<div style={{fontSize:13,color:"var(--text)",lineHeight:1.65,fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"pre-wrap"}}>{entry.text}</div>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {!!personalNotes&&(
+        <div style={{background:"linear-gradient(180deg,var(--inputBg),rgba(var(--accentRgb),0.02))",borderRadius:14,padding:"12px 14px",marginBottom:8,border:"1px solid var(--border)"}}>
+          <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:6,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Personal Notes</div>
+          <div style={{fontSize:14,color:"var(--text)",lineHeight:1.7,fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"pre-wrap"}}>{personalNotes}</div>
+        </div>
+      )}
       <Btn onClick={onEdit} full icon="edit">Edit Journal Notes</Btn>
     </div>
   );
 };
 
-const JournalNoteForm=({wine,onSave,onClose})=>{
+const JournalNoteForm=({wine,onSave,onClose,reviewerSuggestions=[]})=>{
+  const initialJournal=toJournalState(wine);
   const [form,setForm]=useState({
-    rating:wine.rating||0,
-    review:wine.review||"",
-    notes:wine.notes||"",
-    tastingNotes:wine.tastingNotes||"",
+    primary:normalizeReviewEntry(initialJournal.primary),
+    otherReviews:normalizeOtherReviews(initialJournal.otherReviews).length?normalizeOtherReviews(initialJournal.otherReviews):[normalizeReviewEntry({})],
+    personalNotes:initialJournal.personalNotes||"",
   });
-  const set=(k,v)=>setForm(p=>({...p,[k]:v}));
+  const setPrimary=(k,v)=>setForm(p=>({...p,primary:normalizeReviewEntry({...p.primary,[k]:v})}));
+  const setOther=(idx,k,v)=>setForm(p=>({...p,otherReviews:(p.otherReviews||[]).map((entry,i)=>i===idx?normalizeReviewEntry({...entry,[k]:v}):entry)}));
+  const addOther=()=>setForm(p=>({...p,otherReviews:[...(p.otherReviews||[]),normalizeReviewEntry({})]}));
+  const removeOther=idx=>setForm(p=>{
+    const next=(p.otherReviews||[]).filter((_,i)=>i!==idx);
+    return {...p,otherReviews:next.length?next:[normalizeReviewEntry({})]};
+  });
+  const save=()=>{
+    const primary=normalizeReviewEntry(form.primary);
+    const otherReviews=normalizeOtherReviews(form.otherReviews);
+    const numericRating=safeNum(primary.rating);
+    const stars=numericRating!=null?ratingFromHalliday(numericRating):(wine.rating||0);
+    onSave({
+      ...wine,
+      review:primary.text,
+      reviewPrimaryReviewer:primary.reviewer,
+      reviewPrimaryRating:primary.rating,
+      otherReviews,
+      notes:form.personalNotes||"",
+      tastingNotes:serializeOtherRatings(otherReviews),
+      rating:stars,
+    });
+  };
   return(
     <div>
       <ModalHeader title="Edit Journal Notes" onClose={onClose}/>
       <div style={{fontSize:12,color:"var(--sub)",marginBottom:14,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{wine.name}</div>
-      <div style={{marginBottom:14}}>
-        <div style={{fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Rating</div>
-        <Stars value={form.rating} onChange={v=>set("rating",v)} size={22}/>
-      </div>
-      <Field label="Review" value={form.review} onChange={v=>set("review",v)} placeholder="Overall opinion..." rows={3} optional/>
-      <Field label="Personal Notes" value={form.notes} onChange={v=>set("notes",v)} placeholder="Memories, pairings, context..." rows={3} optional/>
-      <Field label="Tasting Notes" value={form.tastingNotes} onChange={v=>set("tastingNotes",v)} placeholder="Aromas, palate, finish..." rows={3} optional/>
+      <ReviewEntryEditor
+        title="Review"
+        entry={form.primary}
+        onChange={setPrimary}
+        suggestions={reviewerSuggestions}
+      />
+      <div style={{fontSize:11,fontWeight:700,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Other Reviews</div>
+      {(form.otherReviews||[]).map((entry,idx)=>(
+        <ReviewEntryEditor
+          key={idx}
+          title={`Other Review ${idx+1}`}
+          entry={entry}
+          onChange={(k,v)=>setOther(idx,k,v)}
+          suggestions={reviewerSuggestions}
+          onRemove={(form.otherReviews||[]).length>1?()=>removeOther(idx):undefined}
+        />
+      ))}
+      <button type="button" onClick={addOther} style={{width:"100%",marginBottom:12,padding:"8px 10px",borderRadius:10,border:"1.5px dashed var(--border)",background:"none",color:"var(--accent)",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+        + Add Another Review
+      </button>
+      <Field label="Personal Notes" value={form.personalNotes} onChange={v=>setForm(p=>({...p,personalNotes:v}))} placeholder="Memories, pairings, context..." rows={3} optional/>
       <div style={{display:"flex",gap:8}}>
         <Btn variant="secondary" onClick={onClose} full>Cancel</Btn>
-        <Btn onClick={()=>onSave({...wine,...form})} full>Save Notes</Btn>
+        <Btn onClick={save} full>Save Notes</Btn>
       </div>
     </div>
   );
@@ -2496,12 +2768,15 @@ const JournalScreen=({wines,onUpdate,desktop})=>{
   const [sel,setSel]=useState(null);
   const [editing,setEditing]=useState(false);
   const col=wines.filter(w=>!w.wishlist);
+  const reviewerSuggestions=reviewerSuggestionsFromWines(col);
   const filtered=col
     .filter(w=>{
       if(!search.trim()) return true;
+      const journal=toJournalState(w);
       const haystack=[
         w.name,w.grape,resolveVarietal(w),w.origin,w.vintage?.toString()||"",
-        w.review,w.notes,w.tastingNotes
+        journal.primary.reviewer,journal.primary.rating,journal.primary.text,journal.personalNotes,
+        ...journal.otherReviews.flatMap(r=>[r.reviewer,r.rating,r.text])
       ].join(" ").toLowerCase();
       return haystack.includes(search.trim().toLowerCase());
     })
@@ -2533,7 +2808,7 @@ const JournalScreen=({wines,onUpdate,desktop})=>{
         )}
       </Modal>
       <Modal show={!!sel&&editing} onClose={()=>setEditing(false)} wide>
-        {sel&&<JournalNoteForm wine={sel} onClose={()=>setEditing(false)} onSave={w=>{onUpdate(w);setSel(w);setEditing(false);}}/>}
+        {sel&&<JournalNoteForm wine={sel} reviewerSuggestions={reviewerSuggestions} onClose={()=>setEditing(false)} onSave={w=>{onUpdate(w);setSel(w);setEditing(false);}}/>}
       </Modal>
     </div>
   );
@@ -3194,7 +3469,7 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile})=>{
   const bottles=col.reduce((s,w)=>s+(w.bottles||0),0);
   const topWine=[...col].sort((a,b)=>(b.rating||0)-(a.rating||0))[0];
   const types=col.reduce((acc,w)=>{const t=resolveWineType(w);acc[t]=(acc[t]||0)+1;return acc;},{});
-  const wineryValue=col.reduce((s,w)=>s+((safeNum(w.cellarMeta?.pricePerBottle)||0)*(safeNum(w.bottles)||0)),0);
+  const rrpValue=col.reduce((s,w)=>s+((safeNum(w.cellarMeta?.rrp)||0)*(safeNum(w.bottles)||0)),0);
   const readyCount=col.filter(w=>wineReadiness(w).key==="ready").length;
   const consumedBottles=col.reduce((s,w)=>s+getConsumedBottles(w),0);
   const regionStats=col.reduce((acc,w)=>{
@@ -3204,7 +3479,7 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile})=>{
     return acc;
   },{});
   const topRegion=Object.entries(regionStats).sort((a,b)=>b[1]-a[1])[0]?.[0]||"—";
-  const avgBottle=bottles?wineryValue/bottles:0;
+  const avgBottle=bottles?rrpValue/bottles:0;
   const profileBg=profile.profileBg||THEME_BY_ID[(profile.accent||"wine")]?.profileBg||THEME_BY_ID.wine.profileBg;
   const displayName=[profile.name,profile.surname].filter(Boolean).join(" ")||"Winemaker";
 
@@ -3215,7 +3490,7 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile})=>{
     <div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:20}}>
         <div>
-          <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"2px",textTransform:"uppercase",marginBottom:4}}>My Winery</div>
+          <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"2px",textTransform:"uppercase",marginBottom:4}}>Summary</div>
           <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:34,fontWeight:800,color:"var(--text)",lineHeight:1}}>{profile.cellarName||"My Cellar"}</div>
         </div>
         <button onClick={()=>setView("settings")} style={{width:40,height:40,borderRadius:12,background:"var(--card)",border:"1px solid var(--border)",display:"flex",alignItems:"center",justifyContent:"center",color:"var(--sub)",cursor:"pointer",transition:"all 0.15s",flexShrink:0}}
@@ -3254,7 +3529,7 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile})=>{
       <div style={{background:"var(--card)",borderRadius:16,border:"1px solid var(--border)",padding:"14px 16px",marginBottom:10}}>
         <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:10,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Winery Summary</div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8}}>
-          {[["Winery Value",`$${wineryValue.toLocaleString(undefined,{maximumFractionDigits:2})}`],["Most Common Origin",topRegion],["Ready to Drink",`${readyCount} wines`],["Consumed Bottles",consumedBottles],["Avg Bottle Value",`$${avgBottle.toLocaleString(undefined,{maximumFractionDigits:2})}`]].map(([k,v])=>(
+          {[["RRP Value",`$${rrpValue.toLocaleString(undefined,{maximumFractionDigits:2})}`],["Most Common Origin",topRegion],["Ready to Drink",`${readyCount} wines`],["Consumed Bottles",consumedBottles],["Avg Bottle RRP",`$${avgBottle.toLocaleString(undefined,{maximumFractionDigits:2})}`]].map(([k,v])=>(
             <div key={k} style={{background:"var(--inputBg)",borderRadius:12,padding:"10px 11px",border:"1px solid var(--border)"}}>
               <div style={{fontSize:10,color:"var(--sub)",textTransform:"uppercase",fontWeight:700,letterSpacing:"0.7px",marginBottom:3,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{k}</div>
               <div style={{fontSize:14,color:"var(--text)",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{v}</div>
@@ -3304,7 +3579,7 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile})=>{
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.59 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.60 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
@@ -3325,7 +3600,7 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile})=>{
 };
 
 /* ── TABS ─────────────────────────────────────────────────────── */
-const TABS=[{id:"collection",label:"Cellar",ic:"wine"},{id:"audit",label:"Audit",ic:"audit"},{id:"ai",label:"Sommelier",ic:"chat"},{id:"notes",label:"Journal",ic:"note"},{id:"profile",label:"Winery",ic:"user"}];
+const TABS=[{id:"collection",label:"Cellar",ic:"wine"},{id:"audit",label:"Audit",ic:"audit"},{id:"ai",label:"Sommelier",ic:"chat"},{id:"notes",label:"Journal",ic:"note"},{id:"profile",label:"Summary",ic:"user"}];
 
 /* ── APP ──────────────────────────────────────────────────────── */
 export default function App(){
@@ -3390,10 +3665,28 @@ export default function App(){
         console.log("DB: wines",wineRows.length,"notes",noteRows.length);
         if(wineRows.length===0){
           if(cache?.wines?.length){
-            setWines(normalizeLegacyWineRows([...(cache.wines||[]),...(cache.wishlist||[])]));
-            setNotes(cache.notes||[]);
+            const cachedWines=normalizeLegacyWineRows([...(cache.wines||[]),...(cache.wishlist||[])]);
+            const cachedNotes=cache.notes||[];
+            setWines(cachedWines);
+            setNotes(cachedNotes);
             if(cache.profile)setProfileState(cache.profile);
             setIsNewUser(!(cache.profile?.name));
+            // Supabase can be accidentally reset. If we still have local cache, restore it remotely.
+            await Promise.all(cachedWines.map(w=>db.upsert("wines",toDb.wine({...w,wishlist:false}))));
+            if(cachedNotes.length){
+              await Promise.all(cachedNotes.map(n=>db.upsert("tasting_notes",toDb.note(n))));
+            }
+            if(cache.profile){
+              await db.saveProfile({
+                ...DEFAULT_PROFILE,
+                ...cache.profile,
+                accent:detectAccentFromProfileBg(cache.profile.profileBg||"")||cache.profile.accent||DEFAULT_PROFILE.accent,
+              });
+            }
+            try{
+              localStorage.setItem(EXCEL_IMPORT_FLAG,"1");
+              localStorage.setItem(EXCEL_RESTORE_FLAG,"1");
+            }catch{}
           }else{
             await Promise.all(SEED_WINES.map(w=>db.upsert("wines",toDb.wine(w))));
             await Promise.all(SEED_NOTES.map(n=>db.upsert("tasting_notes",toDb.note(n))));
