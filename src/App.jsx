@@ -337,6 +337,12 @@ const getTotalPurchased = wine => {
   return Math.max(left,Math.round(metaTotal));
 };
 const getConsumedBottles = wine => Math.max(0,getTotalPurchased(wine)-Math.max(0,Math.round(safeNum(wine?.bottles)||0)));
+const wineAddedTimestamp = wine => {
+  const raw=(wine?.cellarMeta?.addedDate||wine?.datePurchased||"").toString().slice(0,10);
+  if(!raw) return 0;
+  const ts=Date.parse(`${raw}T00:00:00`);
+  return Number.isFinite(ts)?ts:0;
+};
 const todayIsoLocal = ()=>{
   const d=new Date();
   const y=d.getFullYear();
@@ -1624,7 +1630,11 @@ const applyFilters=(wines,f,s)=>{
     if(f.sort==="bottles")return(b.bottles||0)-(a.bottles||0);
     if(f.sort==="costDesc")return (safeNum(b.cellarMeta?.pricePerBottle)||0)-(safeNum(a.cellarMeta?.pricePerBottle)||0);
     if(f.sort==="costAsc")return (safeNum(a.cellarMeta?.pricePerBottle)||0)-(safeNum(b.cellarMeta?.pricePerBottle)||0);
-    if(f.sort==="recent")return b.id.localeCompare(a.id);
+    if(f.sort==="recent"){
+      const delta=wineAddedTimestamp(b)-wineAddedTimestamp(a);
+      if(delta!==0) return delta;
+      return (b.name||"").localeCompare(a.name||"");
+    }
     return a.name.localeCompare(b.name);
   });
 };
@@ -3469,7 +3479,7 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile})=>{
   const bottles=col.reduce((s,w)=>s+(w.bottles||0),0);
   const topWine=[...col].sort((a,b)=>(b.rating||0)-(a.rating||0))[0];
   const types=col.reduce((acc,w)=>{const t=resolveWineType(w);acc[t]=(acc[t]||0)+1;return acc;},{});
-  const rrpValue=col.reduce((s,w)=>s+((safeNum(w.cellarMeta?.rrp)||0)*(safeNum(w.bottles)||0)),0);
+  const rrpValue=col.reduce((s,w)=>s+((safeNum(w.cellarMeta?.rrp)||0)*getTotalPurchased(w)),0);
   const readyCount=col.filter(w=>wineReadiness(w).key==="ready").length;
   const consumedBottles=col.reduce((s,w)=>s+getConsumedBottles(w),0);
   const regionStats=col.reduce((acc,w)=>{
