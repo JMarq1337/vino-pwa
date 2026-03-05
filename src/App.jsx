@@ -1556,9 +1556,16 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
   const canSubmit=!!f.name&&!invalidCustomLocation;
   const showDetailsStep=!usesStepTabs||step==="details";
   const showJournalStep=usesStepTabs&&step==="journal";
-  const sectionCardStyle={background:"var(--card)",border:"1px solid var(--border)",borderRadius:14,padding:"12px 12px 10px",marginBottom:12};
-  const sectionTitleStyle={fontSize:10,color:"var(--sub)",fontWeight:800,textTransform:"uppercase",letterSpacing:"0.8px",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"};
-  const sectionHintStyle={fontSize:12,color:"var(--sub)",marginBottom:10,fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.45};
+  const sectionCardStyle={background:"linear-gradient(180deg,rgba(var(--accentRgb),0.085) 0%,var(--card) 34%)",border:"1px solid rgba(var(--accentRgb),0.22)",borderRadius:14,padding:"13px 13px 11px",marginBottom:12,boxShadow:"0 9px 20px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.35)"};
+  const sectionTitleStyle={display:"flex",alignItems:"center",gap:8,fontSize:10,color:"var(--accent)",fontWeight:800,textTransform:"uppercase",letterSpacing:"0.95px",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"};
+  const sectionTitleDotStyle={width:7,height:7,borderRadius:"50%",background:"var(--accent)",boxShadow:"0 0 0 3px rgba(var(--accentRgb),0.15)"};
+  const sectionHintStyle={fontSize:12,color:"var(--sub)",marginBottom:10,fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.45,fontWeight:600};
+  const sectionTitle=(label)=>(
+    <div style={sectionTitleStyle}>
+      <span style={sectionTitleDotStyle}/>
+      <span>{label}</span>
+    </div>
+  );
   useEffect(()=>{
     const draft=readWineFormDraft(draftKey);
     if(!draft?.form) return;
@@ -1685,15 +1692,15 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
         <div>
           {usesStepTabs&&(
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
-              <button type="button" onClick={()=>setStep("details")} style={{padding:"8px 10px",borderRadius:10,border:step==="details"?"1.5px solid var(--accent)":"1.5px solid var(--border)",background:step==="details"?"rgba(var(--accentRgb),0.1)":"var(--inputBg)",color:step==="details"?"var(--accent)":"var(--sub)",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>1. Main Stats</button>
-              <button type="button" onClick={()=>setStep("journal")} disabled={!canSubmit} style={{padding:"8px 10px",borderRadius:10,border:step==="journal"?"1.5px solid var(--accent)":"1.5px solid var(--border)",background:step==="journal"?"rgba(var(--accentRgb),0.1)":"var(--inputBg)",color:step==="journal"?"var(--accent)":"var(--sub)",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:canSubmit?1:0.5}}>2. Journal</button>
+              <button type="button" onClick={()=>setStep("details")} style={{padding:"9px 11px",borderRadius:12,border:step==="details"?"1.5px solid rgba(var(--accentRgb),0.45)":"1.5px solid var(--border)",background:step==="details"?"linear-gradient(180deg,rgba(var(--accentRgb),0.17),rgba(var(--accentRgb),0.08))":"var(--inputBg)",color:step==="details"?"var(--accent)":"var(--sub)",fontSize:12,fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif",boxShadow:step==="details"?"0 8px 14px rgba(var(--accentRgb),0.18)":"inset 0 1px 0 rgba(255,255,255,0.25)"}}>1. Main Stats</button>
+              <button type="button" onClick={()=>setStep("journal")} disabled={!canSubmit} style={{padding:"9px 11px",borderRadius:12,border:step==="journal"?"1.5px solid rgba(var(--accentRgb),0.45)":"1.5px solid var(--border)",background:step==="journal"?"linear-gradient(180deg,rgba(var(--accentRgb),0.17),rgba(var(--accentRgb),0.08))":"var(--inputBg)",color:step==="journal"?"var(--accent)":"var(--sub)",fontSize:12,fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:canSubmit?1:0.5,boxShadow:step==="journal"?"0 8px 14px rgba(var(--accentRgb),0.18)":"inset 0 1px 0 rgba(255,255,255,0.25)"}}>2. Journal</button>
             </div>
           )}
           {showDetailsStep&&(
             <>
               {!isWishlist&&(
                 <div style={sectionCardStyle}>
-                  <div style={sectionTitleStyle}>Timeline</div>
+                  {sectionTitle("Timeline")}
                   <div style={sectionHintStyle}>Set purchase and inventory dates first.</div>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
                     <Field label="Date Purchased" value={f.datePurchased} onChange={v=>set("datePurchased",v)} type="date" optional/>
@@ -1702,7 +1709,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
                 </div>
               )}
               <div style={sectionCardStyle}>
-                <div style={sectionTitleStyle}>Wine Details</div>
+                {sectionTitle("Wine Details")}
                 <Field label="Wine Name" value={f.name} onChange={v=>set("name",v)} placeholder="e.g. Penfolds Grange"/>
                 <Field label="Origin" value={f.origin} onChange={v=>set("origin",v)} placeholder="Region, Country" optional/>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
@@ -1714,7 +1721,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
               {!isWishlist&&(
                 <>
                   <div style={sectionCardStyle}>
-                    <div style={sectionTitleStyle}>Storage & Inventory</div>
+                    {sectionTitle("Storage & Inventory")}
                     <div style={{display:"grid",gridTemplateColumns:"1fr 2fr 1fr",gap:10}}>
                       <Field label="Bottles" value={f.bottles} onChange={handleBottlesChange} type="number" placeholder="1" optional/>
                       <SelField
@@ -1734,7 +1741,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
                       />
                     )}
                     {locationMode==="custom"&&(
-                      <div style={{marginBottom:12,marginTop:-4,padding:"10px 11px",borderRadius:12,background:"var(--inputBg)",border:"1px solid var(--border)"}}>
+                      <div style={{marginBottom:12,marginTop:-4,padding:"10px 11px",borderRadius:12,background:"linear-gradient(180deg,rgba(var(--accentRgb),0.08),var(--inputBg))",border:"1px solid rgba(var(--accentRgb),0.2)"}}>
                         <Field label="Custom Location" value={customLocation} onChange={setCustomLocation} placeholder="e.g. Events Cellar" optional/>
                         <button type="button" onClick={()=>setRememberLocation(v=>!v)}
                           style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"8px 2px 2px",border:"none",background:"transparent",fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:12,color:"var(--text)",fontWeight:600,width:"100%",cursor:"pointer"}}>
@@ -1745,11 +1752,11 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
                         </button>
                       </div>
                     )}
-                    <div style={{background:"var(--inputBg)",borderRadius:12,padding:"10px 12px",marginBottom:12,border:"1px solid var(--border)"}}>
+                    <div style={{background:"linear-gradient(180deg,rgba(var(--accentRgb),0.08),var(--inputBg))",borderRadius:12,padding:"10px 12px",marginBottom:12,border:"1px solid rgba(var(--accentRgb),0.2)",boxShadow:"inset 0 1px 0 rgba(255,255,255,0.35)"}}>
                       <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Bottle Tracker</div>
                       <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:8}}>
                         {[["Purchased",projectedPurchased],["Left",projectedLeft],["Consumed",projectedConsumed]].map(([label,val])=>(
-                          <div key={label} style={{background:"var(--card)",borderRadius:10,padding:"7px 8px",border:"1px solid var(--border)"}}>
+                          <div key={label} style={{background:"var(--card)",borderRadius:10,padding:"7px 8px",border:"1px solid var(--border)",boxShadow:"0 4px 10px rgba(0,0,0,0.05)"}}>
                             <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:1,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{label}</div>
                             <div style={{fontSize:15,color:"var(--text)",fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.2}}>{val}</div>
                           </div>
@@ -1766,7 +1773,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
                               key={loc}
                               type="button"
                               onClick={()=>onRemoveLocation?.(loc)}
-                              style={{display:"inline-flex",alignItems:"center",gap:6,padding:"6px 10px",borderRadius:20,border:"1.5px solid var(--border)",background:"var(--inputBg)",color:"var(--text)",fontSize:12,fontWeight:600,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:"pointer"}}
+                              style={{display:"inline-flex",alignItems:"center",gap:6,padding:"6px 10px",borderRadius:20,border:"1.5px solid var(--border)",background:"linear-gradient(180deg,var(--inputBg),rgba(var(--accentRgb),0.06))",color:"var(--text)",fontSize:12,fontWeight:600,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:"pointer"}}
                             >
                               <span>{loc}</span>
                               <span style={{color:"var(--sub)",lineHeight:1}}>×</span>
@@ -1781,7 +1788,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
               {!isWishlist&&(
                 <>
                   <div style={sectionCardStyle}>
-                    <div style={sectionTitleStyle}>Drinking Window</div>
+                    {sectionTitle("Drinking Window")}
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
                       <Field label="Drink From" value={f.drinkStart} onChange={v=>set("drinkStart",v)} type="number" placeholder="2026" optional/>
                       <Field label="Drink By" value={f.drinkEnd} onChange={v=>set("drinkEnd",v)} type="number" placeholder="2034" optional/>
@@ -1789,7 +1796,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
                     </div>
                   </div>
                   <div style={sectionCardStyle}>
-                    <div style={sectionTitleStyle}>Pricing</div>
+                    {sectionTitle("Pricing")}
                     <div style={sectionHintStyle}>Set what you paid and optionally override bottle RRP.</div>
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
                       <Field label="Amount Paid" value={f.totalPaid} onChange={v=>set("totalPaid",v)} type="number" placeholder="179.5" optional/>
@@ -1814,8 +1821,8 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
           )}
           {showJournalStep&&(
             <>
-              <div style={{background:"var(--card)",borderRadius:12,padding:"10px 12px",marginBottom:12,border:"1px solid var(--border)"}}>
-                <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:6,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Journal (Optional)</div>
+              <div style={sectionCardStyle}>
+                {sectionTitle("Journal (Optional)")}
                 <div style={{fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Set critic reviews and personal notes now, or leave blank and edit later in Journal.</div>
               </div>
               <ReviewEntryEditor
@@ -3962,7 +3969,7 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile})=>{
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.85 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.86 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
