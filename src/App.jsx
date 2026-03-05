@@ -1322,7 +1322,6 @@ const WineDetail=({wine,onEdit,onDelete,onMove,onAdjustConsumption})=>{
   const paidPerBottle=safeNum(m.pricePerBottle);
   const rrpPerBottle=safeNum(m.rrp);
   const hasPhoto=!!wine.photo;
-  const desktopSideLayout=hasPhoto&&!isMobile;
   const [isMobile,setIsMobile]=useState(()=>window.innerWidth<760);
   useEffect(()=>{
     const onResize=()=>setIsMobile(window.innerWidth<760);
@@ -1340,33 +1339,33 @@ const WineDetail=({wine,onEdit,onDelete,onMove,onAdjustConsumption})=>{
     </div>
   );
   return(
-    <div style={desktopSideLayout?{maxWidth:900,margin:"0 auto",display:"grid",gridTemplateColumns:"minmax(220px,280px) minmax(0,1fr)",gap:14,alignItems:"start"}:{}}>
-      {desktopSideLayout&&(
-        <div style={{borderRadius:18,background:"linear-gradient(180deg,rgba(255,255,255,0.14),rgba(255,255,255,0.04))",border:"1px solid var(--border)",overflow:"hidden",display:"flex",alignItems:"flex-end",justifyContent:"center",padding:"10px 8px 6px",position:"relative",minHeight:420}}>
-          <WinePhotoImage src={wine.photo} alt={wine.name} style={{width:"100%",height:"100%",maxHeight:410,objectFit:"contain",objectPosition:"center",filter:"drop-shadow(0 22px 28px rgba(0,0,0,.28))",animation:"heroPhotoFloat .3s ease-out both"}}/>
+    <div>
+      {hasPhoto&&!isMobile&&(
+        <div style={{display:"grid",gridTemplateColumns:"minmax(180px,220px) 1fr",gap:12,alignItems:"stretch",marginBottom:16}}>
+          <div style={{borderRadius:16,background:"linear-gradient(180deg,rgba(255,255,255,0.12),rgba(255,255,255,0.03))",border:"1px solid var(--border)",overflow:"hidden",display:"flex",alignItems:"flex-end",justifyContent:"center",padding:"8px 6px 4px",position:"relative"}}>
+            <WinePhotoImage src={wine.photo} alt={wine.name} style={{width:"100%",height:"100%",maxHeight:288,objectFit:"contain",objectPosition:"center",filter:"drop-shadow(0 16px 22px rgba(0,0,0,.26))",animation:"heroPhotoFloat .3s ease-out both"}}/>
+          </div>
+          {titleCard}
         </div>
       )}
-      <div>
-        {desktopSideLayout?(
-          <div style={{marginBottom:16}}>{titleCard}</div>
-        ):(
-          <div style={{position:"relative",marginBottom:16}}>
-            {hasPhoto&&(
-              <div style={{position:"absolute",left:"50%",top:-26,transform:"translateX(-50%)",width:"min(92%,330px)",height:196,zIndex:3,pointerEvents:"none",display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
-                <div style={{position:"absolute",left:"15%",right:"15%",bottom:8,height:36,background:`radial-gradient(ellipse at center, rgba(0,0,0,0.34) 0%, rgba(0,0,0,0.14) 46%, rgba(0,0,0,0) 100%)`,filter:"blur(8px)"}}/>
-                <WinePhotoImage src={wine.photo} alt={wine.name} style={{width:"100%",height:"100%",objectFit:"contain",objectPosition:"center",filter:"drop-shadow(0 16px 22px rgba(0,0,0,.34))",animation:"heroPhotoFloat .34s ease-out both"}}/>
-              </div>
-            )}
-            <div style={{borderRadius:16,background:`linear-gradient(140deg,${tc.dot} 0%,rgba(0,0,0,.24) 90%)`,padding:hasPhoto?"168px 20px 20px":"20px",position:"relative",overflow:"hidden",minHeight:hasPhoto?228:108,boxShadow:"inset 0 1px 0 rgba(255,255,255,.2)",animation:"heroGlassIn .25s ease-out"}}>
-              <div style={{position:"absolute",right:-18,bottom:-18,opacity:0.12,pointerEvents:"none"}}><BrandLogo size={120} variant="mono"/></div>
-              <div style={{position:"relative",zIndex:1}}>
-                <WineTypePill type={type} label={varietal}/>
-              </div>
-              <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:22,fontWeight:800,color:"#fff",marginTop:8,lineHeight:1.2,position:"relative",zIndex:1,textShadow:"0 2px 10px rgba(0,0,0,.28)"}}>{wine.name}</div>
-              {(wine.vintage||geo.region||geo.country)&&<div style={{fontSize:14,color:"rgba(255,255,255,.86)",marginTop:2,fontFamily:"'Plus Jakarta Sans',sans-serif",position:"relative",zIndex:1}}>{[wine.vintage,geo.region||geo.country,geo.country&&geo.region?geo.country:null].filter(Boolean).join(" · ")}</div>}
+      {(!hasPhoto||isMobile)&&(
+        <div style={{position:"relative",marginBottom:16}}>
+          {hasPhoto&&(
+            <div style={{position:"absolute",left:"50%",top:-26,transform:"translateX(-50%)",width:"min(92%,330px)",height:196,zIndex:3,pointerEvents:"none",display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+              <div style={{position:"absolute",left:"15%",right:"15%",bottom:8,height:36,background:`radial-gradient(ellipse at center, rgba(0,0,0,0.34) 0%, rgba(0,0,0,0.14) 46%, rgba(0,0,0,0) 100%)`,filter:"blur(8px)"}}/>
+              <WinePhotoImage src={wine.photo} alt={wine.name} style={{width:"100%",height:"100%",objectFit:"contain",objectPosition:"center",filter:"drop-shadow(0 16px 22px rgba(0,0,0,.34))",animation:"heroPhotoFloat .34s ease-out both"}}/>
             </div>
+          )}
+          <div style={{borderRadius:16,background:`linear-gradient(140deg,${tc.dot} 0%,rgba(0,0,0,.24) 90%)`,padding:hasPhoto?"168px 20px 20px":"20px",position:"relative",overflow:"hidden",minHeight:hasPhoto?228:108,boxShadow:"inset 0 1px 0 rgba(255,255,255,.2)",animation:"heroGlassIn .25s ease-out"}}>
+            <div style={{position:"absolute",right:-18,bottom:-18,opacity:0.12,pointerEvents:"none"}}><BrandLogo size={120} variant="mono"/></div>
+            <div style={{position:"relative",zIndex:1}}>
+              <WineTypePill type={type} label={varietal}/>
+            </div>
+            <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:22,fontWeight:800,color:"#fff",marginTop:8,lineHeight:1.2,position:"relative",zIndex:1,textShadow:"0 2px 10px rgba(0,0,0,.28)"}}>{wine.name}</div>
+            {(wine.vintage||geo.region||geo.country)&&<div style={{fontSize:14,color:"rgba(255,255,255,.86)",marginTop:2,fontFamily:"'Plus Jakarta Sans',sans-serif",position:"relative",zIndex:1}}>{[wine.vintage,geo.region||geo.country,geo.country&&geo.region?geo.country:null].filter(Boolean).join(" · ")}</div>}
           </div>
-        )}
+        </div>
+      )}
       {!wine.wishlist&&(
         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:8}}>
           {[["Purchased",purchasedTotal],["Left",bottlesLeft],["Consumed",consumedCount]].map(([label,val])=>(
@@ -1406,7 +1405,6 @@ const WineDetail=({wine,onEdit,onDelete,onMove,onAdjustConsumption})=>{
       <div style={{display:"flex",gap:8,marginTop:12}}>
         <Btn variant="secondary" onClick={onEdit} full icon="edit">Edit</Btn>
         <Btn variant="danger" onClick={onDelete} full icon="trash">Delete</Btn>
-      </div>
       </div>
     </div>
   );
@@ -3777,7 +3775,7 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile})=>{
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.67 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.68 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
