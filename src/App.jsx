@@ -111,6 +111,7 @@ const CACHE_KEY = "vino_local_cache_v2";
 const SAVED_LOCATIONS_KEY = "vino_saved_locations_v1";
 const DELETED_WINES_KEY = "vino_deleted_wines_v1";
 const AUDITS_KEY = "vino_audits_v1";
+const WINE_FORM_DRAFT_PREFIX = "vino_wine_form_draft_v1:";
 const ACCENTS = {
   wine:{id:"wine",label:"Wine Red",accent:"#9B2335",accentLight:"#F08FA0"},
   ocean:{id:"ocean",label:"Ocean Blue",accent:"#1E5BB8",accentLight:"#7EB6FF"},
@@ -376,6 +377,18 @@ const readDeletedWines=()=>{
       .map(item=>({wine:item.wine,deletedAt:item.deletedAt||""}));
   }catch{return[];}
 };
+const wineFormDraftStorageKey = ({initial,isWishlist}) =>
+  `${WINE_FORM_DRAFT_PREFIX}${initial?.id?`edit:${initial.id}`:(isWishlist?"new:wishlist":"new:cellar")}`;
+const readWineFormDraft = key => {
+  try{
+    const raw=localStorage.getItem(key);
+    return raw?JSON.parse(raw):null;
+  }catch{return null;}
+};
+const writeWineFormDraft = (key,payload) => {
+  try{ localStorage.setItem(key,JSON.stringify({...payload,savedAt:new Date().toISOString()})); }catch{}
+};
+const clearWineFormDraft = key => { try{ localStorage.removeItem(key); }catch{} };
 const normalizeAuditItem = item => {
   if(!item||!item.wineId) return null;
   return {
@@ -1420,6 +1433,8 @@ const WineDetail=({wine,onEdit,onDelete,onMove,onAdjustConsumption})=>{
 /* ── WINE FORM ────────────────────────────────────────────────── */
 const CUSTOM_LOCATION_OPTION = "__custom_location__";
 const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocations=[],onSaveLocation,onRemoveLocation,reviewerSuggestions=[]})=>{
+  const draftKeyRef=useRef(wineFormDraftStorageKey({initial,isWishlist}));
+  const draftKey=draftKeyRef.current;
   const knownLocations=dedupeLocations([...LOCATIONS,...locationOptions,...savedLocations,initial?.location]);
   const defaultLocation=knownLocations[0]||LOCATIONS[0]||"Kennards";
   const initialLocation=canonicalLocation(initial?.location||defaultLocation,knownLocations)||defaultLocation;
@@ -1475,6 +1490,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
   const [q,setQ]=useState(initial?.name||"");
   const [sugs,setSugs]=useState([]);
   const [showFields,setShowFields]=useState(!!initial);
+  const [draftRestored,setDraftRestored]=useState(false);
   const selectableLocations=dedupeLocations([...knownLocations,f.location]);
   const selectedLocationValue=locationMode==="custom"
     ? CUSTOM_LOCATION_OPTION
@@ -1508,6 +1524,37 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
   const canSubmit=!!f.name&&!invalidCustomLocation;
   const showDetailsStep=!isTwoStepNewCellar||step==="details";
   const showJournalStep=isTwoStepNewCellar&&step==="journal";
+  useEffect(()=>{
+    const draft=readWineFormDraft(draftKey);
+    if(!draft?.form) return;
+    const restoredForm={...draft.form};
+    restoredForm.otherReviews=normalizeOtherReviews(restoredForm.otherReviews||[]).length
+      ? normalizeOtherReviews(restoredForm.otherReviews||[])
+      : [normalizeReviewEntry({})];
+    setF(prev=>({...prev,...restoredForm}));
+    setLocationMode(draft.locationMode==="custom"?"custom":"preset");
+    setCustomLocation((draft.customLocation||"").toString());
+    setRememberLocation(!!draft.rememberLocation);
+    setPriceBottlesManual(!!draft.priceBottlesManual);
+    setStep(draft.step==="journal"?"journal":"details");
+    setShowFields(typeof draft.showFields==="boolean"?draft.showFields:true);
+    setQ((draft.q||restoredForm.name||"").toString());
+    setDraftRestored(true);
+  },[draftKey]);
+  useEffect(()=>{
+    writeWineFormDraft(draftKey,{
+      form:f,
+      locationMode,
+      customLocation,
+      rememberLocation,
+      priceBottlesManual,
+      step,
+      showFields,
+      q,
+      initialId:initial?.id||null,
+      wishlist:!!isWishlist,
+    });
+  },[draftKey,f,locationMode,customLocation,rememberLocation,priceBottlesManual,step,showFields,q,initial?.id,isWishlist]);
   const handleQ=v=>{setQ(v);set("name",v);setSugs(v.length>=2?fuzzySearch(v):[]);};
   const pickSug=w=>{setF(p=>({...p,name:w.name,origin:w.origin||"",grape:w.grape||"",alcohol:w.alcohol?.toString()||"",tastingNotes:w.tastingNotes||""}));setQ(w.name);setSugs([]);setShowFields(true);};
   const handleLocationSelect=value=>{
@@ -1546,11 +1593,15 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
       tastingNotes:serializeOtherRatings(normalizedOtherReviews),
       cellarMeta:{...(initial?.cellarMeta||{}),drinkStart:parseInt(f.drinkStart)||null,drinkEnd:parseInt(f.drinkEnd)||null,pricePerBottle:finalPricePerBottle,rrp:finalRrp,totalPaid:finalTotalPaid,insuranceValue:parseFloat(f.insuranceValue)||null,supplier:f.supplier||"",locationSection:finalSection,totalPurchased:projectedPurchased,addedDate:finalAddedDate}
     });
+    clearWineFormDraft(draftKey);
     onClose();
   };
   return(
     <div>
       <ModalHeader title={initial?"Edit Wine":isWishlist?"Add to Wishlist":"Add Wine"} onClose={onClose}/>
+      <div style={{marginTop:-12,marginBottom:10,fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+        Draft autosave is on{draftRestored?" · restored previous draft":""}.
+      </div>
       <div style={{display:"flex",justifyContent:"center",marginBottom:18}}>
         <PhotoPicker value={f.photo} onChange={v=>set("photo",v)} size={76}/>
       </div>
@@ -3782,7 +3833,7 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile})=>{
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.81 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.82 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
