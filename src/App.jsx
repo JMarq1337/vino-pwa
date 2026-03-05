@@ -894,8 +894,8 @@ const Icon=({n,size=20,color="currentColor",fill="none",sw=1.5})=>{
   if(n==="search")return(<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>);
   if(n==="rewind")return(
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="miter">
-      <path d="M20 12a8 8 0 1 1-2.8-6.1"/>
-      <path d="M7.6 3.7L4 5.9l3.8 2.2"/>
+      <path d="M20 12a8 8 0 1 0-8-8"/>
+      <path d="M12 4l-3 3M12 4l3 3" strokeLinecap="butt"/>
     </svg>
   );
   return(<svg width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><path d={IC[n]}/></svg>);
@@ -1635,16 +1635,17 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
         Draft autosave is on{draftRestored?" · restored previous draft":""}.
       </div>
       <div style={{display:"flex",justifyContent:"center",marginBottom:18}}>
-        <div style={{display:"flex",alignItems:"center",gap:10}}>
+        <div style={{position:"relative",width:76,height:76}}>
           <PhotoPicker value={f.photo} onChange={v=>set("photo",v)} size={76}/>
           {f.photo&&(
             <button
               type="button"
-              onClick={()=>set("photo",null)}
-              style={{height:34,padding:"0 11px",borderRadius:11,border:"1.5px solid var(--border)",background:"var(--card)",color:"var(--text)",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",display:"inline-flex",alignItems:"center",gap:6,cursor:"pointer"}}
+              onClick={e=>{e.preventDefault();e.stopPropagation();set("photo",null);}}
+              title="Remove photo"
+              aria-label="Remove photo"
+              style={{position:"absolute",top:-7,right:-7,width:22,height:22,borderRadius:"50%",border:"1.5px solid rgba(255,255,255,0.65)",background:"#D23131",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",boxShadow:"0 6px 10px rgba(0,0,0,0.2)",padding:0,zIndex:4}}
             >
-              <Icon n="trash" size={13}/>
-              Remove photo
+              <Icon n="x" size={11} sw={2}/>
             </button>
           )}
         </div>
@@ -1876,7 +1877,10 @@ const applyFilters=(wines,f,s)=>{
   }
   if(f.priceBand){
     r=r.filter(w=>{
-      const p=safeNum(w.cellarMeta?.rrp)||0;
+      const rrp=safeNum(w.cellarMeta?.rrp);
+      const paid=safeNum(w.cellarMeta?.pricePerBottle);
+      const paidTotal=safeNum(w.cellarMeta?.totalPaid);
+      const p=(rrp!=null&&rrp>0)?rrp:((paid!=null&&paid>0)?paid:((paidTotal!=null&&paidTotal>0)?paidTotal:0));
       if(f.priceBand==="budget")return p>0&&p<25;
       if(f.priceBand==="mid")return p>=25&&p<60;
       if(f.priceBand==="premium")return p>=60&&p<120;
