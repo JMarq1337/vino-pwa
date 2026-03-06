@@ -107,6 +107,7 @@ const db = {
 const META_PREFIX = "[[VINO_META]]";
 const EXCEL_IMPORT_FLAG = "vino_excel_seed_v1";
 const EXCEL_RESTORE_FLAG = "vino_excel_restore_v1";
+const EXCEL_JOURNAL_FIX_FLAG = "vino_excel_journal_fix_v3";
 const CACHE_KEY = "vino_local_cache_v2";
 const SAVED_LOCATIONS_KEY = "vino_saved_locations_v1";
 const DELETED_WINES_KEY = "vino_deleted_wines_v1";
@@ -367,6 +368,27 @@ const RECENT_BUCKETS = [
   { key:"week", label:"Added Within 7 Days" },
   { key:"month", label:"Added Within 30 Days" },
   { key:"older", label:"Added Earlier" },
+];
+const journalUpdatedTimestamp = wine => {
+  const raw=(wine?.cellarMeta?.journalUpdatedAt||"").toString().trim();
+  if(!raw) return 0;
+  const ts=Date.parse(raw);
+  return Number.isFinite(ts)?ts:0;
+};
+const journalUpdatedBucket = wine => {
+  const ts=journalUpdatedTimestamp(wine);
+  if(!ts) return "rest";
+  const days=Math.max(0,Math.floor((dayStart(new Date())-dayStart(new Date(ts)))/86400000));
+  if(days<=1) return "yesterday";
+  if(days<=7) return "week";
+  if(days<=30) return "month";
+  return "rest";
+};
+const JOURNAL_UPDATE_GROUPS = [
+  { key:"yesterday", label:"Updated Yesterday" },
+  { key:"week", label:"Updated in 7 Days" },
+  { key:"month", label:"Updated in 30 Days" },
+  { key:"rest", label:"Earlier Updates" },
 ];
 const todayIsoLocal = ()=>{
   const d=new Date();
@@ -787,17 +809,39 @@ const SEED_WINES=SOURCE_CELLAR_ROWS.map((r,i)=>{
   const wineType=guessWineType(grape,name);
   const typeColor=(WINE_TYPE_COLORS[wineType]||WINE_TYPE_COLORS.Other).dot;
   const hallidayScore=safeNum(r.halliday);
-  const otherRatingsParsed=parseOtherRatingsString(r.other_ratings||"");
-  const otherReviewTexts=[r.other_review_1||"",r.other_review_2||"",r.other_review_3||""].map(v=>v.toString().trim());
-  const otherReviewCount=Math.max(otherRatingsParsed.length,otherReviewTexts.filter(Boolean).length);
-  const otherReviews=Array.from({length:otherReviewCount}).map((_,idx)=>{
-    const base=otherRatingsParsed[idx]||{};
+  const hallidayReviewText=(r.halliday_review||"").toString().trim();
+  const hallidayPrimary=normalizeReviewEntry({
+    reviewer:(hallidayReviewText||hallidayScore!=null)?"James Halliday":"",
+    rating:hallidayScore!=null?String(hallidayScore):"",
+    text:hallidayReviewText,
+  });
+  const reviewerFromText=text=>{
+    const m=(text||"").match(/\b([A-Za-z]{2,3})\b/);
+    if(!m) return "";
+    const key=(m[1]||"").toUpperCase();
+    return REVIEWER_INITIALS_MAP[key]||"";
+  };
+  const otherRatingsParsed=parseOtherRatingsString(r.other_ratings||"").filter(entry=>{
+    const who=(entry.reviewer||"").toLowerCase();
+    return !(who==="james halliday"||who==="halliday"||who==="jh");
+  });
+  const otherReviewTexts=[r.other_review_1||"",r.other_review_2||"",r.other_review_3||""]
+    .map(v=>v.toString().trim())
+    .filter(Boolean);
+  const otherReviewSlots=Math.max(otherReviewTexts.length,otherRatingsParsed.length?1:0);
+  const otherReviews=Array.from({length:otherReviewSlots}).map((_,idx)=>{
+    const ratingBase=otherRatingsParsed[idx]||{};
+    const text=otherReviewTexts[idx]||"";
     return normalizeReviewEntry({
-      reviewer:base.reviewer||"",
-      rating:base.rating||"",
-      text:otherReviewTexts[idx]||"",
+      reviewer:ratingBase.reviewer||reviewerFromText(text)||"",
+      rating:ratingBase.rating||"",
+      text,
     });
   }).filter(hasReviewEntryValue);
+  const overflowRatings=otherRatingsParsed.slice(otherReviewSlots);
+  const seedNotesBase=(r.notes||"").toString().trim();
+  const overflowRatingsNote=overflowRatings.length?`Other ratings: ${serializeOtherRatings(overflowRatings)}`:"";
+  const seedNotes=[seedNotesBase,overflowRatingsNote].filter(Boolean).join("\n\n");
   const cellarMeta={
     drinkStart:safeNum(r.drink_start_num??r.drinking_window_start),
     drinkEnd:safeNum(r.drink_end_num??r.drinking_window_end),
@@ -825,11 +869,11 @@ const SEED_WINES=SOURCE_CELLAR_ROWS.map((r,i)=>{
     vintage:year||null,
     bottles:remaining,
     rating:ratingFromHalliday(r.halliday),
-    notes:(r.notes||"").toString(),
+    notes:seedNotes,
     cellarMeta,
-    review:r.halliday_review||"",
-    reviewPrimaryReviewer:(hallidayScore!=null||((r.halliday_review||"").trim()))?"Halliday":"",
-    reviewPrimaryRating:hallidayScore!=null?String(hallidayScore):"",
+    review:hallidayPrimary.text,
+    reviewPrimaryReviewer:hallidayPrimary.reviewer,
+    reviewPrimaryRating:hallidayPrimary.rating,
     otherReviews,
     tastingNotes:serializeOtherRatings(otherReviews),
     datePurchased:purchaseDate,
@@ -852,6 +896,17 @@ const SEED_PRICING_BY_ID=Object.fromEntries(SEED_WINES.map(w=>[
     paidPerBottle:safeNum(w.cellarMeta?.pricePerBottle),
     rrpPerBottle:safeNum(w.cellarMeta?.rrp),
     totalPaid:safeNum(w.cellarMeta?.totalPaid),
+  }
+]));
+const SEED_JOURNAL_BY_ID=Object.fromEntries(SEED_WINES.map(w=>[
+  w.id,
+  {
+    review:w.review||"",
+    reviewPrimaryReviewer:w.reviewPrimaryReviewer||"",
+    reviewPrimaryRating:w.reviewPrimaryRating||"",
+    otherReviews:normalizeOtherReviews(w.otherReviews||[]),
+    notes:w.notes||"",
+    rating:w.rating||0,
   }
 ]));
 const SEED_NOTES=[
@@ -1623,6 +1678,26 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
     const reviewPrimaryRating=(f.reviewPrimaryRating||"").toString().trim();
     const hallidayNumeric=safeNum(reviewPrimaryRating);
     const computedStars=hallidayNumeric!=null?ratingFromHalliday(hallidayNumeric):(f.rating||0);
+    const nextPrimary=normalizeReviewEntry({
+      reviewer:(f.reviewPrimaryReviewer||"").toString().trim(),
+      rating:reviewPrimaryRating,
+      text:(f.review||"").toString().trim(),
+    });
+    const nextPersonalNotes=(f.notes||"").toString().trim();
+    const hasNextJournal=hasReviewEntryValue(nextPrimary)||normalizedOtherReviews.length>0||!!nextPersonalNotes;
+    const prevJournal=toJournalState(initial||{});
+    const journalChanged=JSON.stringify({
+      p:nextPrimary,
+      o:normalizedOtherReviews,
+      n:nextPersonalNotes,
+    })!==JSON.stringify({
+      p:normalizeReviewEntry(prevJournal.primary),
+      o:normalizeOtherReviews(prevJournal.otherReviews),
+      n:(prevJournal.personalNotes||"").toString().trim(),
+    });
+    const journalUpdatedAt=journalChanged
+      ? new Date().toISOString()
+      : ((initial?.cellarMeta?.journalUpdatedAt)||((hasNextJournal&&finalAddedDate)?`${finalAddedDate}T00:00:00`:""));
     const {addPurchased:_addIgnore,locationSection:_locSectionIgnore,addedDate:_addedIgnore,priceForBottles:_priceCountIgnore,pricePerBottle:_pricePerBottleIgnore,...payload}=f;
     if(!isWishlist&&locationMode==="custom"&&rememberLocation&&finalLocation){
       onSaveLocation?.(finalLocation);
@@ -1634,7 +1709,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
       reviewPrimaryRating:reviewPrimaryRating,
       otherReviews:normalizedOtherReviews,
       tastingNotes:serializeOtherRatings(normalizedOtherReviews),
-      cellarMeta:{...(initial?.cellarMeta||{}),drinkStart:parseInt(f.drinkStart)||null,drinkEnd:parseInt(f.drinkEnd)||null,pricePerBottle:finalPricePerBottle,rrp:finalRrp,totalPaid:finalTotalPaid,insuranceValue:parseFloat(f.insuranceValue)||null,supplier:f.supplier||"",locationSection:finalSection,totalPurchased:projectedPurchased,addedDate:finalAddedDate}
+      cellarMeta:{...(initial?.cellarMeta||{}),drinkStart:parseInt(f.drinkStart)||null,drinkEnd:parseInt(f.drinkEnd)||null,pricePerBottle:finalPricePerBottle,rrp:finalRrp,totalPaid:finalTotalPaid,insuranceValue:parseFloat(f.insuranceValue)||null,supplier:f.supplier||"",locationSection:finalSection,totalPurchased:projectedPurchased,addedDate:finalAddedDate,journalUpdatedAt}
     });
     clearWineFormDraft(draftKey);
     onClose();
@@ -3123,6 +3198,7 @@ const JournalNoteForm=({wine,onSave,onClose,reviewerSuggestions=[]})=>{
       notes:form.personalNotes||"",
       tastingNotes:serializeOtherRatings(otherReviews),
       rating:stars,
+      cellarMeta:{...(wine.cellarMeta||{}),journalUpdatedAt:new Date().toISOString()},
     });
   };
   return(
@@ -3174,8 +3250,18 @@ const JournalScreen=({wines,onUpdate,desktop})=>{
         ...journal.otherReviews.flatMap(r=>[r.reviewer,r.rating,r.text])
       ].join(" ").toLowerCase();
       return haystack.includes(search.trim().toLowerCase());
-    })
-    .sort((a,b)=>a.name.localeCompare(b.name));
+    });
+  const sortedByJournalUpdate=[...filtered].sort((a,b)=>{
+    const delta=journalUpdatedTimestamp(b)-journalUpdatedTimestamp(a);
+    if(delta!==0) return delta;
+    return (a.name||"").localeCompare(b.name||"");
+  });
+  const groupedByRecentUpdate=JOURNAL_UPDATE_GROUPS
+    .map(group=>({
+      ...group,
+      wines:sortedByJournalUpdate.filter(w=>journalUpdatedBucket(w)===group.key),
+    }))
+    .filter(group=>group.wines.length>0);
   return(
     <div>
       <div style={{marginBottom:20}}>
@@ -3190,8 +3276,18 @@ const JournalScreen=({wines,onUpdate,desktop})=>{
       </div>
       {filtered.length===0
         ? <Empty icon="note" text={search.trim()?"No journal wines match your search.":"Your cellar has no wines yet."}/>
-        : <div style={{display:desktop?"grid":"block",gridTemplateColumns:desktop?"repeat(auto-fill,minmax(290px,1fr))":"none",gap:desktop?12:0}}>
-            {filtered.map(w=><JournalWineCard key={w.id} wine={w} onClick={()=>{setSel(w);setEditing(false);}}/>)}
+        : <div style={{display:"grid",gap:14}}>
+            {groupedByRecentUpdate.map(group=>(
+              <section key={group.key}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8,padding:"0 2px"}}>
+                  <div style={{fontSize:12,fontWeight:800,color:"var(--text)",letterSpacing:"0.6px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{group.label}</div>
+                  <div style={{padding:"2px 8px",borderRadius:999,background:"var(--inputBg)",border:"1px solid var(--border)",fontSize:11,fontWeight:700,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{group.wines.length}</div>
+                </div>
+                <div style={{display:desktop?"grid":"block",gridTemplateColumns:desktop?"repeat(auto-fill,minmax(290px,1fr))":"none",gap:desktop?12:0}}>
+                  {group.wines.map(w=><JournalWineCard key={w.id} wine={w} onClick={()=>{setSel(w);setEditing(false);}}/>)}
+                </div>
+              </section>
+            ))}
           </div>
       }
       <Modal show={!!sel&&!editing} onClose={()=>setSel(null)} wide>
@@ -3974,7 +4070,7 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile})=>{
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.87 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.88 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
@@ -4213,6 +4309,53 @@ export default function App(){
             await Promise.all(repairedAdded.map(w=>db.upsert("wines",toDb.wine(w))));
             const byId=Object.fromEntries(repairedAdded.map(w=>[w.id,w.cellarMeta]));
             all=all.map(w=>byId[w.id]?{...w,cellarMeta:byId[w.id]}:w);
+          }
+          const journalFixDone=(()=>{try{return localStorage.getItem(EXCEL_JOURNAL_FIX_FLAG)==="1";}catch{return false;}})();
+          if(!journalFixDone){
+            const toRepairSeedJournal=all.filter(w=>{
+              if(!String(w.id||"").startsWith("xl-")) return false;
+              const seed=SEED_JOURNAL_BY_ID[w.id];
+              if(!seed) return false;
+              const currentReviewer=(w.reviewPrimaryReviewer||"").toString().trim().toLowerCase();
+              const reviewerPatchable=!currentReviewer||currentReviewer==="halliday"||currentReviewer==="james halliday";
+              if(!reviewerPatchable) return false;
+              const currentOther=normalizeOtherReviews(w.otherReviews||[]);
+              const seedOther=normalizeOtherReviews(seed.otherReviews||[]);
+              const existingNotes=(w.notes||"").toString().trim();
+              const desiredNotes=(existingNotes||seed.notes||"").trim();
+              return (
+                (w.review||"").toString().trim()!==(seed.review||"").toString().trim() ||
+                (w.reviewPrimaryReviewer||"").toString().trim()!==(seed.reviewPrimaryReviewer||"").toString().trim() ||
+                (w.reviewPrimaryRating||"").toString().trim()!==(seed.reviewPrimaryRating||"").toString().trim() ||
+                JSON.stringify(currentOther)!==JSON.stringify(seedOther) ||
+                existingNotes!==desiredNotes ||
+                !(w.cellarMeta||{}).journalUpdatedAt
+              );
+            });
+            if(toRepairSeedJournal.length){
+              const repairedJournal=toRepairSeedJournal.map(w=>{
+                const seed=SEED_JOURNAL_BY_ID[w.id]||{};
+                const seedOther=normalizeOtherReviews(seed.otherReviews||[]);
+                const m=w.cellarMeta||{};
+                const mergedNotes=((w.notes||"").toString().trim()||(seed.notes||"").toString().trim());
+                const journalUpdatedAt=m.journalUpdatedAt||(m.addedDate?`${m.addedDate}T00:00:00`:((w.datePurchased||"").toString().slice(0,10)?`${(w.datePurchased||"").toString().slice(0,10)}T00:00:00`:""));
+                return{
+                  ...w,
+                  review:seed.review||"",
+                  reviewPrimaryReviewer:seed.reviewPrimaryReviewer||"",
+                  reviewPrimaryRating:seed.reviewPrimaryRating||"",
+                  otherReviews:seedOther,
+                  tastingNotes:serializeOtherRatings(seedOther),
+                  notes:mergedNotes,
+                  rating:(seed.rating||0)>0?seed.rating:w.rating,
+                  cellarMeta:{...m,journalUpdatedAt},
+                };
+              });
+              await Promise.all(repairedJournal.map(w=>db.upsert("wines",toDb.wine(w))));
+              const byId=Object.fromEntries(repairedJournal.map(w=>[w.id,w]));
+              all=all.map(w=>byId[w.id]||w);
+            }
+            try{localStorage.setItem(EXCEL_JOURNAL_FIX_FLAG,"1");}catch{}
           }
           const restoredFromExcel=(()=>{try{return localStorage.getItem(EXCEL_RESTORE_FLAG)==="1";}catch{return false;}})();
           if(!restoredFromExcel){
