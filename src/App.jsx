@@ -107,7 +107,7 @@ const db = {
 const META_PREFIX = "[[VINO_META]]";
 const EXCEL_IMPORT_FLAG = "vino_excel_seed_v1";
 const EXCEL_RESTORE_FLAG = "vino_excel_restore_v1";
-const EXCEL_JOURNAL_FIX_FLAG = "vino_excel_journal_fix_v3";
+const EXCEL_JOURNAL_FIX_FLAG = "vino_excel_journal_fix_v4";
 const CACHE_KEY = "vino_local_cache_v2";
 const SAVED_LOCATIONS_KEY = "vino_saved_locations_v1";
 const DELETED_WINES_KEY = "vino_deleted_wines_v1";
@@ -161,6 +161,12 @@ const normalizeKennardsSection = value => {
 const safeNum = v => {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
+};
+const safeNumStrict = v => {
+  if(v===null||v===undefined) return null;
+  if(typeof v==="string" && v.trim()==="") return null;
+  const n=Number(v);
+  return Number.isFinite(n)?n:null;
 };
 const normalizeLocation = value => {
   const cleaned=(value||"").trim().replace(/\s+/g," ");
@@ -255,9 +261,48 @@ const REVIEWER_INITIALS_MAP = Object.fromEntries(
     .map(row=>[(row?.[0]||"").toString().trim().toUpperCase(),(row?.[1]||"").toString().trim()])
     .filter(([k,v])=>k&&v)
 );
+const REVIEWER_LOOKUP = (() => {
+  const map={};
+  const keyOf=v=>(v||"").toString().trim().toLowerCase().replace(/[^a-z0-9]/g,"");
+  Object.entries(REVIEWER_INITIALS_MAP).forEach(([initial,name])=>{
+    const clean=(name||"").toString().trim();
+    if(!clean) return;
+    map[initial.toUpperCase()]=clean;
+    map[keyOf(clean)]=clean;
+  });
+  map.halliday="James Halliday";
+  map.jameshalliday="James Halliday";
+  map.jamesholliday="James Halliday";
+  map.holliday="James Halliday";
+  return { map, keyOf };
+})();
+const canonicalReviewerName = raw => {
+  const txt=(raw||"").toString().trim();
+  if(!txt) return "";
+  const byInitial=REVIEWER_LOOKUP.map[txt.toUpperCase()];
+  if(byInitial) return byInitial;
+  const byKey=REVIEWER_LOOKUP.map[REVIEWER_LOOKUP.keyOf(txt)];
+  return byKey||txt;
+};
+const cleanRatingToken = raw => {
+  const txt=(raw||"").toString().trim();
+  if(!txt) return "";
+  const n=safeNum(txt);
+  if(n!=null){
+    if(n<=0) return "";
+    return Number.isInteger(n)?String(n):String(Number(n.toFixed(2)));
+  }
+  return txt;
+};
+const isLikelyRatingToken = raw => {
+  const txt=(raw||"").toString().trim();
+  if(!txt) return false;
+  if(safeNum(txt)!=null) return true;
+  return /^[A-F][+-]?$/i.test(txt);
+};
 const normalizeReviewEntry = entry => ({
-  reviewer:(entry?.reviewer||"").toString().trim(),
-  rating:(entry?.rating||"").toString().trim(),
+  reviewer:canonicalReviewerName((entry?.reviewer||"").toString().trim()),
+  rating:cleanRatingToken((entry?.rating||"").toString().trim()),
   text:(entry?.text||"").toString().trim(),
 });
 const hasReviewEntryValue = entry => {
@@ -276,13 +321,27 @@ const parseOtherRatingsString = raw => {
       const dashMatch=token.match(/^(.+?)\s*-\s*(.+)$/);
       let rating="",reviewer="";
       if(dashMatch){
-        rating=(dashMatch[1]||"").trim();
-        reviewer=(dashMatch[2]||"").trim();
+        const left=(dashMatch[1]||"").trim();
+        const right=(dashMatch[2]||"").trim();
+        const leftReviewer=canonicalReviewerName(left);
+        const rightReviewer=canonicalReviewerName(right);
+        const leftRating=cleanRatingToken(left);
+        const rightRating=cleanRatingToken(right);
+        const leftIsReviewer=!!leftReviewer && (leftReviewer!==left || /^[A-Z]{2,3}$/.test(left));
+        const rightIsReviewer=!!rightReviewer && (rightReviewer!==right || /^[A-Z]{2,3}$/.test(right));
+        if(leftIsReviewer && isLikelyRatingToken(right)){
+          reviewer=leftReviewer;
+          rating=rightRating;
+        }else if(rightIsReviewer && isLikelyRatingToken(left)){
+          reviewer=rightReviewer;
+          rating=leftRating;
+        }else{
+          reviewer=rightReviewer||leftReviewer||right;
+          rating=leftRating||rightRating;
+        }
       }else{
-        reviewer=token;
+        reviewer=canonicalReviewerName(token);
       }
-      const upper=reviewer.toUpperCase();
-      if(REVIEWER_INITIALS_MAP[upper]) reviewer=REVIEWER_INITIALS_MAP[upper];
       return normalizeReviewEntry({reviewer,rating,text:""});
     })
     .filter(hasReviewEntryValue);
@@ -502,8 +561,9 @@ const fromDb = {
     const parsed=parseWineMetaFromNotes(r.notes);
     const metaRaw={...(parsed.meta||{})};
     const journalRaw=metaRaw.journal||{};
-    const legacyPrimaryRating = safeNum(metaRaw.hallidayScore);
-    const legacyPrimaryReviewer = (legacyPrimaryRating!=null || (r.review||"").trim()) ? "Halliday" : "";
+    const legacyPrimaryRatingRaw = safeNumStrict(metaRaw.hallidayScore);
+    const legacyPrimaryRating = (legacyPrimaryRatingRaw!=null && legacyPrimaryRatingRaw>0) ? legacyPrimaryRatingRaw : null;
+    const legacyPrimaryReviewer = (legacyPrimaryRating!=null || (r.review||"").trim()) ? "James Halliday" : "";
     const legacyOther = parseOtherRatingsString(r.tasting_notes||"");
     const meta={...metaRaw};
     delete meta.journal;
@@ -808,7 +868,8 @@ const SEED_WINES=SOURCE_CELLAR_ROWS.map((r,i)=>{
   const purchaseDate = r.p_date ? excelSerialToIso(r.p_date) : (r.acquired_date_iso||"");
   const wineType=guessWineType(grape,name);
   const typeColor=(WINE_TYPE_COLORS[wineType]||WINE_TYPE_COLORS.Other).dot;
-  const hallidayScore=safeNum(r.halliday);
+  const hallidayScoreRaw=safeNumStrict((r.halliday??"").toString().trim());
+  const hallidayScore=(hallidayScoreRaw!=null&&hallidayScoreRaw>0)?hallidayScoreRaw:null;
   const hallidayReviewText=(r.halliday_review||"").toString().trim();
   const hallidayPrimary=normalizeReviewEntry({
     reviewer:(hallidayReviewText||hallidayScore!=null)?"James Halliday":"",
@@ -838,10 +899,7 @@ const SEED_WINES=SOURCE_CELLAR_ROWS.map((r,i)=>{
       text,
     });
   }).filter(hasReviewEntryValue);
-  const overflowRatings=otherRatingsParsed.slice(otherReviewSlots);
-  const seedNotesBase=(r.notes||"").toString().trim();
-  const overflowRatingsNote=overflowRatings.length?`Other ratings: ${serializeOtherRatings(overflowRatings)}`:"";
-  const seedNotes=[seedNotesBase,overflowRatingsNote].filter(Boolean).join("\n\n");
+  const seedNotes=(r.notes||"").toString().trim();
   const cellarMeta={
     drinkStart:safeNum(r.drink_start_num??r.drinking_window_start),
     drinkEnd:safeNum(r.drink_end_num??r.drinking_window_end),
@@ -1676,7 +1734,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
     const tc=WINE_TYPE_COLORS[wt]||WINE_TYPE_COLORS.Other;
     const normalizedOtherReviews=normalizeOtherReviews(f.otherReviews||[]);
     const reviewPrimaryRating=(f.reviewPrimaryRating||"").toString().trim();
-    const hallidayNumeric=safeNum(reviewPrimaryRating);
+    const hallidayNumeric=safeNumStrict(reviewPrimaryRating);
     const computedStars=hallidayNumeric!=null?ratingFromHalliday(hallidayNumeric):(f.rating||0);
     const nextPrimary=normalizeReviewEntry({
       reviewer:(f.reviewPrimaryReviewer||"").toString().trim(),
@@ -4070,7 +4128,7 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile})=>{
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.88 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.89 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
@@ -4316,17 +4374,14 @@ export default function App(){
               if(!String(w.id||"").startsWith("xl-")) return false;
               const seed=SEED_JOURNAL_BY_ID[w.id];
               if(!seed) return false;
-              const currentReviewer=(w.reviewPrimaryReviewer||"").toString().trim().toLowerCase();
-              const reviewerPatchable=!currentReviewer||currentReviewer==="halliday"||currentReviewer==="james halliday";
-              if(!reviewerPatchable) return false;
               const currentOther=normalizeOtherReviews(w.otherReviews||[]);
               const seedOther=normalizeOtherReviews(seed.otherReviews||[]);
               const existingNotes=(w.notes||"").toString().trim();
-              const desiredNotes=(existingNotes||seed.notes||"").trim();
+              const desiredNotes=(seed.notes||"").trim();
               return (
                 (w.review||"").toString().trim()!==(seed.review||"").toString().trim() ||
-                (w.reviewPrimaryReviewer||"").toString().trim()!==(seed.reviewPrimaryReviewer||"").toString().trim() ||
-                (w.reviewPrimaryRating||"").toString().trim()!==(seed.reviewPrimaryRating||"").toString().trim() ||
+                canonicalReviewerName((w.reviewPrimaryReviewer||"").toString().trim())!==(seed.reviewPrimaryReviewer||"").toString().trim() ||
+                cleanRatingToken((w.reviewPrimaryRating||"").toString().trim())!==(seed.reviewPrimaryRating||"").toString().trim() ||
                 JSON.stringify(currentOther)!==JSON.stringify(seedOther) ||
                 existingNotes!==desiredNotes ||
                 !(w.cellarMeta||{}).journalUpdatedAt
@@ -4337,7 +4392,6 @@ export default function App(){
                 const seed=SEED_JOURNAL_BY_ID[w.id]||{};
                 const seedOther=normalizeOtherReviews(seed.otherReviews||[]);
                 const m=w.cellarMeta||{};
-                const mergedNotes=((w.notes||"").toString().trim()||(seed.notes||"").toString().trim());
                 const journalUpdatedAt=m.journalUpdatedAt||(m.addedDate?`${m.addedDate}T00:00:00`:((w.datePurchased||"").toString().slice(0,10)?`${(w.datePurchased||"").toString().slice(0,10)}T00:00:00`:""));
                 return{
                   ...w,
@@ -4346,8 +4400,8 @@ export default function App(){
                   reviewPrimaryRating:seed.reviewPrimaryRating||"",
                   otherReviews:seedOther,
                   tastingNotes:serializeOtherRatings(seedOther),
-                  notes:mergedNotes,
-                  rating:(seed.rating||0)>0?seed.rating:w.rating,
+                  notes:(seed.notes||"").toString().trim(),
+                  rating:seed.rating||0,
                   cellarMeta:{...m,journalUpdatedAt},
                 };
               });
