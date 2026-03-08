@@ -1080,7 +1080,39 @@ const BrandLogo=({size=42,variant="color"})=>{
 };
 
 /* ── AI ───────────────────────────────────────────────────────── */
-const callAI=async(msg,wines)=>{
+const getSommelierAuditContext=()=>{
+  try{
+    const raw=localStorage.getItem(AUDITS_KEY);
+    const parsed=raw?JSON.parse(raw):[];
+    if(!Array.isArray(parsed)) return [];
+    return parsed
+      .slice()
+      .sort((a,b)=>(b?.updatedAt||"").localeCompare(a?.updatedAt||""))
+      .slice(0,8)
+      .map(a=>{
+        const items=Object.values(a?.items||{});
+        const present=items.filter(i=>i?.decision==="present").length;
+        const missing=items.filter(i=>i?.decision==="missing").length;
+        const pending=items.filter(i=>!i?.decision||i.decision==="pending").length;
+        return {
+          id:a.id,
+          name:a.name||"Audit",
+          status:a.status||"in_progress",
+          createdAt:a.createdAt||"",
+          updatedAt:a.updatedAt||"",
+          completedAt:a.completedAt||"",
+          locations:Array.isArray(a.locations)?a.locations:[],
+          present,
+          missing,
+          pending,
+          total:items.length,
+        };
+      });
+  }catch{
+    return [];
+  }
+};
+const callAI=async(msg,wines,history=[])=>{
   const cellar=(wines||[])
     .filter(w=>!w.wishlist)
     .map(w=>({
@@ -1100,12 +1132,22 @@ const callAI=async(msg,wines)=>{
       drinkBy:w.cellarMeta?.drinkEnd||null,
       rrpPerBottle:safeNum(w.cellarMeta?.rrp),
       paidPerBottle:safeNum(w.cellarMeta?.pricePerBottle),
+      reviewPrimaryReviewer:(w.reviewPrimaryReviewer||"").toString().trim(),
+      reviewPrimaryRating:(w.reviewPrimaryRating||"").toString().trim(),
+      review:(w.review||"").toString().slice(0,900),
+      otherReviews:normalizeOtherReviews(w.otherReviews||[]).map(r=>({
+        reviewer:r.reviewer||"",
+        rating:r.rating||"",
+        text:(r.text||"").toString().slice(0,450),
+      })),
+      personalNotes:(w.notes||"").toString().slice(0,900),
     }));
+  const audits=getSommelierAuditContext();
   try{
     const r=await fetch("/api/sommelier",{
       method:"POST",
       headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({message:msg,cellar})
+      body:JSON.stringify({message:msg,cellar,audits,history})
     });
     const d=await r.json().catch(()=>({}));
     if(!r.ok) return d?.error||"Sommelier is unavailable. Check API configuration.";
@@ -3103,27 +3145,96 @@ const AuditScreen=({wines,desktop,onSetWineBottles,onRemoveWine,onRevokeAudit})=
 
 /* ── AI ───────────────────────────────────────────────────────── */
 const AIScreen=({wines})=>{
-  const [msgs,setMsgs]=useState([{r:"a",t:"Hello. I'm Vinology — your personal sommelier.\n\nAsk me anything about your collection, food pairings, what to open tonight, or recommendations."}]);
+  const makeSession=seed=>({
+    id:`chat-${uid()}`,
+    title:"New Chat",
+    createdAt:new Date().toISOString(),
+    updatedAt:new Date().toISOString(),
+    messages:seed||[{r:"a",t:"Hello. I'm Vinology — your personal sommelier.\n\nAsk me anything about your collection, food pairings, where wines are stored, purchase dates, or audit status."}]
+  });
+  const [sessions,setSessions]=useState(()=>{
+    try{
+      const raw=localStorage.getItem("vino_ai_sessions_v1");
+      const parsed=raw?JSON.parse(raw):[];
+      if(Array.isArray(parsed)&&parsed.length){
+        return parsed.filter(s=>s&&s.id&&Array.isArray(s.messages));
+      }
+    }catch{}
+    return [makeSession()];
+  });
+  const [activeId,setActiveId]=useState(()=>sessions[0]?.id||`chat-${uid()}`);
   const [input,setInput]=useState("");
   const [loading,setLoading]=useState(false);
+  const [historyOpen,setHistoryOpen]=useState(false);
   const scrollRef=useRef();
   const chips=["What should I open tonight?","Best food pairings?","What's in my cellar?","Recommend a wine"];
+  const orderedSessions=[...sessions].sort((a,b)=>(b.updatedAt||"").localeCompare(a.updatedAt||""));
+  const activeSession=sessions.find(s=>s.id===activeId)||orderedSessions[0]||makeSession();
+  const msgs=activeSession.messages||[];
+  useEffect(()=>{
+    if(!sessions.some(s=>s.id===activeId)){
+      if(sessions[0]?.id) setActiveId(sessions[0].id);
+    }
+  },[sessions,activeId]);
+  useEffect(()=>{
+    try{localStorage.setItem("vino_ai_sessions_v1",JSON.stringify(sessions.slice(0,25)))}catch{}
+  },[sessions]);
+  useEffect(()=>{
+    setTimeout(()=>scrollRef.current?.scrollTo({top:99999,behavior:"smooth"}),60);
+  },[activeId,msgs.length]);
+  const patchSession=(id,updater)=>setSessions(prev=>prev.map(s=>s.id===id?updater(s):s));
+  const newChat=()=>{
+    const session=makeSession();
+    setSessions(prev=>[session,...prev]);
+    setActiveId(session.id);
+    setHistoryOpen(false);
+    setInput("");
+  };
+  const removeChat=id=>{
+    setSessions(prev=>{
+      const next=prev.filter(s=>s.id!==id);
+      return next.length?next:[makeSession()];
+    });
+  };
   const send=useCallback(async msg=>{
     const txt=msg||input.trim();
     if(!txt||loading)return;
     setInput("");
-    setMsgs(p=>[...p,{r:"u",t:txt}]);
+    const sessionId=activeSession.id;
+    const userMsg={r:"u",t:txt,ts:new Date().toISOString()};
+    const priorHistory=(activeSession.messages||[])
+      .filter(m=>m.r==="u"||m.r==="a")
+      .slice(-14)
+      .map(m=>({role:m.r==="u"?"user":"assistant",text:m.t}));
+    patchSession(sessionId,s=>{
+      const messages=[...(s.messages||[]),userMsg];
+      return{
+        ...s,
+        title:s.title==="New Chat"?txt.slice(0,46):s.title,
+        updatedAt:new Date().toISOString(),
+        messages
+      };
+    });
     setLoading(true);
-    const reply=await callAI(txt,wines);
-    setMsgs(p=>[...p,{r:"a",t:reply}]);
+    const reply=await callAI(txt,wines,priorHistory);
+    const assistantMsg={r:"a",t:reply,ts:new Date().toISOString()};
+    patchSession(sessionId,s=>({...s,updatedAt:new Date().toISOString(),messages:[...(s.messages||[]),assistantMsg]}));
     setLoading(false);
     setTimeout(()=>scrollRef.current?.scrollTo({top:99999,behavior:"smooth"}),80);
-  },[input,wines,loading]);
+  },[input,wines,loading,activeSession]);
   return(
     <div style={{display:"flex",flexDirection:"column",height:"calc(100vh - 140px)"}}>
       <div style={{marginBottom:18}}>
-        <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"2px",textTransform:"uppercase",marginBottom:4}}>Vinology AI</div>
-        <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:28,fontWeight:800,color:"var(--text)",lineHeight:1}}>Sommelier</div>
+        <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",gap:10}}>
+          <div>
+            <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"2px",textTransform:"uppercase",marginBottom:4}}>Vinology AI</div>
+            <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:28,fontWeight:800,color:"var(--text)",lineHeight:1}}>Sommelier</div>
+          </div>
+          <div style={{display:"flex",gap:6}}>
+            <button onClick={()=>setHistoryOpen(true)} style={{padding:"8px 10px",borderRadius:10,border:"1.5px solid var(--border)",background:"var(--card)",color:"var(--text)",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>History</button>
+            <button onClick={newChat} style={{padding:"8px 10px",borderRadius:10,border:"1.5px solid rgba(var(--accentRgb),0.3)",background:"rgba(var(--accentRgb),0.11)",color:"var(--accent)",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>New Chat</button>
+          </div>
+        </div>
       </div>
       <div ref={scrollRef} style={{flex:1,overflowY:"auto",paddingBottom:8}}>
         {msgs.map((m,i)=>(
@@ -3157,6 +3268,25 @@ const AIScreen=({wines})=>{
           <Icon n="send" size={17}/>
         </button>
       </div>
+      <Modal show={historyOpen} onClose={()=>setHistoryOpen(false)} wide>
+        <ModalHeader title="Sommelier Chat History" onClose={()=>setHistoryOpen(false)}/>
+        <div style={{display:"grid",gap:8}}>
+          {orderedSessions.map(session=>{
+            const preview=(session.messages||[]).find(m=>m.r==="u")?.t||"No questions yet";
+            const when=session.updatedAt?new Date(session.updatedAt).toLocaleDateString("en-AU",{day:"numeric",month:"short",year:"numeric"}):"";
+            return(
+              <div key={session.id} style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:"10px 11px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+                <button onClick={()=>{setActiveId(session.id);setHistoryOpen(false);}} style={{border:"none",background:"transparent",textAlign:"left",flex:1,minWidth:0,cursor:"pointer"}}>
+                  <div style={{fontSize:13,fontWeight:700,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{session.title||"Conversation"}</div>
+                  <div style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{preview}</div>
+                  <div style={{fontSize:10,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginTop:2}}>{when}</div>
+                </button>
+                <button onClick={()=>removeChat(session.id)} style={{width:30,height:30,borderRadius:10,border:"1.5px solid var(--border)",background:"var(--inputBg)",color:"var(--sub)",display:"flex",alignItems:"center",justifyContent:"center"}}><Icon n="trash" size={13}/></button>
+              </div>
+            );
+          })}
+        </div>
+      </Modal>
     </div>
   );
 };
@@ -4157,7 +4287,7 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile})=>{
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.90 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.91 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
