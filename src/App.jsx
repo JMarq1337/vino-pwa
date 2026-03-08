@@ -1081,9 +1081,38 @@ const BrandLogo=({size=42,variant="color"})=>{
 
 /* ── AI ───────────────────────────────────────────────────────── */
 const callAI=async(msg,wines)=>{
-  const sys=`You are Vinology, a warm knowledgeable personal wine sommelier. User collection: ${JSON.stringify(wines.filter(w=>!w.wishlist).map(w=>({name:w.name,grape:w.grape,vintage:w.vintage,bottles:w.bottles,rating:w.rating})))}. Be concise, warm, expert. Max 3-4 sentences unless listing.`;
-  try{const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:800,system:sys,messages:[{role:"user",content:msg}]})});const d=await r.json();return d.content?.[0]?.text||"Having a moment — try again.";}
-  catch{return"Connection issue. Please try again.";}
+  const cellar=(wines||[])
+    .filter(w=>!w.wishlist)
+    .map(w=>({
+      name:w.name||"",
+      varietal:resolveVarietal(w),
+      vintage:w.vintage||null,
+      origin:w.origin||"",
+      location:normalizeLocation(w.location||""),
+      locationSection:normalizeKennardsSection(w.cellarMeta?.locationSection||""),
+      locationSlot:(w.locationSlot||"").toString().trim(),
+      bottlesLeft:Math.max(0,Math.round(safeNum(w.bottles)||0)),
+      bottlesPurchased:getTotalPurchased(w),
+      bottlesConsumed:getConsumedBottles(w),
+      datePurchased:w.datePurchased||"",
+      addedDate:w.cellarMeta?.addedDate||"",
+      drinkFrom:w.cellarMeta?.drinkStart||null,
+      drinkBy:w.cellarMeta?.drinkEnd||null,
+      rrpPerBottle:safeNum(w.cellarMeta?.rrp),
+      paidPerBottle:safeNum(w.cellarMeta?.pricePerBottle),
+    }));
+  try{
+    const r=await fetch("/api/sommelier",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({message:msg,cellar})
+    });
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok) return d?.error||"Sommelier is unavailable. Check API configuration.";
+    return d?.text||"Having a moment — try again.";
+  }catch{
+    return "Connection issue. Please try again.";
+  }
 };
 
 /* ── THEME ────────────────────────────────────────────────────── */
@@ -4128,7 +4157,7 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile})=>{
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.89 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.90 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
