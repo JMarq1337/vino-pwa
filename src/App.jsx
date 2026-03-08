@@ -3145,6 +3145,8 @@ const AuditScreen=({wines,desktop,onSetWineBottles,onRemoveWine,onRevokeAudit})=
 
 /* ── AI ───────────────────────────────────────────────────────── */
 const AIScreen=({wines})=>{
+  const STORE_KEY="vino_ai_sessions_v1";
+  const TAB_BOOT_KEY="vino_ai_tab_boot_v1";
   const makeSession=seed=>({
     id:`chat-${uid()}`,
     title:"New Chat",
@@ -3154,7 +3156,7 @@ const AIScreen=({wines})=>{
   });
   const [sessions,setSessions]=useState(()=>{
     try{
-      const raw=localStorage.getItem("vino_ai_sessions_v1");
+      const raw=localStorage.getItem(STORE_KEY);
       const parsed=raw?JSON.parse(raw):[];
       if(Array.isArray(parsed)&&parsed.length){
         return parsed.filter(s=>s&&s.id&&Array.isArray(s.messages));
@@ -3177,8 +3179,34 @@ const AIScreen=({wines})=>{
     }
   },[sessions,activeId]);
   useEffect(()=>{
-    try{localStorage.setItem("vino_ai_sessions_v1",JSON.stringify(sessions.slice(0,25)))}catch{}
+    try{localStorage.setItem(STORE_KEY,JSON.stringify(sessions.slice(0,25)))}catch{}
   },[sessions]);
+  useEffect(()=>{
+    let freshBoot=false;
+    try{
+      freshBoot=!sessionStorage.getItem(TAB_BOOT_KEY);
+      if(freshBoot) sessionStorage.setItem(TAB_BOOT_KEY,new Date().toISOString());
+    }catch{
+      freshBoot=false;
+    }
+    if(!freshBoot) return;
+    let nextId="";
+    setSessions(prev=>{
+      const reusable=prev.find(s=>{
+        const msgs=Array.isArray(s?.messages)?s.messages:[];
+        return msgs.filter(m=>m?.r==="u"&&(m?.t||"").toString().trim()).length===0;
+      });
+      if(reusable){
+        nextId=reusable.id;
+        return prev;
+      }
+      const session=makeSession();
+      nextId=session.id;
+      return [session,...prev].slice(0,25);
+    });
+    if(nextId) setActiveId(nextId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[]);
   useEffect(()=>{
     setTimeout(()=>scrollRef.current?.scrollTo({top:99999,behavior:"smooth"}),60);
   },[activeId,msgs.length]);
@@ -4350,7 +4378,7 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile})=>{
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.94 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.95 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
