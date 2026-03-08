@@ -3735,7 +3735,6 @@ const exportToExcel=async(wines,wishlist,notes,{includeWishlist=true,includeNote
       const geo=deriveRegionCountry(w.origin||"");
       const journal=toJournalState(w);
       return [
-        textOrNil(w.id),
         textOrNil(w.name),
         textOrNil(resolveVarietal(w)),
         textOrNil(resolveWineType(w)),
@@ -3760,8 +3759,6 @@ const exportToExcel=async(wines,wishlist,notes,{includeWishlist=true,includeNote
         textOrNil(getPaidTotal(w)),
         textOrNil(getRrpTotal(w)),
         textOrNil(m.supplier),
-        textOrNil(w.color),
-        textOrNil(w.photo),
         textOrNil(w.reviewPrimaryReviewer),
         textOrNil(w.reviewPrimaryRating),
         textOrNil((journal.primary?.text||w.review||"").trim()),
@@ -3774,16 +3771,16 @@ const exportToExcel=async(wines,wishlist,notes,{includeWishlist=true,includeNote
   appendTableSheet({
     name:"Cellar",
     title:`Cellar Inventory (${cellarRows.length} wines)`,
-    subtitle:"Every wine field exported. Missing values are marked as nill.",
+    subtitle:"User-facing wine fields only. Missing values are marked as nill.",
     headers:[
-      "Wine ID","Wine Name","Varietal","Wine Type","Vintage","Origin (Raw)","Region","Country","Readiness",
+      "Wine Name","Varietal","Wine Type","Vintage","Origin (Raw)","Region","Country","Readiness",
       "Drink From","Drink By","Purchase Date","Added To Inventory","Location","Section","Slot / Box",
       "Bottles Purchased","Bottles Left","Bottles Consumed","ABV %","Paid / Bottle","RRP / Bottle",
-      "Total Paid","Total RRP Value","Supplier","Color Tag","Photo","Primary Reviewer","Primary Rating",
+      "Total Paid","Total RRP Value","Supplier","Primary Reviewer","Primary Rating",
       "Primary Review","Other Reviews","Personal Notes","Journal Updated","Legacy Tasting Notes"
     ],
     rows:cellarRows,
-    widths:[22,34,18,14,10,26,18,16,16,11,11,14,14,14,12,12,14,12,14,8,12,12,12,14,16,12,32,16,12,44,46,42,14,42],
+    widths:[34,18,14,10,26,18,16,16,11,11,14,14,14,12,12,14,12,14,8,12,12,12,14,16,16,12,44,46,42,14,42],
     accent:"6E1212"
   });
 
@@ -3798,7 +3795,6 @@ const exportToExcel=async(wines,wishlist,notes,{includeWishlist=true,includeNote
       const o2=others[1]||{};
       const o3=others[2]||{};
       return [
-        textOrNil(w.id),
         textOrNil(w.name),
         textOrNil(resolveVarietal(w)),
         textOrNil(w.vintage),
@@ -3819,7 +3815,7 @@ const exportToExcel=async(wines,wishlist,notes,{includeWishlist=true,includeNote
     title:`Journal Entries (${journalRows.length} wines)`,
     subtitle:"Primary review, other reviews, and personal notes in one place.",
     headers:[
-      "Wine ID","Wine Name","Varietal","Vintage","Origin",
+      "Wine Name","Varietal","Vintage","Origin",
       "Primary Reviewer","Primary Rating","Primary Review",
       "Other Review 1 Reviewer","Other Review 1 Rating","Other Review 1 Text",
       "Other Review 2 Reviewer","Other Review 2 Rating","Other Review 2 Text",
@@ -3827,7 +3823,7 @@ const exportToExcel=async(wines,wishlist,notes,{includeWishlist=true,includeNote
       "Additional Other Reviews","Personal Notes","Journal Updated"
     ],
     rows:journalRows,
-    widths:[22,32,16,10,26,18,12,44,20,12,36,20,12,36,20,12,36,42,42,14],
+    widths:[32,16,10,26,18,12,44,20,12,36,20,12,36,20,12,36,42,42,14],
     accent:"5B1F2B"
   });
 
@@ -3876,7 +3872,6 @@ const exportToExcel=async(wines,wishlist,notes,{includeWishlist=true,includeNote
         textOrNil(a.id),
         textOrNil(a.name),
         textOrNil(a.status),
-        textOrNil(item.wineId),
         textOrNil(item.wineName||chosen.name),
         textOrNil(item.varietal||resolveVarietal(chosen)),
         textOrNil(item.vintage||chosen.vintage),
@@ -3902,12 +3897,12 @@ const exportToExcel=async(wines,wishlist,notes,{includeWishlist=true,includeNote
     title:`Audit Item Changes (${auditItemRows.length})`,
     subtitle:"Per-wine audit decisions and quantity/location adjustments.",
     headers:[
-      "Audit ID","Audit Name","Audit Status","Wine ID","Wine Name","Varietal","Vintage","Origin","Expected Bottles",
+      "Audit ID","Audit Name","Audit Status","Wine Name","Varietal","Vintage","Origin","Expected Bottles",
       "Decision","Count Type","Counted Amount","Delta vs Expected","Missing Action","Synced",
       "Current Bottles In Cellar","Current Location","Current Section","Current Slot / Box","Before Bottles","Before Location Snapshot"
     ],
     rows:auditItemRows,
-    widths:[24,24,14,22,30,18,10,24,13,11,10,13,14,12,10,14,16,14,14,12,26],
+    widths:[24,24,14,30,18,10,24,13,11,10,13,14,12,10,14,16,14,14,12,26],
     accent:"1E4675"
   });
 
@@ -4355,7 +4350,7 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile})=>{
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.93 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.94 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
