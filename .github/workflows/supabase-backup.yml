@@ -1,0 +1,58 @@
+name: Supabase Daily Backup
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 18 * * *" # 05:17 Australia/Melbourne (AEST/AEDT varies with DST)
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Create backup folder
+        run: mkdir -p backups
+
+      - name: Dump database
+        env:
+          SUPABASE_HOST: ${{ secrets.SUPABASE_HOST }}
+          SUPABASE_PORT: ${{ secrets.SUPABASE_PORT }}
+          SUPABASE_DB: ${{ secrets.SUPABASE_DB }}
+          SUPABASE_USER: ${{ secrets.SUPABASE_USER }}
+          SUPABASE_PASSWORD: ${{ secrets.SUPABASE_PASSWORD }}
+          PGSSLMODE: require
+        run: |
+          TS="$(date -u +%Y-%m-%dT%H-%M-%SZ)"
+          OUT="backups/vinology-${TS}.dump"
+          PGPASSWORD="$SUPABASE_PASSWORD" pg_dump \
+            -h "$SUPABASE_HOST" \
+            -p "$SUPABASE_PORT" \
+            -U "$SUPABASE_USER" \
+            -d "$SUPABASE_DB" \
+            --format=custom \
+            --no-owner \
+            --no-privileges \
+            --verbose \
+            --file "$OUT"
+          echo "BACKUP_FILE=$OUT" >> "$GITHUB_ENV"
+
+      - name: Verify dump file
+        run: |
+          test -s "$BACKUP_FILE"
+          pg_restore --list "$BACKUP_FILE" > /dev/null
+          shasum -a 256 "$BACKUP_FILE"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: supabase-backup-${{ github.run_number }}
+          path: ${{ env.BACKUP_FILE }}
+          retention-days: 90
