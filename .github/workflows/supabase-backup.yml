@@ -23,6 +23,7 @@ jobs:
 
       - name: Dump database
         env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           SUPABASE_HOST: ${{ secrets.SUPABASE_HOST }}
           SUPABASE_PORT: ${{ secrets.SUPABASE_PORT }}
           SUPABASE_DB: ${{ secrets.SUPABASE_DB }}
@@ -30,18 +31,31 @@ jobs:
           SUPABASE_PASSWORD: ${{ secrets.SUPABASE_PASSWORD }}
           PGSSLMODE: require
         run: |
+          set -euo pipefail
           TS="$(date -u +%Y-%m-%dT%H-%M-%SZ)"
           OUT="backups/vinology-${TS}.dump"
-          PGPASSWORD="$SUPABASE_PASSWORD" pg_dump \
-            -h "$SUPABASE_HOST" \
-            -p "$SUPABASE_PORT" \
-            -U "$SUPABASE_USER" \
-            -d "$SUPABASE_DB" \
-            --format=custom \
-            --no-owner \
-            --no-privileges \
-            --verbose \
-            --file "$OUT"
+          if [ -n "${SUPABASE_DB_URL:-}" ]; then
+            echo "Using SUPABASE_DB_URL secret."
+            pg_dump "$SUPABASE_DB_URL" \
+              --format=custom \
+              --no-owner \
+              --no-privileges \
+              --verbose \
+              --file "$OUT"
+          else
+            echo "Using host/port/db/user/password secrets."
+            echo "Host: ${SUPABASE_HOST:-missing} Port: ${SUPABASE_PORT:-missing} DB: ${SUPABASE_DB:-missing} User: ${SUPABASE_USER:-missing}"
+            PGPASSWORD="$SUPABASE_PASSWORD" pg_dump \
+              -h "$SUPABASE_HOST" \
+              -p "$SUPABASE_PORT" \
+              -U "$SUPABASE_USER" \
+              -d "$SUPABASE_DB" \
+              --format=custom \
+              --no-owner \
+              --no-privileges \
+              --verbose \
+              --file "$OUT"
+          fi
           echo "BACKUP_FILE=$OUT" >> "$GITHUB_ENV"
 
       - name: Verify dump file
