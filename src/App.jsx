@@ -3611,10 +3611,17 @@ const exportToExcel=async(wines,wishlist,notes,{includeWishlist=true,includeNote
     }
   });
 
+  const excelSafeText=v=>{
+    let t=(v??"").toString();
+    if(t.length>32000) t=t.slice(0,32000)+"…";
+    if(/^[=+\-@]/.test(t)) t=`'${t}`;
+    return t;
+  };
+
   const setCell=(ws,r,c,v,s)=>{
     const addr=X.utils.encode_cell({r,c});
     const isNum=typeof v==="number"&&Number.isFinite(v);
-    ws[addr]={t:isNum?"n":"s",v:isNum?v:String(v),s};
+    ws[addr]={t:isNum?"n":"s",v:isNum?v:excelSafeText(v),s};
   };
 
   const appendTableSheet=({name,title,subtitle,headers,rows,widths,accent="7A1818"})=>{
@@ -3659,8 +3666,12 @@ const exportToExcel=async(wines,wishlist,notes,{includeWishlist=true,includeNote
 
   const localAudits=readAudits();
   let remoteAudits=[];
+  const withTimeout=(p,ms)=>Promise.race([
+    p,
+    new Promise((_,rej)=>setTimeout(()=>rej(new Error("timeout")),ms)),
+  ]);
   try{
-    const res=await db.listAudits();
+    const res=await withTimeout(db.listAudits(),4500);
     if(res.ok){
       remoteAudits=(res.rows||[]).map(fromDbAudit).filter(a=>a&&a.id);
     }
@@ -4344,7 +4355,7 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile})=>{
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.92 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.93 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
@@ -4360,7 +4371,21 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile})=>{
         </div>
         <div style={{display:"flex",gap:8}}>
           <Btn variant="secondary" onClick={()=>setExportOpen(false)} full>Cancel</Btn>
-          <Btn onClick={()=>{exportToExcel(wines,[],notes,{includeWishlist:false,includeNotes:true});setExportOpen(false);}} full icon="export">Export</Btn>
+          <Btn
+            onClick={async()=>{
+              try{
+                await exportToExcel(wines,[],notes,{includeWishlist:false,includeNotes:true});
+                setExportOpen(false);
+              }catch(e){
+                window.alert("Export failed. Please try again. If it keeps failing, refresh and retry.");
+                console.error("Export failed",e);
+              }
+            }}
+            full
+            icon="export"
+          >
+            Export
+          </Btn>
         </div>
       </Modal>
     </div>
