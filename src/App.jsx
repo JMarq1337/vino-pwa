@@ -105,7 +105,7 @@ const db = {
 };
 
 const META_PREFIX = "[[VINO_META]]";
-const APP_VERSION = "7.07";
+const APP_VERSION = "7.08";
 const EXCEL_IMPORT_FLAG = "vino_excel_seed_v1";
 const EXCEL_RESTORE_FLAG = "vino_excel_restore_v1";
 const EXCEL_JOURNAL_FIX_FLAG = "vino_excel_journal_fix_v4";
@@ -1916,6 +1916,10 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
     if(hint.includes("champagne")) return "Champagne";
     return normalizeWineCategory(inferredType)||"Other";
   })();
+  const activeCategory=normalizeWineCategory(f.manualCategory)||inferredAutoCategory||"Other";
+  const activeCategoryType=wineTypeFromCategory(activeCategory)||"Other";
+  const activeCategoryTheme=WINE_TYPE_COLORS[activeCategoryType]||WINE_TYPE_COLORS.Other;
+  const activeCategoryRgb=hexToRgb(activeCategoryTheme.dot);
   const sectionCardStyle={background:"linear-gradient(180deg,rgba(var(--accentRgb),0.085) 0%,var(--card) 34%)",border:"1px solid rgba(var(--accentRgb),0.22)",borderRadius:14,padding:"13px 13px 11px",marginBottom:12,boxShadow:"0 9px 20px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.35)"};
   const sectionTitleStyle={display:"flex",alignItems:"center",gap:8,fontSize:10,color:"var(--accent)",fontWeight:800,textTransform:"uppercase",letterSpacing:"0.95px",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"};
   const sectionTitleDotStyle={width:7,height:7,borderRadius:"50%",background:"var(--accent)",boxShadow:"0 0 0 3px rgba(var(--accentRgb),0.15)"};
@@ -2136,11 +2140,23 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
                 </div>
                 {hasVarietalInput&&(
                   <div style={{marginTop:-2,marginBottom:8,maxWidth:360}}>
-                    <div style={{fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:6,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Wine Category</div>
+                    <div style={{fontSize:11,fontWeight:600,color:activeCategoryTheme.text,letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:6,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Wine Category</div>
                     <select
                       value={f.manualCategory||"__auto__"}
                       onChange={e=>set("manualCategory",e.target.value==="__auto__"?"":e.target.value)}
-                      style={{margin:0,padding:"10px 36px 10px 12px",fontSize:13,minHeight:40,borderRadius:12,border:"1px solid rgba(var(--accentRgb),0.33)",background:"linear-gradient(180deg,rgba(var(--accentRgb),0.08),var(--card))",fontWeight:700,width:"100%"}}
+                      style={{
+                        margin:0,
+                        padding:"10px 36px 10px 12px",
+                        fontSize:13,
+                        minHeight:40,
+                        borderRadius:12,
+                        border:`1.5px solid rgba(${activeCategoryRgb},0.38)`,
+                        background:`linear-gradient(180deg,${activeCategoryTheme.bg},rgba(${activeCategoryRgb},0.08))`,
+                        color:activeCategoryTheme.text,
+                        fontWeight:800,
+                        width:"100%",
+                        boxShadow:`0 6px 14px rgba(${activeCategoryRgb},0.14), inset 0 1px 0 rgba(255,255,255,0.36)`,
+                      }}
                     >
                       <option value="__auto__">{`Auto · ${inferredAutoCategory}`}</option>
                       {WINE_CATEGORY_OPTIONS.map(cat=><option key={cat} value={cat}>{cat}</option>)}
