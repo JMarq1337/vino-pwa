@@ -11,6 +11,12 @@ Rules:
 - For location answers include location + section + slot when available.
 - For date questions, return one exact date first, then short context if needed.
 - If a question is ambiguous, ask one short clarifying question.`;
+const RETRY_APPEND_PROMPT = `
+Additional strict output requirements:
+- If you provide a wine list, every numbered line must include an exact wine name from the provided cellar JSON.
+- Do not output truncated lines.
+- Prefer plain text (no markdown tables).
+- If data is insufficient, say that clearly instead of guessing.`;
 
 const clean = v => (v == null ? "" : String(v).trim());
 const low = v => clean(v).toLowerCase();
@@ -64,6 +70,24 @@ const latestWine = cellar =>
   safeArr(cellar)
     .slice()
     .sort((x, y) => sortableTimestamp(y) - sortableTimestamp(x))[0] || null;
+
+const parsePositiveCount = (q, fallback = 10) => {
+  const m = clean(q).match(/\b(\d{1,3})\b/);
+  if (!m) return fallback;
+  const n = Number(m[1]);
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  return Math.min(100, n);
+};
+
+const readinessState = wine => {
+  const currentYear = new Date().getFullYear();
+  const start = num(wine?.drinkFrom);
+  const end = num(wine?.drinkBy);
+  if (!start && !end) return "none";
+  if (start && currentYear < start) return "early";
+  if (end && currentYear > end) return "late";
+  return "ready";
+};
 
 const locationLine = wine => {
   const parts = [clean(wine?.location), clean(wine?.locationSection), clean(wine?.locationSlot)].filter(Boolean);
@@ -119,6 +143,32 @@ const resolveWine = (message, cellar, history) => {
   return null;
 };
 
+const isListIntent = q => /\b(list|show|give me|top|which)\b/.test(low(q)) && /\bwines?\b/.test(low(q));
+
+const validateModelAnswer = ({ message, text, cellar }) => {
+  const out = clean(text);
+  if (!out) return { ok: false, reason: "empty-response" };
+
+  const lines = out.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const last = lines[lines.length - 1] || "";
+  if (/,\s*\d{0,4}$/.test(last) || /[:\-–—]\s*$/.test(last)) {
+    return { ok: false, reason: "truncated-ending" };
+  }
+  if (((out.match(/\*\*/g) || []).length % 2) === 1) {
+    return { ok: false, reason: "unbalanced-markdown" };
+  }
+
+  const numbered = lines.filter(l => /^\d+\.\s+/.test(l));
+  const listExpected = isListIntent(message) || numbered.length >= 3;
+  if (listExpected && numbered.length) {
+    const badLines = numbered.filter(line => !pickExplicitWine(line, cellar));
+    if (badLines.length > 0) {
+      return { ok: false, reason: "list-items-not-matching-cellar" };
+    }
+  }
+  return { ok: true, reason: "ok" };
+};
+
 const deterministicAnswer = ({ message, cellar, audits, history }) => {
   const q = low(message);
   const wines = safeArr(cellar);
@@ -167,6 +217,37 @@ const deterministicAnswer = ({ message, cellar, audits, history }) => {
     }
     const totalLeft = wines.reduce((s, w) => s + Math.max(0, Math.round(num(w.bottlesLeft) || 0)), 0);
     return `You currently have ${totalLeft} bottles left across ${wines.length} wines.`;
+  }
+
+  if (/\bready\b.*\bdrink\b|\bdrink\b.*\bready\b/.test(q)) {
+    const want = parsePositiveCount(q, 10);
+    const ready = wines
+      .filter(w => readinessState(w) === "ready")
+      .sort((a, b) => {
+        const endA = num(a?.drinkBy) || 9999;
+        const endB = num(b?.drinkBy) || 9999;
+        if (endA !== endB) return endA - endB;
+        return clean(a?.name).localeCompare(clean(b?.name));
+      })
+      .slice(0, want);
+
+    if (!ready.length) {
+      return "No wines are currently flagged as ready to drink based on your drink window dates.";
+    }
+
+    const lines = ready.map((w, idx) => {
+      const name = clean(w?.name) || "Unnamed wine";
+      const vintage = clean(w?.vintage);
+      const varietal = clean(w?.varietal);
+      const from = clean(w?.drinkFrom);
+      const to = clean(w?.drinkBy);
+      const windowTxt = (from || to) ? ` (${from || "?"}-${to || "?"})` : "";
+      const sub = [vintage, varietal].filter(Boolean).join(" · ");
+      const subTxt = sub ? ` — ${sub}` : "";
+      return `${idx + 1}. ${name}${subTxt}${windowTxt}`;
+    });
+
+    return `Here are ${ready.length} ready-to-drink wines from your cellar:\n${lines.join("\n")}`;
   }
 
   if (/\baudit\b/.test(q) && /(latest|last|recent|status)/.test(q)) {
@@ -220,6 +301,14 @@ const compactCellar = cellar =>
     })),
   }));
 
+const extractGeminiText = data =>
+  safeArr(data?.candidates)
+    .flatMap(c => safeArr(c?.content?.parts))
+    .map(p => clean(p?.text))
+    .filter(Boolean)
+    .join("\n")
+    .trim();
+
 module.exports = async (req, res) => {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
@@ -263,34 +352,72 @@ module.exports = async (req, res) => {
       },
     ];
 
-    const aiRes = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-        contents,
-        generationConfig: {
-          temperature: 0.2,
-          maxOutputTokens: 700,
-          topP: 0.9,
+    const runModel = async ({ systemText, userText, temperature = 0.2, maxOutputTokens = 900 }) => {
+      const reqContents = [
+        ...history.map(h => ({
+          role: h.role,
+          parts: [{ text: h.text }],
+        })),
+        {
+          role: "user",
+          parts: [{ text: userText }],
         },
-      }),
-    });
+      ];
+      const aiRes = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: systemText }] },
+          contents: reqContents,
+          generationConfig: {
+            temperature,
+            maxOutputTokens,
+            topP: 0.9,
+          },
+        }),
+      });
+      const data = await aiRes.json().catch(() => ({}));
+      return { aiRes, data, text: extractGeminiText(data) };
+    };
 
-    const data = await aiRes.json().catch(() => ({}));
-    if (!aiRes.ok) {
-      const err = data?.error?.message || "Gemini request failed.";
-      return res.status(aiRes.status).json({ error: err });
+    const baseUserText = `Context JSON:\n${JSON.stringify(contextPayload)}\n\nUser question: ${message}`;
+    const first = await runModel({
+      systemText: SYSTEM_PROMPT,
+      userText: baseUserText,
+      temperature: 0.2,
+      maxOutputTokens: 900,
+    });
+    if (!first.aiRes.ok) {
+      const err = first.data?.error?.message || "Gemini request failed.";
+      return res.status(first.aiRes.status).json({ error: err });
     }
 
-    const text = safeArr(data?.candidates)
-      .flatMap(c => safeArr(c?.content?.parts))
-      .map(p => clean(p?.text))
-      .filter(Boolean)
-      .join("\n")
-      .trim();
+    let finalText = first.text || "";
+    let validation = validateModelAnswer({ message, text: finalText, cellar });
 
-    return res.status(200).json({ text: text || "I could not generate an answer from the current cellar data." });
+    if (!validation.ok) {
+      const retry = await runModel({
+        systemText: `${SYSTEM_PROMPT}\n${RETRY_APPEND_PROMPT}`,
+        userText: `${baseUserText}\n\nPrevious draft failed validation: ${validation.reason}. Rewrite from scratch.`,
+        temperature: 0.1,
+        maxOutputTokens: 1000,
+      });
+      if (retry.aiRes.ok) {
+        const retryValidation = validateModelAnswer({ message, text: retry.text || "", cellar });
+        if (retryValidation.ok) {
+          finalText = retry.text || "";
+          validation = retryValidation;
+        }
+      }
+    }
+
+    if (!finalText || !validation.ok) {
+      return res.status(200).json({
+        text: "I couldn’t verify a reliable answer from the current cellar data for that request. Please ask a narrower question (wine name, location, date, or bottle count).",
+      });
+    }
+
+    return res.status(200).json({ text: finalText });
   } catch (err) {
     return res.status(500).json({ error: `Sommelier error: ${err.message || "Unknown error"}` });
   }
