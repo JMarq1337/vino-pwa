@@ -1765,10 +1765,20 @@ const WineDetail=({wine,onEdit,onDelete,onMove,onAdjustConsumption})=>{
           </div>
         )}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
-          {[["Varietal",varietal],["Alcohol",wine.alcohol?`${wine.alcohol}%`:null],["Category",category],!wine.wishlist&&["Readiness",ready.label],!wine.wishlist&&["Drink Window",drinkWindow],!wine.wishlist&&["RRP / Bottle",rrpPerBottle?`$${rrpPerBottle.toFixed(2)}`:null],!wine.wishlist&&["Paid / Bottle",paidPerBottle?`$${paidPerBottle.toFixed(2)}`:null],!wine.wishlist&&["Location",formatWineLocation(wine)||null],["Purchased Date",fmt(wine.datePurchased)]].filter(x=>x&&x[1]).map(([l,v])=>(
-            <div key={l} style={{background:"var(--inputBg)",borderRadius:12,padding:"11px 13px"}}>
-              <div style={{fontSize:10,color:"var(--sub)",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:3,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{l}</div>
-              <div style={{fontSize:14,color:"var(--text)",fontWeight:500,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{v}</div>
+          {[
+            {label:"Varietal",value:varietal},
+            {label:"Alcohol",value:wine.alcohol?`${wine.alcohol}%`:null},
+            {label:"Category",value:category,forceLeft:true},
+            ...(!wine.wishlist?[{label:"Readiness",value:ready.label}]:[]),
+            ...(!wine.wishlist?[{label:"Drink Window",value:drinkWindow}]:[]),
+            ...(!wine.wishlist?[{label:"RRP / Bottle",value:rrpPerBottle?`$${rrpPerBottle.toFixed(2)}`:null}]:[]),
+            ...(!wine.wishlist?[{label:"Paid / Bottle",value:paidPerBottle?`$${paidPerBottle.toFixed(2)}`:null}]:[]),
+            ...(!wine.wishlist?[{label:"Location",value:formatWineLocation(wine)||null}]:[]),
+            {label:"Purchased Date",value:fmt(wine.datePurchased)},
+          ].filter(item=>item&&item.value).map(item=>(
+            <div key={item.label} style={{background:"var(--inputBg)",borderRadius:12,padding:"11px 13px",gridColumn:item.forceLeft?"1":"auto"}}>
+              <div style={{fontSize:10,color:"var(--sub)",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:3,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{item.label}</div>
+              <div style={{fontSize:14,color:"var(--text)",fontWeight:500,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{item.value}</div>
             </div>
           ))}
         </div>
@@ -1850,7 +1860,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
   const handlePurchasedTotalChange=v=>{
     const clean=v.replace(/[^0-9]/g,"");
     if(clean===""){
-      setPurchasedManual(false);
+      setPurchasedManual(true);
       set("purchasedTotal","");
       return;
     }
@@ -2185,8 +2195,17 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
                             {label==="Purchased"
                               ? (
                                 <input
-                                  value={projectedPurchased}
+                                  value={purchasedManual?f.purchasedTotal:String(projectedPurchased)}
                                   onChange={e=>handlePurchasedTotalChange(e.target.value)}
+                                  onBlur={()=>{
+                                    if(!purchasedManual) return;
+                                    if(String(f.purchasedTotal||"").trim()===""){
+                                      setPurchasedManual(false);
+                                      return;
+                                    }
+                                    const normalized=Math.max(projectedLeft,Math.max(0,parseInt(f.purchasedTotal)||0));
+                                    set("purchasedTotal",String(normalized));
+                                  }}
                                   inputMode="numeric"
                                   style={{margin:0,padding:0,minHeight:0,height:"auto",background:"transparent",border:"none",borderRadius:0,boxShadow:"none",fontSize:15,color:"var(--text)",fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.2,textAlign:"left"}}
                                 />
