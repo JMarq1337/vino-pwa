@@ -2102,7 +2102,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
                 {sectionTitle("Wine Details")}
                 <Field label="Wine Name" value={f.name} onChange={v=>set("name",v)} placeholder="e.g. Penfolds Grange"/>
                 <Field label="Origin" value={f.origin} onChange={v=>set("origin",v)} placeholder="Region, Country" optional/>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+                <div style={{display:"grid",gridTemplateColumns:"minmax(0,1.4fr) minmax(0,1fr) minmax(0,1fr)",gap:10}}>
                   <div style={{marginBottom:14,position:"relative"}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
                       <label style={{fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Varietal</label>
@@ -2131,12 +2131,12 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
                       </div>
                     )}
                     {hasVarietalInput&&(
-                      <div style={{marginTop:7,display:"inline-flex",alignItems:"center",gap:8,padding:"6px 10px",borderRadius:999,border:"1px solid rgba(var(--accentRgb),0.26)",background:"linear-gradient(180deg,rgba(var(--accentRgb),0.12),rgba(var(--accentRgb),0.06))"}}>
-                        <span style={{fontSize:10,fontWeight:800,color:"var(--accent)",letterSpacing:"0.7px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Category</span>
+                      <div style={{marginTop:7,display:"flex",alignItems:"center",gap:8,padding:"6px 10px",borderRadius:999,border:"1px solid rgba(var(--accentRgb),0.26)",background:"linear-gradient(180deg,rgba(var(--accentRgb),0.12),rgba(var(--accentRgb),0.06))"}}>
+                        <span style={{fontSize:10,fontWeight:800,color:"var(--accent)",letterSpacing:"0.7px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap"}}>Category</span>
                         <select
                           value={f.manualCategory||"__auto__"}
                           onChange={e=>set("manualCategory",e.target.value==="__auto__"?"":e.target.value)}
-                          style={{margin:0,padding:"6px 26px 6px 10px",fontSize:12,minHeight:30,borderRadius:999,border:"1px solid rgba(var(--accentRgb),0.33)",background:"var(--card)",fontWeight:700,maxWidth:190}}
+                          style={{margin:0,padding:"6px 26px 6px 10px",fontSize:12,minHeight:30,borderRadius:999,border:"1px solid rgba(var(--accentRgb),0.33)",background:"var(--card)",fontWeight:700,flex:1,minWidth:0,width:"100%"}}
                         >
                           <option value="__auto__">{`Auto · ${inferredAutoCategory}`}</option>
                           {WINE_CATEGORY_OPTIONS.map(cat=><option key={cat} value={cat}>{cat}</option>)}
