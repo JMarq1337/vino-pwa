@@ -132,7 +132,7 @@ const db = {
 };
 
 const META_PREFIX = "[[VINO_META]]";
-const APP_VERSION = "7.29";
+const APP_VERSION = "7.30";
 const EXCEL_IMPORT_FLAG = "vino_excel_seed_v1";
 const EXCEL_RESTORE_FLAG = "vino_excel_restore_v1";
 const EXCEL_JOURNAL_FIX_FLAG = "vino_excel_journal_fix_v4";
@@ -1988,11 +1988,22 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
   const activeCategoryType=wineTypeFromCategory(activeCategory)||"Other";
   const activeCategoryTheme=WINE_TYPE_COLORS[activeCategoryType]||WINE_TYPE_COLORS.Other;
   const activeCategoryRgb=hexToRgb(activeCategoryTheme.dot);
-  const sectionCardStyle={background:"linear-gradient(180deg,rgba(var(--accentRgb),0.085) 0%,var(--card) 34%)",border:"1px solid rgba(var(--accentRgb),0.22)",borderRadius:14,padding:"13px 13px 11px",marginBottom:12,boxShadow:"0 9px 20px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.35)"};
-  const sectionTitleStyle={display:"flex",alignItems:"center",gap:8,fontSize:10,color:"var(--accent)",fontWeight:800,textTransform:"uppercase",letterSpacing:"0.95px",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"};
-  const sectionTitleDotStyle={width:7,height:7,borderRadius:"50%",background:"var(--accent)",boxShadow:"0 0 0 3px rgba(var(--accentRgb),0.15)"};
+  const sectionCardStyle={
+    background:"linear-gradient(180deg,rgba(var(--accentRgb),0.13) 0%,var(--card) 38%)",
+    border:"1px solid rgba(var(--accentRgb),0.26)",
+    borderRadius:16,
+    padding:"14px 14px 12px",
+    marginBottom:12,
+    boxShadow:"0 12px 24px rgba(0,0,0,0.09), inset 0 1px 0 rgba(255,255,255,0.36)"
+  };
+  const sectionTitleStyle={display:"flex",alignItems:"center",gap:8,fontSize:10,color:"var(--accent)",fontWeight:900,textTransform:"uppercase",letterSpacing:"1.02px",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"};
+  const sectionTitleDotStyle={width:7,height:7,borderRadius:"50%",background:"var(--accent)",boxShadow:"0 0 0 4px rgba(var(--accentRgb),0.14)"};
   const sectionHintStyle={fontSize:12,color:"var(--sub)",marginBottom:10,fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.45,fontWeight:600};
-  const journalBlockStyle={background:"linear-gradient(180deg,rgba(var(--accentRgb),0.08),var(--card))",border:"1.5px solid rgba(var(--accentRgb),0.22)",borderRadius:13,padding:"11px 12px",boxShadow:"0 10px 18px rgba(0,0,0,0.07), inset 0 1px 0 rgba(255,255,255,0.3)"};
+  const journalBlockStyle={background:"linear-gradient(180deg,rgba(var(--accentRgb),0.1),var(--card))",border:"1.5px solid rgba(var(--accentRgb),0.24)",borderRadius:13,padding:"11px 12px",boxShadow:"0 10px 18px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.3)"};
+  const topShellStyle={background:"linear-gradient(165deg,rgba(var(--accentRgb),0.16),rgba(var(--accentRgb),0.06) 46%,var(--card))",border:"1px solid rgba(var(--accentRgb),0.26)",borderRadius:18,padding:"12px",marginTop:-2,marginBottom:14,boxShadow:"0 14px 24px rgba(0,0,0,0.09)"};
+  const topMetaPillStyle={display:"inline-flex",alignItems:"center",gap:6,padding:"4px 9px",borderRadius:999,border:"1px solid rgba(var(--accentRgb),0.28)",background:"rgba(var(--accentRgb),0.1)",fontSize:10,fontWeight:800,color:"var(--accent)",letterSpacing:"0.8px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"};
+  const detailsGridStyle={display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(250px,1fr))",gap:12};
+  const actionRailStyle={position:"sticky",bottom:0,zIndex:3,marginTop:12,paddingTop:10,background:"linear-gradient(180deg,rgba(255,255,255,0),var(--surface) 22%)"};
   const sectionTitle=(label)=>(
     <div style={sectionTitleStyle}>
       <span style={sectionTitleDotStyle}/>
@@ -2103,33 +2114,46 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
   return(
     <div>
       <ModalHeader title={initial?"Edit Wine":isWishlist?"Add to Wishlist":"Add Wine"} onClose={onClose}/>
-      <div style={{marginTop:-12,marginBottom:10,fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
-        Draft autosave is on{draftRestored?" · restored previous draft":""}.
-      </div>
-      <div style={{display:"flex",justifyContent:"center",marginBottom:18}}>
-        <div style={{position:"relative",width:76,height:76}}>
-          <PhotoPicker value={f.photo} onChange={v=>set("photo",v)} size={76}/>
-          {f.photo&&(
-            <button
-              type="button"
-              onClick={e=>{e.preventDefault();e.stopPropagation();set("photo",null);}}
-              title="Remove photo"
-              aria-label="Remove photo"
-              style={{position:"absolute",top:-7,right:-7,width:22,height:22,borderRadius:"50%",border:"1.5px solid rgba(255,255,255,0.65)",background:"#D23131",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",boxShadow:"0 6px 10px rgba(0,0,0,0.2)",padding:0,zIndex:4}}
-            >
-              <Icon n="x" size={11} sw={2}/>
-            </button>
-          )}
+      <div style={topShellStyle}>
+        <div style={{display:"grid",gridTemplateColumns:"78px minmax(0,1fr)",gap:12,alignItems:"center"}}>
+          <div style={{position:"relative",width:76,height:76}}>
+            <PhotoPicker value={f.photo} onChange={v=>set("photo",v)} size={76}/>
+            {f.photo&&(
+              <button
+                type="button"
+                onClick={e=>{e.preventDefault();e.stopPropagation();set("photo",null);}}
+                title="Remove photo"
+                aria-label="Remove photo"
+                style={{position:"absolute",top:-7,right:-7,width:22,height:22,borderRadius:"50%",border:"1.5px solid rgba(255,255,255,0.65)",background:"#D23131",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",boxShadow:"0 6px 10px rgba(0,0,0,0.2)",padding:0,zIndex:4}}
+              >
+                <Icon n="x" size={11} sw={2}/>
+              </button>
+            )}
+          </div>
+          <div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:7,marginBottom:7}}>
+              <span style={topMetaPillStyle}>{initial?"Edit Mode":"New Entry"}</span>
+              <span style={{...topMetaPillStyle,border:"1px solid var(--border)",background:"var(--surface)",color:"var(--sub)"}}>
+                Autosave on{draftRestored?" · restored draft":""}
+              </span>
+            </div>
+            <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:13,color:"var(--sub)",lineHeight:1.45}}>
+              {isWishlist
+                ? "Capture key details quickly and keep notes clean."
+                : "Structured entry with synced inventory, pricing, dates and journal notes."
+              }
+            </div>
+          </div>
         </div>
       </div>
-      <div style={{marginBottom:14,position:"relative"}}>
-        <label style={{display:"block",fontSize:11,fontWeight:700,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:6,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Search wine database</label>
+      <div style={{...sectionCardStyle,marginBottom:14,position:"relative"}}>
+        {sectionTitle("Search Wine Database")}
         <div style={{position:"relative"}}>
           <input value={q} onChange={e=>handleQ(e.target.value)} placeholder="Wine name, grape, or region…" style={{paddingLeft:38}} onBlur={()=>setTimeout(()=>setSugs([]),160)}/>
           <div style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"var(--sub)",pointerEvents:"none"}}><Icon n="search" size={16}/></div>
         </div>
         {sugs.length>0&&(
-          <div style={{position:"absolute",top:"100%",left:0,right:0,background:"var(--surface)",borderRadius:14,border:"1px solid var(--border)",zIndex:99,maxHeight:300,overflowY:"auto",overscrollBehavior:"contain",boxShadow:"0 12px 40px rgba(0,0,0,0.2)",marginTop:4}}
+          <div style={{position:"absolute",top:"100%",left:14,right:14,background:"var(--surface)",borderRadius:14,border:"1px solid var(--border)",zIndex:99,maxHeight:300,overflowY:"auto",overscrollBehavior:"contain",boxShadow:"0 12px 40px rgba(0,0,0,0.2)",marginTop:6}}
             onWheel={e=>e.stopPropagation()}>
             {sugs.map((w,i)=>(
               <div key={i} onMouseDown={()=>pickSug(w)} style={{padding:"10px 14px",cursor:"pointer",borderBottom:i<sugs.length-1?"1px solid var(--border)":"none"}}
@@ -2139,13 +2163,13 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
                 <div style={{fontSize:12,color:"var(--sub)",marginTop:1}}>{w.grape} · {w.origin}</div>
               </div>
             ))}
-            <div onMouseDown={()=>{setSugs([]);setShowFields(true);}} style={{padding:"10px 14px",cursor:"pointer",color:"var(--accent)",fontSize:13,fontWeight:600,textAlign:"center",borderTop:"1px solid var(--border)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+            <div onMouseDown={()=>{setSugs([]);setShowFields(true);}} style={{padding:"10px 14px",cursor:"pointer",color:"var(--accent)",fontSize:13,fontWeight:700,textAlign:"center",borderTop:"1px solid var(--border)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
               Add "{q}" manually
             </div>
           </div>
         )}
         {!showFields&&!sugs.length&&q.length>=1&&(
-          <button onMouseDown={()=>setShowFields(true)} style={{marginTop:8,width:"100%",padding:"9px",borderRadius:10,border:"1.5px dashed var(--border)",background:"none",color:"var(--accent)",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+          <button onMouseDown={()=>setShowFields(true)} style={{marginTop:9,width:"100%",padding:"10px",borderRadius:11,border:"1.5px dashed var(--border)",background:"linear-gradient(180deg,var(--inputBg),rgba(var(--accentRgb),0.05))",color:"var(--accent)",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
             Enter details manually
           </button>
         )}
@@ -2153,9 +2177,9 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
       {showFields&&(
         <div>
           {usesStepTabs&&(
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
-              <button type="button" onClick={()=>setStep("details")} style={{padding:"9px 11px",borderRadius:12,border:step==="details"?"1.5px solid rgba(var(--accentRgb),0.45)":"1.5px solid var(--border)",background:step==="details"?"linear-gradient(180deg,rgba(var(--accentRgb),0.17),rgba(var(--accentRgb),0.08))":"var(--inputBg)",color:step==="details"?"var(--accent)":"var(--sub)",fontSize:12,fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif",boxShadow:step==="details"?"0 8px 14px rgba(var(--accentRgb),0.18)":"inset 0 1px 0 rgba(255,255,255,0.25)"}}>1. Main Stats</button>
-              <button type="button" onClick={()=>setStep("journal")} disabled={!canSubmit} style={{padding:"9px 11px",borderRadius:12,border:step==="journal"?"1.5px solid rgba(var(--accentRgb),0.45)":"1.5px solid var(--border)",background:step==="journal"?"linear-gradient(180deg,rgba(var(--accentRgb),0.17),rgba(var(--accentRgb),0.08))":"var(--inputBg)",color:step==="journal"?"var(--accent)":"var(--sub)",fontSize:12,fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:canSubmit?1:0.5,boxShadow:step==="journal"?"0 8px 14px rgba(var(--accentRgb),0.18)":"inset 0 1px 0 rgba(255,255,255,0.25)"}}>2. Journal</button>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14,padding:8,borderRadius:14,background:"var(--inputBg)",border:"1px solid var(--border)"}}>
+              <button type="button" onClick={()=>setStep("details")} style={{padding:"10px 11px",borderRadius:12,border:step==="details"?"1.5px solid rgba(var(--accentRgb),0.45)":"1.5px solid transparent",background:step==="details"?"linear-gradient(180deg,rgba(var(--accentRgb),0.17),rgba(var(--accentRgb),0.08))":"transparent",color:step==="details"?"var(--accent)":"var(--sub)",fontSize:12,fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif",boxShadow:step==="details"?"0 8px 14px rgba(var(--accentRgb),0.18)":"none"}}>1. Core Details</button>
+              <button type="button" onClick={()=>setStep("journal")} disabled={!canSubmit} style={{padding:"10px 11px",borderRadius:12,border:step==="journal"?"1.5px solid rgba(var(--accentRgb),0.45)":"1.5px solid transparent",background:step==="journal"?"linear-gradient(180deg,rgba(var(--accentRgb),0.17),rgba(var(--accentRgb),0.08))":"transparent",color:step==="journal"?"var(--accent)":"var(--sub)",fontSize:12,fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:canSubmit?1:0.5,boxShadow:step==="journal"?"0 8px 14px rgba(var(--accentRgb),0.18)":"none"}}>2. Journal</button>
             </div>
           )}
           {showDetailsStep&&(
@@ -2233,8 +2257,8 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
                 )}
               </div>
               {!isWishlist&&(
-                <>
-                  <div style={sectionCardStyle}>
+                <div style={detailsGridStyle}>
+                  <div style={{...sectionCardStyle,gridColumn:"1 / -1"}}>
                     {sectionTitle("Storage & Inventory")}
                     <div style={{display:"grid",gridTemplateColumns:"1fr 2fr 1fr",gap:10}}>
                       <Field label="Bottles" value={f.bottles} onChange={handleBottlesChange} type="number" placeholder="1" optional/>
@@ -2319,17 +2343,13 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
                       </div>
                     )}
                   </div>
-                </>
-              )}
-              {!isWishlist&&(
-                <>
                   <div style={sectionCardStyle}>
                     {sectionTitle("Drinking Window")}
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
                       <Field label="Drink From" value={f.drinkStart} onChange={v=>set("drinkStart",v)} type="number" placeholder="2026" optional/>
                       <Field label="Drink By" value={f.drinkEnd} onChange={v=>set("drinkEnd",v)} type="number" placeholder="2034" optional/>
-                      <Field label="Supplier" value={f.supplier} onChange={v=>set("supplier",v)} placeholder="WS / Local shop" optional/>
                     </div>
+                    <Field label="Supplier" value={f.supplier} onChange={v=>set("supplier",v)} placeholder="WS / Local shop" optional/>
                   </div>
                   <div style={sectionCardStyle}>
                     {sectionTitle("Pricing")}
@@ -2351,7 +2371,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
                       If RRP is left blank, it will use the calculated paid per bottle automatically.
                     </div>
                   </div>
-                </>
+                </div>
               )}
             </>
           )}
@@ -2388,24 +2408,26 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
               </div>
             </>
           )}
-          {usesStepTabs&&step==="details"&&(
-            <div style={{display:"flex",gap:8,marginTop:4}}>
-              <Btn variant="secondary" onClick={onClose} full>Cancel</Btn>
-              <Btn onClick={()=>setStep("journal")} full disabled={!canSubmit}>Continue</Btn>
-            </div>
-          )}
-          {usesStepTabs&&step==="journal"&&(
-            <div style={{display:"flex",gap:8,marginTop:4}}>
-              <Btn variant="secondary" onClick={()=>setStep("details")} full>Back</Btn>
-              <Btn onClick={save} full disabled={!canSubmit}>Save Wine</Btn>
-            </div>
-          )}
-          {!usesStepTabs&&(
-            <div style={{display:"flex",gap:8,marginTop:4}}>
-              <Btn variant="secondary" onClick={onClose} full>Cancel</Btn>
-              <Btn onClick={save} full disabled={!canSubmit}>Save Wine</Btn>
-            </div>
-          )}
+          <div style={actionRailStyle}>
+            {usesStepTabs&&step==="details"&&(
+              <div style={{display:"flex",gap:8,padding:"10px",borderRadius:14,border:"1px solid var(--border)",background:"var(--card)",boxShadow:"0 10px 22px rgba(0,0,0,0.12)"}}>
+                <Btn variant="secondary" onClick={onClose} full>Cancel</Btn>
+                <Btn onClick={()=>setStep("journal")} full disabled={!canSubmit}>Continue</Btn>
+              </div>
+            )}
+            {usesStepTabs&&step==="journal"&&(
+              <div style={{display:"flex",gap:8,padding:"10px",borderRadius:14,border:"1px solid var(--border)",background:"var(--card)",boxShadow:"0 10px 22px rgba(0,0,0,0.12)"}}>
+                <Btn variant="secondary" onClick={()=>setStep("details")} full>Back</Btn>
+                <Btn onClick={save} full disabled={!canSubmit}>{initial?"Save Changes":"Save Wine"}</Btn>
+              </div>
+            )}
+            {!usesStepTabs&&(
+              <div style={{display:"flex",gap:8,padding:"10px",borderRadius:14,border:"1px solid var(--border)",background:"var(--card)",boxShadow:"0 10px 22px rgba(0,0,0,0.12)"}}>
+                <Btn variant="secondary" onClick={onClose} full>Cancel</Btn>
+                <Btn onClick={save} full disabled={!canSubmit}>{initial?"Save Changes":"Save Wine"}</Btn>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
