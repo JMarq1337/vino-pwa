@@ -667,6 +667,77 @@ const normalizeWineText = (text="") => (text||"")
 const hasAnyHint = (text,hints=[]) => hints.some(h => text.includes(h));
 const WINE_TYPES = ["Red","White","Rosé","Sparkling","Dessert","Fortified","Other"];
 const WINE_TYPES_SET = new Set(WINE_TYPES);
+const BUILTIN_VARIETAL_LIBRARY = [
+  {label:"Durif",type:"Red",aliases:["duriff","petite sirah","petit sirah"]},
+  {label:"Bordeaux Blend",type:"Red",aliases:["bordeaux","claret","left bank blend","right bank blend","cabernet blend"]},
+  {label:"Shiraz",type:"Red",aliases:["syrah"]},
+  {label:"Cabernet Sauvignon",type:"Red",aliases:["cab sauv"]},
+  {label:"Cabernet Franc",type:"Red",aliases:[]},
+  {label:"Merlot",type:"Red",aliases:[]},
+  {label:"Malbec",type:"Red",aliases:[]},
+  {label:"Pinot Noir",type:"Red",aliases:["pinot"]},
+  {label:"Tempranillo",type:"Red",aliases:[]},
+  {label:"Sangiovese",type:"Red",aliases:[]},
+  {label:"Nebbiolo",type:"Red",aliases:[]},
+  {label:"Grenache",type:"Red",aliases:["garnacha"]},
+  {label:"Mourvedre",type:"Red",aliases:["monastrell","mataro"]},
+  {label:"Zinfandel",type:"Red",aliases:["primitivo"]},
+  {label:"Barbera",type:"Red",aliases:[]},
+  {label:"Carmenere",type:"Red",aliases:[]},
+  {label:"Touriga Nacional",type:"Red",aliases:[]},
+  {label:"Chardonnay",type:"White",aliases:[]},
+  {label:"Sauvignon Blanc",type:"White",aliases:[]},
+  {label:"Riesling",type:"White",aliases:[]},
+  {label:"Pinot Gris",type:"White",aliases:["pinot grigio"]},
+  {label:"Semillon",type:"White",aliases:["semillon"]},
+  {label:"Chenin Blanc",type:"White",aliases:[]},
+  {label:"Viognier",type:"White",aliases:[]},
+  {label:"Gruner Veltliner",type:"White",aliases:["gruener veltliner"]},
+  {label:"Gewurztraminer",type:"White",aliases:["gewurz","traminer"]},
+  {label:"Welschriesling",type:"White",aliases:[]},
+  {label:"Fiano",type:"White",aliases:[]},
+  {label:"Vermentino",type:"White",aliases:[]},
+  {label:"Arneis",type:"White",aliases:[]},
+  {label:"Albarino",type:"White",aliases:["albarino","albariño"]},
+  {label:"Garganega",type:"White",aliases:["soave"]},
+  {label:"Marsanne",type:"White",aliases:[]},
+  {label:"Roussanne",type:"White",aliases:[]},
+  {label:"Picpoul",type:"White",aliases:[]},
+  {label:"Moscato",type:"Dessert",aliases:["muscat"]},
+  {label:"Tokaji",type:"Dessert",aliases:[]},
+  {label:"Sauternes",type:"Dessert",aliases:[]},
+  {label:"Ice Wine",type:"Dessert",aliases:["icewine"]},
+  {label:"Port",type:"Fortified",aliases:["tawny port","vintage port"]},
+  {label:"Sherry",type:"Fortified",aliases:[]},
+  {label:"Madeira",type:"Fortified",aliases:[]},
+  {label:"Champagne",type:"Sparkling",aliases:[]},
+  {label:"Prosecco",type:"Sparkling",aliases:[]},
+  {label:"Cava",type:"Sparkling",aliases:[]},
+  {label:"Cremant",type:"Sparkling",aliases:["cremant"]},
+];
+const toVarietalDisplay = alias => {
+  const base=(alias||"").trim();
+  if(!base) return "";
+  return base
+    .split(" ")
+    .map(part=>part?`${part[0].toUpperCase()}${part.slice(1)}`:part)
+    .join(" ");
+};
+const BUILTIN_VARIETAL_TYPE_MAP = {};
+const BUILTIN_VARIETAL_LABEL_MAP = {};
+const BUILTIN_VARIETAL_SUGGESTIONS = [];
+BUILTIN_VARIETAL_LIBRARY.forEach(entry=>{
+  const label=(entry?.label||"").trim();
+  const type=(entry?.type||"").trim();
+  if(!label||!WINE_TYPES_SET.has(type)||type==="Other") return;
+  BUILTIN_VARIETAL_SUGGESTIONS.push({label,type});
+  [label,...(entry.aliases||[])].forEach(alias=>{
+    const key=normalizeWineText(alias);
+    if(!key) return;
+    if(!BUILTIN_VARIETAL_TYPE_MAP[key]) BUILTIN_VARIETAL_TYPE_MAP[key]=type;
+    if(!BUILTIN_VARIETAL_LABEL_MAP[key]) BUILTIN_VARIETAL_LABEL_MAP[key]=label;
+  });
+});
 let GRAPE_ALIAS_CACHE = {};
 const setGrapeAliasCache = map => { GRAPE_ALIAS_CACHE = map||{}; };
 const splitGrapeAliases = (raw="") => {
@@ -704,10 +775,37 @@ const aliasWineTypeFromMap = (grape="",name="",aliasMap={}) => {
   const aliases=splitGrapeAliases(grape);
   if(normalizeWineText(name).includes("champagne")) aliases.push("champagne");
   for(const alias of aliases){
-    const type=map[alias];
+    const type=map[alias]||BUILTIN_VARIETAL_TYPE_MAP[alias];
     if(WINE_TYPES_SET.has(type) && type!=="Other") return type;
   }
   return "";
+};
+const getVarietalSuggestions = (query="",aliasMap=GRAPE_ALIAS_CACHE) => {
+  const q=normalizeWineText(query);
+  if(q.length<2) return [];
+  const out=[];
+  const seen=new Set();
+  const add=(label,type,priority=3)=>{
+    const clean=normalizeVarietal(label);
+    if(!clean) return;
+    const key=normalizeWineText(clean);
+    if(!key||seen.has(key)) return;
+    seen.add(key);
+    out.push({label:clean,type,priority});
+  };
+  BUILTIN_VARIETAL_SUGGESTIONS.forEach(entry=>{
+    const key=normalizeWineText(entry.label);
+    if(key.startsWith(q)) add(entry.label,entry.type,0);
+    else if(key.includes(q)) add(entry.label,entry.type,1);
+  });
+  Object.entries(aliasMap||{}).forEach(([alias,type])=>{
+    if(!WINE_TYPES_SET.has(type)||type==="Other") return;
+    const key=normalizeWineText(alias);
+    if(!key.includes(q)) return;
+    const label=BUILTIN_VARIETAL_LABEL_MAP[key]||toVarietalDisplay(alias);
+    add(label,type,key.startsWith(q)?1:2);
+  });
+  return out.sort((a,b)=>a.priority-b.priority||a.label.localeCompare(b.label)).slice(0,8);
 };
 const guessWineType = (grape="",name="",aliasMap=GRAPE_ALIAS_CACHE) => {
   const aliasType=aliasWineTypeFromMap(grape,name,aliasMap);
@@ -1707,6 +1805,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
   const [sugs,setSugs]=useState([]);
   const [showFields,setShowFields]=useState(!!initial);
   const [draftRestored,setDraftRestored]=useState(false);
+  const [grapeSugOpen,setGrapeSugOpen]=useState(false);
   const selectableLocations=dedupeLocations([...knownLocations,f.location]);
   const selectedLocationValue=locationMode==="custom"
     ? CUSTOM_LOCATION_OPTION
@@ -1740,6 +1839,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
   const canSubmit=!!f.name&&!invalidCustomLocation;
   const showDetailsStep=!usesStepTabs||step==="details";
   const showJournalStep=usesStepTabs&&step==="journal";
+  const grapeSuggestions=getVarietalSuggestions(f.grape,GRAPE_ALIAS_CACHE);
   const sectionCardStyle={background:"linear-gradient(180deg,rgba(var(--accentRgb),0.085) 0%,var(--card) 34%)",border:"1px solid rgba(var(--accentRgb),0.22)",borderRadius:14,padding:"13px 13px 11px",marginBottom:12,boxShadow:"0 9px 20px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.35)"};
   const sectionTitleStyle={display:"flex",alignItems:"center",gap:8,fontSize:10,color:"var(--accent)",fontWeight:800,textTransform:"uppercase",letterSpacing:"0.95px",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"};
   const sectionTitleDotStyle={width:7,height:7,borderRadius:"50%",background:"var(--accent)",boxShadow:"0 0 0 3px rgba(var(--accentRgb),0.15)"};
@@ -1918,7 +2018,34 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
                 <Field label="Wine Name" value={f.name} onChange={v=>set("name",v)} placeholder="e.g. Penfolds Grange"/>
                 <Field label="Origin" value={f.origin} onChange={v=>set("origin",v)} placeholder="Region, Country" optional/>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
-                  <Field label="Varietal" value={f.grape} onChange={v=>set("grape",v)} placeholder="Shiraz" optional/>
+                  <div style={{marginBottom:14,position:"relative"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                      <label style={{fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Varietal</label>
+                      <span style={{fontSize:10,color:"var(--sub)",opacity:0.6,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>optional</span>
+                    </div>
+                    <input
+                      value={f.grape}
+                      onFocus={()=>setGrapeSugOpen(true)}
+                      onBlur={()=>setTimeout(()=>setGrapeSugOpen(false),140)}
+                      onChange={e=>{set("grape",e.target.value);setGrapeSugOpen(true);}}
+                      placeholder="Shiraz, Durif, Bordeaux Blend..."
+                    />
+                    {grapeSugOpen&&grapeSuggestions.length>0&&(
+                      <div style={{position:"absolute",top:"100%",left:0,right:0,marginTop:4,background:"var(--surface)",border:"1px solid var(--border)",borderRadius:12,boxShadow:"0 12px 32px rgba(0,0,0,0.2)",zIndex:70,maxHeight:220,overflowY:"auto"}}>
+                        {grapeSuggestions.map(s=>(
+                          <button
+                            key={`${s.label}-${s.type}`}
+                            type="button"
+                            onMouseDown={e=>{e.preventDefault();set("grape",s.label);setGrapeSugOpen(false);}}
+                            style={{width:"100%",textAlign:"left",padding:"9px 11px",border:"none",borderBottom:"1px solid var(--border)",background:"transparent",cursor:"pointer",fontFamily:"'Plus Jakarta Sans',sans-serif"}}
+                          >
+                            <div style={{fontSize:13,color:"var(--text)",fontWeight:700}}>{s.label}</div>
+                            <div style={{fontSize:11,color:"var(--sub)",marginTop:1}}>{s.type}</div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   <Field label="Vintage" value={f.vintage} onChange={v=>set("vintage",v)} type="number" placeholder="2019" optional/>
                   <Field label="Alc %" value={f.alcohol} onChange={v=>set("alcohol",v)} type="number" placeholder="14.5" optional/>
                 </div>
@@ -4378,7 +4505,7 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile})=>{
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.96 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.97 · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
