@@ -132,7 +132,7 @@ const db = {
 };
 
 const META_PREFIX = "[[VINO_META]]";
-const APP_VERSION = "7.31";
+const APP_VERSION = "7.33";
 const EXCEL_IMPORT_FLAG = "vino_excel_seed_v1";
 const EXCEL_RESTORE_FLAG = "vino_excel_restore_v1";
 const EXCEL_JOURNAL_FIX_FLAG = "vino_excel_journal_fix_v4";
@@ -2712,6 +2712,12 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAdjustConsumption,deskt
   const active=hasFilters(filters);
   const filterCount=activeFilterCount(filters);
   const sortDirectionSupported=filters.sort==="vintage"||filters.sort==="bottles";
+  const sortDirectionLabelDesktop=filters.sort==="vintage"
+    ? (filters.sortDir==="asc"?"Oldest first":"Newest first")
+    : (filters.sortDir==="asc"?"Fewest bottles":"Most bottles");
+  const sortDirectionLabelMobile=filters.sort==="vintage"
+    ? (filters.sortDir==="asc"?"Oldest":"Newest")
+    : (filters.sortDir==="asc"?"Fewest":"Most");
   const quickChipStyle=activeChip=>({
     padding:"7px 11px",
     borderRadius:999,
@@ -2767,7 +2773,7 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAdjustConsumption,deskt
               title="Sort direction"
               style={{height:42,borderRadius:11,border:sortDirectionSupported?"1.5px solid var(--border)":"1.5px solid var(--border)",background:sortDirectionSupported?"var(--surface)":"var(--inputBg)",color:sortDirectionSupported?"var(--text)":"var(--sub)",fontSize:12,fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:sortDirectionSupported?"pointer":"default",opacity:sortDirectionSupported?1:0.55}}
             >
-              {sortDirectionSupported?(filters.sortDir==="asc"?"Asc":"Desc"):"—"}
+              {sortDirectionSupported?sortDirectionLabelDesktop:"—"}
             </button>
             <button onClick={()=>setFilterOpen(true)} style={{height:42,borderRadius:12,background:active?"rgba(var(--accentRgb),0.14)":"var(--surface)",border:active?"1.5px solid var(--accent)":"1.5px solid var(--border)",display:"flex",alignItems:"center",justifyContent:"center",color:active?"var(--accent)":"var(--sub)",position:"relative",cursor:"pointer"}}>
               <Icon n="filter" size={17}/>
@@ -2797,7 +2803,7 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAdjustConsumption,deskt
                 title="Sort direction"
                 style={{width:46,height:42,borderRadius:11,border:"1.5px solid var(--border)",background:sortDirectionSupported?"var(--surface)":"var(--inputBg)",color:sortDirectionSupported?"var(--text)":"var(--sub)",fontSize:11,fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:sortDirectionSupported?"pointer":"default",opacity:sortDirectionSupported?1:0.55}}
               >
-                {sortDirectionSupported?(filters.sortDir==="asc"?"A":"D"):"—"}
+                {sortDirectionSupported?sortDirectionLabelMobile:"—"}
               </button>
               <button onClick={()=>setFilterOpen(true)} style={{width:46,height:42,borderRadius:12,background:active?"rgba(var(--accentRgb),0.14)":"var(--surface)",border:active?"1.5px solid var(--accent)":"1.5px solid var(--border)",display:"flex",alignItems:"center",justifyContent:"center",color:active?"var(--accent)":"var(--sub)",position:"relative",cursor:"pointer"}}>
                 <Icon n="filter" size={17}/>
@@ -4109,7 +4115,7 @@ const JournalScreen=({wines,onUpdate,desktop})=>{
         <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search wines, varietal, origin, or notes..." style={{paddingLeft:38,background:"var(--surface)"}}/>
         <div style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"var(--sub)",pointerEvents:"none"}}><Icon n="search" size={16}/></div>
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 150px",gap:8}}>
+      <div style={{display:"grid",gridTemplateColumns:desktop?"minmax(0,1fr) minmax(214px,240px)":"1fr",gap:8}}>
         <button
           onClick={()=>setNotesOnly(v=>!v)}
           style={{
@@ -4126,7 +4132,7 @@ const JournalScreen=({wines,onUpdate,desktop})=>{
         >
           {notesOnly?"Showing: Has Notes":"Filter: All Wines"}
         </button>
-        <select value={sortBy} onChange={e=>setSortBy(e.target.value)} style={{fontSize:12,fontWeight:700,background:"var(--surface)"}}>
+        <select value={sortBy} onChange={e=>setSortBy(e.target.value)} style={{fontSize:12,fontWeight:700,background:"var(--surface)",minWidth:0,paddingRight:34}}>
           <option value="updated">Sort: Recently Updated</option>
           <option value="name">Sort: Name (A-Z)</option>
           <option value="vintage">Sort: Vintage (Newest)</option>
