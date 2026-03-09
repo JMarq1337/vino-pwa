@@ -132,7 +132,7 @@ const db = {
 };
 
 const META_PREFIX = "[[VINO_META]]";
-const APP_VERSION = "7.26";
+const APP_VERSION = "7.27";
 const EXCEL_IMPORT_FLAG = "vino_excel_seed_v1";
 const EXCEL_RESTORE_FLAG = "vino_excel_restore_v1";
 const EXCEL_JOURNAL_FIX_FLAG = "vino_excel_journal_fix_v4";
@@ -1192,57 +1192,61 @@ const BrandLogo=({size=42,variant="color"})=>{
     drop:`gDrop-${uid}`,
   };
   const mono=variant==="mono";
-  const stemStroke=mono?"rgba(255,255,255,0.74)":`url(#${ids.stem})`;
-  const stemHighlight=mono?"rgba(255,255,255,0.26)":"rgba(255,244,220,0.28)";
-  const vineStroke=mono?"rgba(255,255,255,0.66)":"#7A4A24";
-  const leafFill=mono?"rgba(255,255,255,0.14)":`url(#${ids.leaf})`;
-  const leafStroke=mono?"rgba(255,255,255,0.68)":"#2A6D2A";
-  const leafVein=mono?"rgba(255,255,255,0.44)":"rgba(33,92,38,0.65)";
+  const stemStroke=mono?"rgba(255,255,255,0.78)":`url(#${ids.stem})`;
+  const stemHighlight=mono?"rgba(255,255,255,0.28)":"rgba(255,238,210,0.35)";
+  const vineStroke=mono?"rgba(255,255,255,0.72)":"#7A522E";
+  const leafFill=mono?"rgba(255,255,255,0.16)":`url(#${ids.leaf})`;
+  const leafStroke=mono?"rgba(255,255,255,0.7)":"#2B7030";
+  const leafVein=mono?"rgba(255,255,255,0.46)":"rgba(37,95,44,0.72)";
+  const berryFill=mono?"rgba(255,255,255,0.15)":`url(#${ids.berry})`;
+  const berryStroke=mono?"rgba(255,255,255,0.66)":"#3A1632";
+  const berryHighlight=mono?"rgba(255,255,255,0.22)":"rgba(255,255,255,0.28)";
   const berries=[
-    [22,29],[30,29],[38,29],[46,29],
-    [26,36],[34,36],[42,36],
-    [22,43],[30,43],[38,43],[46,43],
-    [26,50],[34,50],[42,50],
-    [30,57],[38,57],
-    [34,64]
+    [24,30],[32,30],[40,30],[48,30],
+    [28,37],[36,37],[44,37],
+    [24,44],[32,44],[40,44],[48,44],
+    [28,51],[36,51],[44,51],
+    [32,58],[40,58],
+    [36,65],
   ];
+
   return(
     <svg width={size} height={size} viewBox="0 0 72 72" aria-hidden="true">
       <defs>
-        <radialGradient id={ids.berry} cx="32%" cy="28%" r="76%">
-          <stop offset="0%" stopColor="#C83B8C"/>
-          <stop offset="52%" stopColor="#932E6B"/>
-          <stop offset="100%" stopColor="#4A123A"/>
+        <radialGradient id={ids.berry} cx="34%" cy="24%" r="78%">
+          <stop offset="0%" stopColor="#D34A93"/>
+          <stop offset="55%" stopColor="#932A67"/>
+          <stop offset="100%" stopColor="#4E173D"/>
         </radialGradient>
         <linearGradient id={ids.stem} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#8A5B2D"/>
-          <stop offset="100%" stopColor="#5E3A1A"/>
+          <stop offset="0%" stopColor="#926136"/>
+          <stop offset="100%" stopColor="#614021"/>
         </linearGradient>
         <linearGradient id={ids.leaf} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#65B33A"/>
-          <stop offset="100%" stopColor="#2E7A2F"/>
+          <stop offset="0%" stopColor="#74C148"/>
+          <stop offset="100%" stopColor="#2F7E33"/>
         </linearGradient>
-        <filter id={ids.drop} x="-20%" y="-20%" width="140%" height="140%">
-          <feDropShadow dx="0" dy="1.2" stdDeviation="1.1" floodColor="#2A0D23" floodOpacity="0.3"/>
+        <filter id={ids.drop} x="-25%" y="-25%" width="150%" height="150%">
+          <feDropShadow dx="0" dy="1.4" stdDeviation="1.25" floodColor="#2A0D23" floodOpacity="0.3"/>
         </filter>
       </defs>
 
       <g filter={mono?undefined:`url(#${ids.drop})`}>
-        <path d="M35 8.6c2.1 5.8 2.1 10.9 0 16.4" fill="none" stroke={stemStroke} strokeWidth="2.9" strokeLinecap="round"/>
-        <path d="M35.7 9.9c.8 3.8.8 7.7-.2 11.2" fill="none" stroke={stemHighlight} strokeWidth="0.92" strokeLinecap="round"/>
-        <path d="M35 16.4c6.2-4.7 13.3-4.7 18.9-.3 3.8 3 3.8 7 .4 9.5-3.2 2.3-7.6 1.9-10.3-.9-2.1-2.2-2-4.9.3-6.5 1.9-1.4 4.3-1.1 5.6.6" fill="none" stroke={vineStroke} strokeWidth="1.72" strokeLinecap="round"/>
-        <path d="M35 17.1c-3.4-3.5-7.6-5.7-12.5-6.9" fill="none" stroke={stemStroke} strokeWidth="2.08" strokeLinecap="round"/>
-        <path d="M20.1 12.1c3.1-2.1 7.2-2.2 10.4-.4 2.3 1.3 4 3.6 4.8 6.4-2.5-.3-4.8.2-6.8 1.5 1.3 1.1 2.3 2.5 3 4.2-3.4 1-6.7.6-9.6-1.1-3.8-2.2-5.4-6.4-1.8-10.6z" fill={leafFill} stroke={leafStroke} strokeWidth="1.1" strokeLinejoin="round"/>
-        <path d="M14.2 14.6c3.9-3.1 9.4-3.5 13.8-1 3.1 1.8 5.3 4.8 6.1 8.4-3-.2-5.7.6-8 2.2 2 1.4 3.6 3.3 4.7 5.7-4.5 1.9-9.2 1.7-13.3-.7-4.7-2.8-7.3-7.9-3.3-14.6z" fill={leafFill} stroke={leafStroke} strokeWidth="1.18" strokeLinejoin="round"/>
-        <path d="M18.8 16.1c2.3-1.2 5.1-1.3 7.4-.2 1.8.9 3.2 2.3 4.1 4.2-2 .1-3.8.6-5.3 1.6 1.3.8 2.3 1.9 3 3.3-2.6.8-5.1.6-7.3-.6-2.8-1.4-4.1-4.5-1.9-8.3z" fill={mono?"rgba(255,255,255,0.08)":"rgba(255,255,255,0.18)"}/>
-        <path d="M24.8 17.9c-.4 3.1-.1 6 1.1 8.8M24.6 19.3c-2.4-.8-4.8-1.9-7.1-3.3M24.9 21.6c-3 1.1-6 1.7-9.2 1.9M25.7 24.2c-1.9 2-3.9 3.7-6.3 5.1" fill="none" stroke={leafVein} strokeWidth="0.92" strokeLinecap="round"/>
+        <path d="M36 7.8c1.9 5.2 1.9 9.8 0 14.8" fill="none" stroke={stemStroke} strokeWidth="2.95" strokeLinecap="round"/>
+        <path d="M36.7 9.3c.8 3.4.8 6.9-.2 10.1" fill="none" stroke={stemHighlight} strokeWidth="0.95" strokeLinecap="round"/>
+        <path d="M36 16.8c-4.4-4.2-10.8-6-16.9-4.7" fill="none" stroke={stemStroke} strokeWidth="1.95" strokeLinecap="round"/>
+        <path d="M36 16.3c6.5-4.9 15.3-5.2 21.8-.8 4.2 2.9 4.3 7.5.2 10-3.4 2.2-8.2 1.8-10.8-.9-2-2-1.9-4.5.2-6.1 1.8-1.4 4.1-1.2 5.4.5" fill="none" stroke={vineStroke} strokeWidth="1.75" strokeLinecap="round"/>
+
+        <path d="M14.3 12.2c4-2.9 9.5-3.1 13.8-.6 3.5 2.1 5.7 5.8 6.3 10.2-3.3-.2-6.1.7-8.4 2.7 2 1.5 3.6 3.6 4.8 6.3-5.1 1.9-10.3 1.5-14.7-1.4-4.8-3.1-7.4-8.7-1.8-17.2z" fill={leafFill} stroke={leafStroke} strokeWidth="1.22" strokeLinejoin="round"/>
+        <path d="M41.3 12.8c2.6-1.7 6-1.8 8.9-.3 2.5 1.3 4.2 3.8 4.9 6.9-2.3-.1-4.3.5-6 1.9 1.4 1 2.5 2.4 3.3 4.2-3.5 1.2-6.9.8-9.6-1.1-3-2.1-4.3-5.6-1.5-11.6z" fill={leafFill} stroke={leafStroke} strokeWidth="1.12" strokeLinejoin="round"/>
+        <path d="M24.5 17.7c-.3 3.4.1 6.6 1.5 9.7M24.6 19.3c-2.5-.9-4.9-2.1-7.2-3.5M24.9 21.7c-3 1.1-6.1 1.8-9.5 2.1M25.8 24.4c-1.9 2.1-4 3.9-6.5 5.4M46.5 15.7c-.2 2 .1 3.9.8 5.8M46.5 17.1c-1.4-.5-2.8-1.1-4.1-1.9M46.7 18.8c1.8.7 3.5 1.1 5.3 1.3" fill="none" stroke={leafVein} strokeWidth="0.92" strokeLinecap="round"/>
       </g>
 
-      <g fill={mono?"rgba(255,255,255,0.14)":`url(#${ids.berry})`} stroke={mono?"rgba(255,255,255,0.65)":"#3E1733"} strokeWidth="1.1">
-        {berries.map(([cx,cy],i)=><circle key={i} cx={cx} cy={cy} r="4.65"/>)}
+      <g fill={berryFill} stroke={berryStroke} strokeWidth="1.12">
+        {berries.map(([cx,cy],i)=><circle key={i} cx={cx} cy={cy} r="4.68"/>)}
       </g>
-      <g fill={mono?"rgba(255,255,255,0.2)":"rgba(255,255,255,0.28)"}>
-        {berries.map(([cx,cy],i)=><circle key={`h-${i}`} cx={cx-1.5} cy={cy-1.7} r="1.15"/>)}
+      <g fill={berryHighlight}>
+        {berries.map(([cx,cy],i)=><circle key={`h-${i}`} cx={cx-1.52} cy={cy-1.68} r="1.14"/>)}
       </g>
     </svg>
   );
