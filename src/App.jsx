@@ -132,7 +132,7 @@ const db = {
 };
 
 const META_PREFIX = "[[VINO_META]]";
-const APP_VERSION = "7.28";
+const APP_VERSION = "7.29";
 const EXCEL_IMPORT_FLAG = "vino_excel_seed_v1";
 const EXCEL_RESTORE_FLAG = "vino_excel_restore_v1";
 const EXCEL_JOURNAL_FIX_FLAG = "vino_excel_journal_fix_v4";
@@ -467,15 +467,17 @@ const journalUpdatedBucket = wine => {
   const ts=journalUpdatedTimestamp(wine);
   if(!ts) return "rest";
   const days=Math.max(0,Math.floor((dayStart(new Date())-dayStart(new Date(ts)))/86400000));
-  if(days<=1) return "yesterday";
+  if(days===0) return "today";
+  if(days===1) return "yesterday";
   if(days<=7) return "week";
   if(days<=30) return "month";
   return "rest";
 };
 const JOURNAL_UPDATE_GROUPS = [
+  { key:"today", label:"Updated Today" },
   { key:"yesterday", label:"Updated Yesterday" },
-  { key:"week", label:"Updated in 7 Days" },
-  { key:"month", label:"Updated in 30 Days" },
+  { key:"week", label:"Updated in Last 7 Days" },
+  { key:"month", label:"Updated in Last 30 Days" },
   { key:"rest", label:"Earlier Updates" },
 ];
 const todayIsoLocal = ()=>{
@@ -3726,40 +3728,57 @@ const AIScreen=({wines,profile,setProfile})=>{
 };
 
 /* ── JOURNAL ──────────────────────────────────────────────────── */
-const JournalWineCard=({wine,onClick})=>{
+const wineHasJournalEntry = wine => {
+  const journal=toJournalState(wine);
+  return hasReviewEntryValue(journal.primary)||journal.otherReviews.length>0||!!(journal.personalNotes||"").trim();
+};
+const formatJournalUpdated = wine => {
+  const ts=journalUpdatedTimestamp(wine);
+  if(!ts) return "Not updated yet";
+  const d=new Date(ts);
+  return d.toLocaleString("en-AU",{day:"numeric",month:"short",year:"numeric"});
+};
+
+const JournalWineCard=({wine,onClick,active=false})=>{
   const type=resolveWineType(wine);
   const varietal=resolveVarietal(wine);
-  const tc=WINE_TYPE_COLORS[type]||WINE_TYPE_COLORS.Other;
   const geo=deriveRegionCountry(wine.origin||"");
-  const journal=toJournalState(wine);
-  const hasJournalText=hasReviewEntryValue(journal.primary)||journal.otherReviews.length>0||journal.personalNotes.trim();
-  const journalStatusStyle={
-    border:"1px solid var(--border)",
-    background:"var(--surface)",
-    color:"var(--text)",
-    opacity:0.88
-  };
+  const hasJournalText=wineHasJournalEntry(wine);
+  const updatedLabel=formatJournalUpdated(wine);
   return(
-    <div onClick={onClick} style={{background:"var(--card)",borderRadius:18,padding:"14px 16px",cursor:"pointer",border:"1px solid var(--border)",marginBottom:10,transition:"transform 0.15s,box-shadow 0.15s",boxShadow:"0 2px 8px var(--shadow)"}} onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 8px 24px var(--shadow)";}} onMouseLeave={e=>{e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="0 2px 8px var(--shadow)";}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,marginBottom:7}}>
-        <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:16,fontWeight:700,color:"var(--text)",lineHeight:1.2}}>{wine.name}</div>
-        {wine.vintage&&<span style={{padding:"3px 8px",borderRadius:20,fontSize:11,fontWeight:700,color:"var(--text)",background:"var(--inputBg)",fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap"}}>{wine.vintage}</span>}
+    <button
+      onClick={onClick}
+      style={{
+        width:"100%",
+        textAlign:"left",
+        background:active?"linear-gradient(180deg,rgba(var(--accentRgb),0.16),rgba(var(--accentRgb),0.08))":"var(--card)",
+        borderRadius:16,
+        padding:"12px 13px",
+        border:active?"1.5px solid rgba(var(--accentRgb),0.4)":"1px solid var(--border)",
+        marginBottom:8,
+        transition:"transform 0.14s,box-shadow 0.14s,border-color 0.14s",
+        boxShadow:active?"0 10px 22px rgba(var(--accentRgb),0.16)":"0 3px 10px var(--shadow)",
+        cursor:"pointer",
+      }}
+      onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";}}
+      onMouseLeave={e=>{e.currentTarget.style.transform="none";}}
+    >
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}}>
+        <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:15,fontWeight:800,color:"var(--text)",lineHeight:1.22}}>{wine.name}</div>
+        {wine.vintage&&<span style={{padding:"2px 8px",borderRadius:999,background:"var(--inputBg)",border:"1px solid var(--border)",fontSize:11,fontWeight:700,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap"}}>{wine.vintage}</span>}
       </div>
-      <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:8}}>
+      <div style={{marginTop:7,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
         <WineTypePill type={type} label={varietal}/>
         {hasJournalText&&(
-          <div
-            title="Journal entry exists"
-            aria-label="Journal entry exists"
-            style={{width:24,height:24,borderRadius:999,display:"inline-flex",alignItems:"center",justifyContent:"center",...journalStatusStyle}}
-          >
-            <Icon n="note" size={13} color="currentColor"/>
+          <div title="Has notes" style={{width:22,height:22,borderRadius:999,border:"1px solid var(--border)",background:"var(--surface)",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"var(--text)",opacity:0.84}}>
+            <Icon n="note" size={12}/>
           </div>
         )}
       </div>
-      {(geo.region||geo.country)&&<div style={{fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{geo.region||geo.country}</div>}
-      <div style={{marginTop:10,height:2,borderRadius:2,background:tc.dot,opacity:0.45}}/>
-    </div>
+      <div style={{marginTop:8,fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.4}}>
+        {(geo.region||geo.country)||"—"} · {updatedLabel}
+      </div>
+    </button>
   );
 };
 
@@ -3774,29 +3793,32 @@ const JournalWineDetail=({wine,onEdit})=>{
   const hasContent=hasReviewEntryValue(primary)||otherReviews.length>0||!!personalNotes;
   return(
     <div>
-      <div style={{borderRadius:16,background:"linear-gradient(135deg,rgba(var(--accentRgb),0.2) 0%,rgba(var(--accentRgb),0.08) 100%)",padding:"18px 18px",marginBottom:14,border:"1px solid rgba(var(--accentRgb),0.2)"}}>
-        <WineTypePill type={type} label={varietal}/>
-        <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:22,fontWeight:800,color:"var(--text)",marginTop:8,lineHeight:1.2}}>{wine.name}</div>
-        {(wine.vintage||geo.region||geo.country)&&<div style={{fontSize:13,color:"var(--sub)",marginTop:3,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{[wine.vintage,geo.region||geo.country,geo.country&&geo.region?geo.country:null].filter(Boolean).join(" · ")}</div>}
+      <div style={{borderRadius:16,background:"linear-gradient(150deg,rgba(var(--accentRgb),0.2) 0%,rgba(var(--accentRgb),0.08) 100%)",padding:"18px 18px",marginBottom:14,border:"1px solid rgba(var(--accentRgb),0.22)",boxShadow:"0 14px 28px rgba(var(--accentRgb),0.11)"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+          <WineTypePill type={type} label={varietal}/>
+          <div style={{fontSize:11,fontWeight:700,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",textTransform:"uppercase",letterSpacing:"0.7px"}}>{formatJournalUpdated(wine)}</div>
+        </div>
+        <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:24,fontWeight:800,color:"var(--text)",marginTop:8,lineHeight:1.2}}>{wine.name}</div>
+        {(wine.vintage||geo.region||geo.country)&&<div style={{fontSize:13,color:"var(--sub)",marginTop:4,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{[wine.vintage,geo.region||geo.country,geo.country&&geo.region?geo.country:null].filter(Boolean).join(" · ")}</div>}
       </div>
       {!hasContent&&(
-        <div style={{background:"var(--inputBg)",borderRadius:13,padding:"14px",marginBottom:12,border:"1px solid var(--border)",fontSize:13,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+        <div style={{background:"var(--inputBg)",borderRadius:14,padding:"14px",marginBottom:12,border:"1px solid var(--border)",fontSize:13,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
           No review notes yet for this wine.
         </div>
       )}
       {hasReviewEntryValue(primary)&&(
-        <div style={{background:"linear-gradient(180deg,var(--inputBg),rgba(var(--accentRgb),0.03))",borderRadius:14,padding:"12px 14px",marginBottom:8,border:"1px solid var(--border)"}}>
-          <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:6,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Review</div>
+        <div style={{background:"linear-gradient(180deg,var(--inputBg),rgba(var(--accentRgb),0.03))",borderRadius:14,padding:"13px 14px",marginBottom:9,border:"1px solid var(--border)"}}>
+          <div style={{fontSize:10,color:"var(--sub)",fontWeight:800,textTransform:"uppercase",letterSpacing:"0.75px",marginBottom:6,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Primary Review</div>
           <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:6}}>
             {primary.reviewer&&<span style={{padding:"3px 8px",borderRadius:999,background:"var(--card)",border:"1px solid var(--border)",fontSize:11,fontWeight:700,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{primary.reviewer}</span>}
             {primary.rating&&<span style={{padding:"3px 8px",borderRadius:999,background:"rgba(var(--accentRgb),0.12)",border:"1px solid rgba(var(--accentRgb),0.22)",fontSize:11,fontWeight:700,color:"var(--accent)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{primary.rating}</span>}
           </div>
-          {!!primary.text&&<div style={{fontSize:14,color:"var(--text)",lineHeight:1.7,fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"pre-wrap"}}>{primary.text}</div>}
+          {!!primary.text&&<div style={{fontSize:14,color:"var(--text)",lineHeight:1.68,fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"pre-wrap"}}>{primary.text}</div>}
         </div>
       )}
       {otherReviews.length>0&&(
-        <div style={{background:"linear-gradient(180deg,var(--inputBg),rgba(var(--accentRgb),0.02))",borderRadius:14,padding:"12px 14px",marginBottom:8,border:"1px solid var(--border)"}}>
-          <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Other Reviews</div>
+        <div style={{background:"linear-gradient(180deg,var(--inputBg),rgba(var(--accentRgb),0.02))",borderRadius:14,padding:"13px 14px",marginBottom:9,border:"1px solid var(--border)"}}>
+          <div style={{fontSize:10,color:"var(--sub)",fontWeight:800,textTransform:"uppercase",letterSpacing:"0.75px",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Other Reviews</div>
           <div style={{display:"grid",gap:8}}>
             {otherReviews.map((entry,idx)=>(
               <div key={idx} style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:10,padding:"9px 10px"}}>
@@ -3811,9 +3833,9 @@ const JournalWineDetail=({wine,onEdit})=>{
         </div>
       )}
       {!!personalNotes&&(
-        <div style={{background:"linear-gradient(180deg,var(--inputBg),rgba(var(--accentRgb),0.02))",borderRadius:14,padding:"12px 14px",marginBottom:8,border:"1px solid var(--border)"}}>
-          <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:6,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Personal Notes</div>
-          <div style={{fontSize:14,color:"var(--text)",lineHeight:1.7,fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"pre-wrap"}}>{personalNotes}</div>
+        <div style={{background:"linear-gradient(180deg,var(--inputBg),rgba(var(--accentRgb),0.02))",borderRadius:14,padding:"13px 14px",marginBottom:10,border:"1px solid var(--border)"}}>
+          <div style={{fontSize:10,color:"var(--sub)",fontWeight:800,textTransform:"uppercase",letterSpacing:"0.75px",marginBottom:6,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Personal Notes</div>
+          <div style={{fontSize:14,color:"var(--text)",lineHeight:1.68,fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"pre-wrap"}}>{personalNotes}</div>
         </div>
       )}
       <Btn onClick={onEdit} full icon="edit">Edit Journal Notes</Btn>
@@ -3821,7 +3843,7 @@ const JournalWineDetail=({wine,onEdit})=>{
   );
 };
 
-const JournalNoteForm=({wine,onSave,onClose,reviewerSuggestions=[]})=>{
+const JournalNoteForm=({wine,onSave,onClose,reviewerSuggestions=[],inline=false})=>{
   const initialJournal=toJournalState(wine);
   const [form,setForm]=useState({
     primary:normalizeReviewEntry(initialJournal.primary),
@@ -3854,7 +3876,15 @@ const JournalNoteForm=({wine,onSave,onClose,reviewerSuggestions=[]})=>{
   };
   return(
     <div>
-      <ModalHeader title="Edit Journal Notes" onClose={onClose}/>
+      {inline
+        ? <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
+            <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:22,fontWeight:800,color:"var(--text)"}}>Edit Journal Notes</div>
+            <button onClick={onClose} style={{background:"var(--inputBg)",border:"1px solid var(--border)",borderRadius:10,width:32,height:32,display:"inline-flex",alignItems:"center",justifyContent:"center",color:"var(--sub)"}}>
+              <Icon n="x" size={15}/>
+            </button>
+          </div>
+        : <ModalHeader title="Edit Journal Notes" onClose={onClose}/>
+      }
       <div style={{fontSize:12,color:"var(--sub)",marginBottom:14,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{wine.name}</div>
       <ReviewEntryEditor
         title="Review"
@@ -3887,8 +3917,10 @@ const JournalNoteForm=({wine,onSave,onClose,reviewerSuggestions=[]})=>{
 
 const JournalScreen=({wines,onUpdate,desktop})=>{
   const [search,setSearch]=useState("");
-  const [sel,setSel]=useState(null);
+  const [selectedId,setSelectedId]=useState(null);
   const [editing,setEditing]=useState(false);
+  const [notesOnly,setNotesOnly]=useState(false);
+  const [sortBy,setSortBy]=useState("updated");
   const col=wines.filter(w=>!w.wishlist);
   const reviewerSuggestions=reviewerSuggestionsFromWines(col);
   const filtered=col
@@ -3901,56 +3933,146 @@ const JournalScreen=({wines,onUpdate,desktop})=>{
         ...journal.otherReviews.flatMap(r=>[r.reviewer,r.rating,r.text])
       ].join(" ").toLowerCase();
       return haystack.includes(search.trim().toLowerCase());
-    });
-  const sortedByJournalUpdate=[...filtered].sort((a,b)=>{
+    })
+    .filter(w=>notesOnly?wineHasJournalEntry(w):true);
+
+  const sorted=[...filtered].sort((a,b)=>{
+    if(sortBy==="name") return (a.name||"").localeCompare(b.name||"");
+    if(sortBy==="vintage"){
+      const av=safeNum(a.vintage)??-Infinity;
+      const bv=safeNum(b.vintage)??-Infinity;
+      if(bv!==av) return bv-av;
+      return (a.name||"").localeCompare(b.name||"");
+    }
     const delta=journalUpdatedTimestamp(b)-journalUpdatedTimestamp(a);
     if(delta!==0) return delta;
     return (a.name||"").localeCompare(b.name||"");
   });
-  const groupedByRecentUpdate=JOURNAL_UPDATE_GROUPS
-    .map(group=>({
-      ...group,
-      wines:sortedByJournalUpdate.filter(w=>journalUpdatedBucket(w)===group.key),
-    }))
-    .filter(group=>group.wines.length>0);
-  return(
-    <div>
-      <div style={{marginBottom:20}}>
-        <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"2px",textTransform:"uppercase",marginBottom:4}}>Journal</div>
-        <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:34,fontWeight:800,color:"var(--text)",lineHeight:1}}>
-          {col.length} <span style={{fontSize:18,color:"var(--sub)",fontWeight:400}}>wines</span>
-        </div>
+
+  const grouped=sortBy==="updated"
+    ? JOURNAL_UPDATE_GROUPS
+        .map(group=>({
+          ...group,
+          wines:sorted.filter(w=>journalUpdatedBucket(w)===group.key),
+        }))
+        .filter(group=>group.wines.length>0)
+    : [{key:"all",label:sortBy==="name"?"All Results (A-Z)":"All Results (Vintage)",wines:sorted}];
+
+  useEffect(()=>{
+    if(!desktop) return;
+    if(selectedId) return;
+    if(sorted.length) setSelectedId(sorted[0].id);
+  },[desktop,selectedId,sorted]);
+
+  const selectedWine=col.find(w=>w.id===selectedId)||null;
+  const listTitle=`${filtered.length} ${filtered.length===1?"wine":"wines"}`;
+
+  const Controls=(
+    <div style={{position:"sticky",top:0,zIndex:2,background:"var(--card)",borderBottom:"1px solid var(--border)",padding:"12px 12px 10px",borderTopLeftRadius:18,borderTopRightRadius:18}}>
+      <div style={{marginBottom:9}}>
+        <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:11,fontWeight:700,color:"var(--sub)",letterSpacing:"1.7px",textTransform:"uppercase",marginBottom:3}}>Journal</div>
+        <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:26,fontWeight:800,color:"var(--text)",lineHeight:1}}>{listTitle}</div>
       </div>
-      <div style={{marginBottom:14,position:"relative"}}>
-        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search wines, varietal, origin, or notes..." style={{paddingLeft:38}}/>
+      <div style={{marginBottom:9,position:"relative"}}>
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search wines, varietal, origin, or notes..." style={{paddingLeft:38,background:"var(--surface)"}}/>
         <div style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"var(--sub)",pointerEvents:"none"}}><Icon n="search" size={16}/></div>
       </div>
-      {filtered.length===0
-        ? <Empty icon="note" text={search.trim()?"No journal wines match your search.":"Your cellar has no wines yet."}/>
-        : <div style={{display:"grid",gap:14}}>
-            {groupedByRecentUpdate.map(group=>(
-              <section key={group.key}>
-                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8,padding:"0 2px"}}>
-                  <div style={{fontSize:12,fontWeight:800,color:"var(--text)",letterSpacing:"0.6px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{group.label}</div>
-                  <div style={{padding:"2px 8px",borderRadius:999,background:"var(--inputBg)",border:"1px solid var(--border)",fontSize:11,fontWeight:700,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{group.wines.length}</div>
-                </div>
-                <div style={{display:desktop?"grid":"block",gridTemplateColumns:desktop?"repeat(auto-fill,minmax(290px,1fr))":"none",gap:desktop?12:0}}>
-                  {group.wines.map(w=><JournalWineCard key={w.id} wine={w} onClick={()=>{setSel(w);setEditing(false);}}/>)}
-                </div>
-              </section>
-            ))}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 150px",gap:8}}>
+        <button
+          onClick={()=>setNotesOnly(v=>!v)}
+          style={{
+            borderRadius:11,
+            border:notesOnly?"1.5px solid rgba(var(--accentRgb),0.42)":"1px solid var(--border)",
+            background:notesOnly?"linear-gradient(180deg,rgba(var(--accentRgb),0.15),rgba(var(--accentRgb),0.08))":"var(--surface)",
+            color:notesOnly?"var(--accent)":"var(--sub)",
+            fontSize:12,
+            fontWeight:700,
+            fontFamily:"'Plus Jakarta Sans',sans-serif",
+            padding:"9px 10px",
+            textAlign:"left",
+          }}
+        >
+          {notesOnly?"Showing: Has Notes":"Filter: All Wines"}
+        </button>
+        <select value={sortBy} onChange={e=>setSortBy(e.target.value)} style={{fontSize:12,fontWeight:700,background:"var(--surface)"}}>
+          <option value="updated">Sort: Recently Updated</option>
+          <option value="name">Sort: Name (A-Z)</option>
+          <option value="vintage">Sort: Vintage (Newest)</option>
+        </select>
+      </div>
+    </div>
+  );
+
+  return(
+    <div>
+      {desktop
+        ? <div style={{display:"grid",gridTemplateColumns:"minmax(320px,392px) minmax(0,1fr)",gap:16,alignItems:"start"}}>
+            <div style={{background:"var(--card)",borderRadius:18,border:"1px solid var(--border)",boxShadow:"0 18px 36px var(--shadow)",overflow:"hidden",maxHeight:"calc(100vh - 128px)",display:"flex",flexDirection:"column"}}>
+              {Controls}
+              <div style={{padding:"10px 10px 12px",overflowY:"auto"}}>
+                {filtered.length===0
+                  ? <div style={{padding:10}}><Empty icon="note" text={search.trim()?"No journal wines match your search.":"No journal wines for this filter."}/></div>
+                  : grouped.map(group=>(
+                      <section key={group.key} style={{marginBottom:12}}>
+                        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",margin:"2px 4px 6px"}}>
+                          <div style={{fontSize:11,fontWeight:800,color:"var(--sub)",letterSpacing:"0.7px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{group.label}</div>
+                          <div style={{padding:"2px 7px",borderRadius:999,background:"var(--inputBg)",border:"1px solid var(--border)",fontSize:11,fontWeight:700,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{group.wines.length}</div>
+                        </div>
+                        {group.wines.map(w=><JournalWineCard key={w.id} wine={w} active={selectedId===w.id} onClick={()=>{setSelectedId(w.id);setEditing(false);}}/>)}
+                      </section>
+                    ))
+                }
+              </div>
+            </div>
+            <div style={{position:"sticky",top:12}}>
+              <div style={{background:"var(--card)",borderRadius:18,border:"1px solid var(--border)",boxShadow:"0 18px 36px var(--shadow)",padding:"16px"}}>
+                {!selectedWine
+                  ? <Empty icon="note" text="Select a wine to open its journal."/>
+                  : editing
+                    ? <JournalNoteForm
+                        wine={selectedWine}
+                        reviewerSuggestions={reviewerSuggestions}
+                        inline
+                        onClose={()=>setEditing(false)}
+                        onSave={w=>{onUpdate(w);setSelectedId(w.id);setEditing(false);}}
+                      />
+                    : <JournalWineDetail wine={selectedWine} onEdit={()=>setEditing(true)}/>
+                }
+              </div>
+            </div>
           </div>
+        : <>
+            <div style={{marginBottom:14,background:"var(--card)",borderRadius:18,border:"1px solid var(--border)",boxShadow:"0 10px 24px var(--shadow)",overflow:"hidden"}}>
+              {Controls}
+            </div>
+            {filtered.length===0
+              ? <Empty icon="note" text={search.trim()?"No journal wines match your search.":"No journal wines for this filter."}/>
+              : <div style={{display:"grid",gap:12}}>
+                  {grouped.map(group=>(
+                    <section key={group.key}>
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8,padding:"0 2px"}}>
+                        <div style={{fontSize:12,fontWeight:800,color:"var(--text)",letterSpacing:"0.6px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{group.label}</div>
+                        <div style={{padding:"2px 8px",borderRadius:999,background:"var(--inputBg)",border:"1px solid var(--border)",fontSize:11,fontWeight:700,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{group.wines.length}</div>
+                      </div>
+                      <div>
+                        {group.wines.map(w=><JournalWineCard key={w.id} wine={w} active={selectedId===w.id} onClick={()=>{setSelectedId(w.id);setEditing(false);}}/>)}
+                      </div>
+                    </section>
+                  ))}
+                </div>
+            }
+          </>
       }
-      <Modal show={!!sel&&!editing} onClose={()=>setSel(null)} wide>
-        {sel&&(
+      <Modal show={!desktop&&!!selectedWine&&!editing} onClose={()=>setSelectedId(null)} wide>
+        {selectedWine&&(
           <div>
-            <ModalHeader title="Wine Journal" onClose={()=>setSel(null)}/>
-            <JournalWineDetail wine={sel} onEdit={()=>setEditing(true)}/>
+            <ModalHeader title="Wine Journal" onClose={()=>setSelectedId(null)}/>
+            <JournalWineDetail wine={selectedWine} onEdit={()=>setEditing(true)}/>
           </div>
         )}
       </Modal>
-      <Modal show={!!sel&&editing} onClose={()=>setEditing(false)} wide>
-        {sel&&<JournalNoteForm wine={sel} reviewerSuggestions={reviewerSuggestions} onClose={()=>setEditing(false)} onSave={w=>{onUpdate(w);setSel(w);setEditing(false);}}/>}
+      <Modal show={!desktop&&!!selectedWine&&editing} onClose={()=>setEditing(false)} wide>
+        {selectedWine&&<JournalNoteForm wine={selectedWine} reviewerSuggestions={reviewerSuggestions} onClose={()=>setEditing(false)} onSave={w=>{onUpdate(w);setSelectedId(w.id);setEditing(false);}}/>}
       </Modal>
     </div>
   );
