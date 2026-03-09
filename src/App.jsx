@@ -105,7 +105,7 @@ const db = {
 };
 
 const META_PREFIX = "[[VINO_META]]";
-const APP_VERSION = "7.05";
+const APP_VERSION = "7.07";
 const EXCEL_IMPORT_FLAG = "vino_excel_seed_v1";
 const EXCEL_RESTORE_FLAG = "vino_excel_restore_v1";
 const EXCEL_JOURNAL_FIX_FLAG = "vino_excel_journal_fix_v4";
@@ -2130,23 +2130,23 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
                         ))}
                       </div>
                     )}
-                    {hasVarietalInput&&(
-                      <div style={{marginTop:7,display:"flex",alignItems:"center",gap:8,padding:"6px 10px",borderRadius:999,border:"1px solid rgba(var(--accentRgb),0.26)",background:"linear-gradient(180deg,rgba(var(--accentRgb),0.12),rgba(var(--accentRgb),0.06))"}}>
-                        <span style={{fontSize:10,fontWeight:800,color:"var(--accent)",letterSpacing:"0.7px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap"}}>Category</span>
-                        <select
-                          value={f.manualCategory||"__auto__"}
-                          onChange={e=>set("manualCategory",e.target.value==="__auto__"?"":e.target.value)}
-                          style={{margin:0,padding:"6px 26px 6px 10px",fontSize:12,minHeight:30,borderRadius:999,border:"1px solid rgba(var(--accentRgb),0.33)",background:"var(--card)",fontWeight:700,flex:1,minWidth:0,width:"100%"}}
-                        >
-                          <option value="__auto__">{`Auto · ${inferredAutoCategory}`}</option>
-                          {WINE_CATEGORY_OPTIONS.map(cat=><option key={cat} value={cat}>{cat}</option>)}
-                        </select>
-                      </div>
-                    )}
                   </div>
                   <Field label="Vintage" value={f.vintage} onChange={v=>set("vintage",v)} type="number" placeholder="2019" optional/>
                   <Field label="Alc %" value={f.alcohol} onChange={v=>set("alcohol",v)} type="number" placeholder="14.5" optional/>
                 </div>
+                {hasVarietalInput&&(
+                  <div style={{marginTop:-2,marginBottom:8,maxWidth:360}}>
+                    <div style={{fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:6,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Wine Category</div>
+                    <select
+                      value={f.manualCategory||"__auto__"}
+                      onChange={e=>set("manualCategory",e.target.value==="__auto__"?"":e.target.value)}
+                      style={{margin:0,padding:"10px 36px 10px 12px",fontSize:13,minHeight:40,borderRadius:12,border:"1px solid rgba(var(--accentRgb),0.33)",background:"linear-gradient(180deg,rgba(var(--accentRgb),0.08),var(--card))",fontWeight:700,width:"100%"}}
+                    >
+                      <option value="__auto__">{`Auto · ${inferredAutoCategory}`}</option>
+                      {WINE_CATEGORY_OPTIONS.map(cat=><option key={cat} value={cat}>{cat}</option>)}
+                    </select>
+                  </div>
+                )}
               </div>
               {!isWishlist&&(
                 <>
