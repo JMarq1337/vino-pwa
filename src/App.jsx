@@ -132,7 +132,7 @@ const db = {
 };
 
 const META_PREFIX = "[[VINO_META]]";
-const APP_VERSION = "7.24";
+const APP_VERSION = "7.25";
 const EXCEL_IMPORT_FLAG = "vino_excel_seed_v1";
 const EXCEL_RESTORE_FLAG = "vino_excel_restore_v1";
 const EXCEL_JOURNAL_FIX_FLAG = "vino_excel_journal_fix_v4";
@@ -4823,6 +4823,7 @@ const SettingsPanel=({onBack,profile,setProfile,theme,setTheme})=>{
 const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile,onNavigateTab})=>{
   const [view,setView]=useState("main"); // main | settings | explore
   const [exportOpen,setExportOpen]=useState(false);
+  const [kpiListOpen,setKpiListOpen]=useState(null);
   const [compact,setCompact]=useState(()=>window.innerWidth<920);
   useEffect(()=>{
     const onResize=()=>setCompact(window.innerWidth<920);
@@ -4856,17 +4857,7 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile,onNavigateTa
     return left>0&&left<=2;
   }).length;
   const rrpValue=col.reduce((s,w)=>s+((safeNum(w.cellarMeta?.rrp)||0)*getTotalPurchased(w)),0);
-  const paidValue=col.reduce((s,w)=>{
-    const m=w.cellarMeta||{};
-    const totalPaid=safeNum(m.totalPaid);
-    if(totalPaid!=null) return s+totalPaid;
-    const paid=safeNum(m.pricePerBottle);
-    return s+(paid!=null?paid*getTotalPurchased(w):0);
-  },0);
   const avgBottle=purchasedBottles?rrpValue/purchasedBottles:0;
-  const valueDelta=rrpValue-paidValue;
-  const valueDeltaPct=paidValue>0?((valueDelta/paidValue)*100):0;
-  const paidVsRrpPct=rrpValue>0?Math.min(100,Math.max(0,Math.round((paidValue/rrpValue)*100))):0;
   const regionStats=col.reduce((acc,w)=>{
     const geo=deriveRegionCountry(w.origin||"");
     const key=geo.region||geo.country;
@@ -4882,6 +4873,22 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile,onNavigateTa
   const topVarietals=Object.entries(varietalStats).sort((a,b)=>b[1]-a[1]).slice(0,5);
   const profileBg=profile.profileBg||THEME_BY_ID[(profile.accent||"wine")]?.profileBg||THEME_BY_ID.wine.profileBg;
   const displayName=[profile.name,profile.surname].filter(Boolean).join(" ")||"Winemaker";
+  const readyWines=[...col]
+    .filter(w=>wineReadiness(w).key==="ready")
+    .sort((a,b)=>(safeNum(a?.cellarMeta?.drinkEnd)||9999)-(safeNum(b?.cellarMeta?.drinkEnd)||9999)||((a.name||"").localeCompare(b.name||"")));
+  const pastPeakSoonWines=[...col]
+    .filter(w=>{
+      const end=safeNum(w?.cellarMeta?.drinkEnd);
+      const left=Math.max(0,Math.round(safeNum(w?.bottles)||0));
+      return left>0 && end!=null && end>=currentYear && end<=currentYear+1;
+    })
+    .sort((a,b)=>(safeNum(a?.cellarMeta?.drinkEnd)||9999)-(safeNum(b?.cellarMeta?.drinkEnd)||9999)||((a.name||"").localeCompare(b.name||"")));
+  const lowStockWines=[...col]
+    .filter(w=>{
+      const left=Math.max(0,Math.round(safeNum(w?.bottles)||0));
+      return left>0&&left<=2;
+    })
+    .sort((a,b)=>(Math.max(0,Math.round(safeNum(a?.bottles)||0))-Math.max(0,Math.round(safeNum(b?.bottles)||0)))||((a.name||"").localeCompare(b.name||"")));
 
   const tsFromRaw=raw=>{
     const t=(raw||"").toString().trim();
@@ -4992,21 +4999,30 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile,onNavigateTa
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:10,marginBottom:12}}>
         {[
           {label:"RRP Value",value:`$${rrpValue.toLocaleString(undefined,{maximumFractionDigits:0})}`,meta:"Purchased-bottle basis"},
-          {label:"Ready to Drink",value:`${readyCount}`,meta:`${Math.round((readyCount/Math.max(1,col.length))*100)}% of cellar`},
-          {label:"Past Peak Risk (12m)",value:`${pastPeakSoonCount}`,meta:"Ends this/next year"},
-          {label:"Low Stock Wines",value:`${lowStockCount}`,meta:"1-2 bottles left"},
+          {label:"Ready to Drink",value:`${readyCount}`,meta:`${Math.round((readyCount/Math.max(1,col.length))*100)}% of cellar`,onClick:()=>setKpiListOpen({title:"Ready to Drink",rows:readyWines,subtitle:"Wines currently in drinking window."})},
+          {label:"Past Peak Risk (12m)",value:`${pastPeakSoonCount}`,meta:"Ends this/next year",onClick:()=>setKpiListOpen({title:"Past Peak Risk (12 Months)",rows:pastPeakSoonWines,subtitle:"Wines whose drink window ends this year or next year."})},
+          {label:"Low Stock Wines",value:`${lowStockCount}`,meta:"1-2 bottles left",onClick:()=>setKpiListOpen({title:"Low Stock Wines",rows:lowStockWines,subtitle:"Wines with one or two bottles left."})},
         ].map(card=>(
-          <div key={card.label} style={{...panel,padding:"12px 13px"}}>
+          <button
+            key={card.label}
+            onClick={card.onClick}
+            style={{...panel,padding:"12px 13px",textAlign:"left",cursor:card.onClick?"pointer":"default",transition:"transform .15s, box-shadow .15s",background:"var(--card)",width:"100%",border:card.onClick?"1px solid rgba(var(--accentRgb),0.22)":"1px solid var(--border)"}}
+            onMouseEnter={e=>{if(card.onClick){e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 10px 24px var(--shadow)";}}
+            }
+            onMouseLeave={e=>{if(card.onClick){e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="0 8px 24px var(--shadow)";}}
+            }
+          >
             <div style={tinyLabel}>{card.label}</div>
             <div style={{fontSize:27,fontWeight:900,color:"var(--text)",lineHeight:1.05,marginTop:4,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{card.value}</div>
-            <div style={{fontSize:11,color:"var(--sub)",marginTop:3,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{card.meta}</div>
-          </div>
+            <div style={{fontSize:11,color:"var(--sub)",marginTop:3,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+              {card.meta}{card.onClick?" · View list":""}
+            </div>
+          </button>
         ))}
       </div>
 
       <div style={{display:"grid",gridTemplateColumns:compact?"1fr":"1.05fr 1fr",gap:10,marginBottom:12}}>
         <div style={{...panel,padding:"14px 14px"}}>
-          <div style={{...tinyLabel,marginBottom:10}}>Cellar Health</div>
           <div style={{display:"flex",gap:14,alignItems:"center",flexWrap:"wrap"}}>
             <div style={{width:132,height:132,borderRadius:"50%",background:ringBg,display:"grid",placeItems:"center",flexShrink:0}}>
               <div style={{width:88,height:88,borderRadius:"50%",background:"var(--card)",display:"grid",placeItems:"center",boxShadow:"inset 0 1px 0 rgba(255,255,255,0.34)"}}>
@@ -5037,28 +5053,23 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile,onNavigateTa
 
         <div style={{...panel,padding:"14px 14px"}}>
           <div style={{...tinyLabel,marginBottom:10}}>Value Intelligence</div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
             <div style={{background:"var(--inputBg)",border:"1px solid var(--border)",borderRadius:11,padding:"9px 10px"}}>
-              <div style={{fontSize:10,color:"var(--sub)",textTransform:"uppercase",letterSpacing:"0.7px",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Paid Total</div>
-              <div style={{fontSize:15,color:"var(--text)",fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>${paidValue.toLocaleString(undefined,{maximumFractionDigits:2})}</div>
+              <div style={{fontSize:10,color:"var(--sub)",textTransform:"uppercase",letterSpacing:"0.7px",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>RRP Total</div>
+              <div style={{fontSize:15,color:"var(--text)",fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>${rrpValue.toLocaleString(undefined,{maximumFractionDigits:2})}</div>
             </div>
             <div style={{background:"var(--inputBg)",border:"1px solid var(--border)",borderRadius:11,padding:"9px 10px"}}>
               <div style={{fontSize:10,color:"var(--sub)",textTransform:"uppercase",letterSpacing:"0.7px",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Avg Bottle RRP</div>
               <div style={{fontSize:15,color:"var(--text)",fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>${avgBottle.toLocaleString(undefined,{maximumFractionDigits:2})}</div>
             </div>
-          </div>
-          <div style={{marginBottom:8}}>
-            <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
-              <span style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Paid vs RRP coverage</span>
-              <span style={{fontSize:11,color:"var(--text)",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{paidVsRrpPct}%</span>
+            <div style={{background:"var(--inputBg)",border:"1px solid var(--border)",borderRadius:11,padding:"9px 10px"}}>
+              <div style={{fontSize:10,color:"var(--sub)",textTransform:"uppercase",letterSpacing:"0.7px",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Most Common Origin</div>
+              <div style={{fontSize:15,color:"var(--text)",fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{topRegion}</div>
             </div>
-            <div style={{height:10,borderRadius:999,background:"var(--inputBg)",border:"1px solid var(--border)",overflow:"hidden"}}>
-              <div style={{height:"100%",width:`${paidVsRrpPct}%`,background:"linear-gradient(90deg,rgba(var(--accentRgb),0.34),rgba(var(--accentRgb),0.7))"}}/>
+            <div style={{background:"var(--inputBg)",border:"1px solid var(--border)",borderRadius:11,padding:"9px 10px"}}>
+              <div style={{fontSize:10,color:"var(--sub)",textTransform:"uppercase",letterSpacing:"0.7px",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Ready Wines</div>
+              <div style={{fontSize:15,color:"var(--text)",fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{readyCount}</div>
             </div>
-          </div>
-          <div style={{fontSize:12,color:valueDelta>=0?"#2F855A":"#B83232",fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
-            {valueDelta>=0?"+":"-"}${Math.abs(valueDelta).toLocaleString(undefined,{maximumFractionDigits:2})}
-            <span style={{color:"var(--sub)",fontWeight:600}}> ({Math.abs(valueDeltaPct).toLocaleString(undefined,{maximumFractionDigits:1})}% vs paid)</span>
           </div>
         </div>
       </div>
@@ -5138,6 +5149,39 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile,onNavigateTa
       </div>
 
       <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.7,marginBottom:8}}>Vinology v{APP_VERSION} · {displayName}</div>
+      <Modal show={!!kpiListOpen} onClose={()=>setKpiListOpen(null)} wide>
+        <ModalHeader title={kpiListOpen?.title||"Wines"} onClose={()=>setKpiListOpen(null)}/>
+        {kpiListOpen?.subtitle&&<div style={{fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:12}}>{kpiListOpen.subtitle}</div>}
+        <div style={{maxHeight:"54vh",overflowY:"auto",paddingRight:2}}>
+          {(kpiListOpen?.rows||[]).length?(
+            (kpiListOpen.rows||[]).map(w=>{
+              const readiness=wineReadiness(w);
+              const region=deriveRegionCountry(w.origin||"");
+              const left=Math.max(0,Math.round(safeNum(w.bottles)||0));
+              const drinkEnd=safeNum(w?.cellarMeta?.drinkEnd);
+              return(
+                <div key={w.id} style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:13,padding:"10px 11px",marginBottom:8}}>
+                  <div style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"flex-start"}}>
+                    <div style={{minWidth:0}}>
+                      <div style={{fontSize:13,fontWeight:800,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{w.name||"Unnamed wine"}</div>
+                      <div style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginTop:2}}>
+                        {[w.vintage||"",resolveVarietal(w),region.region||region.country||""].filter(Boolean).join(" · ")}
+                      </div>
+                    </div>
+                    <div style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap"}}>{left} left</div>
+                  </div>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:8}}>
+                    <span style={{fontSize:11,color:"#fff",background:readiness.color,borderRadius:999,padding:"3px 8px",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{readiness.label}</span>
+                    <span style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{drinkEnd?`Drink by ${drinkEnd}`:"No drink end"}</span>
+                  </div>
+                </div>
+              );
+            })
+          ):(
+            <div style={{fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",padding:"8px 2px"}}>No wines in this category.</div>
+          )}
+        </div>
+      </Modal>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
