@@ -105,6 +105,7 @@ const db = {
 };
 
 const META_PREFIX = "[[VINO_META]]";
+const APP_VERSION = "7.05";
 const EXCEL_IMPORT_FLAG = "vino_excel_seed_v1";
 const EXCEL_RESTORE_FLAG = "vino_excel_restore_v1";
 const EXCEL_JOURNAL_FIX_FLAG = "vino_excel_journal_fix_v4";
@@ -2093,7 +2094,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
                   <div style={sectionHintStyle}>Set purchase and inventory dates first.</div>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
                     <Field label="Date Purchased" value={f.datePurchased} onChange={v=>set("datePurchased",v)} type="date" clearable onClear={()=>set("datePurchased","")} optional/>
-                    <Field label="Added to Inventory" value={f.addedDate} onChange={v=>set("addedDate",v)} type="date" clearable onClear={()=>set("addedDate","")} optional/>
+                    <Field label="Added to Inventory" value={f.addedDate} onChange={v=>set("addedDate",v)} type="date" optional/>
                   </div>
                 </div>
               )}
@@ -2129,25 +2130,23 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
                         ))}
                       </div>
                     )}
+                    {hasVarietalInput&&(
+                      <div style={{marginTop:7,display:"inline-flex",alignItems:"center",gap:8,padding:"6px 10px",borderRadius:999,border:"1px solid rgba(var(--accentRgb),0.26)",background:"linear-gradient(180deg,rgba(var(--accentRgb),0.12),rgba(var(--accentRgb),0.06))"}}>
+                        <span style={{fontSize:10,fontWeight:800,color:"var(--accent)",letterSpacing:"0.7px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Category</span>
+                        <select
+                          value={f.manualCategory||"__auto__"}
+                          onChange={e=>set("manualCategory",e.target.value==="__auto__"?"":e.target.value)}
+                          style={{margin:0,padding:"6px 26px 6px 10px",fontSize:12,minHeight:30,borderRadius:999,border:"1px solid rgba(var(--accentRgb),0.33)",background:"var(--card)",fontWeight:700,maxWidth:190}}
+                        >
+                          <option value="__auto__">{`Auto · ${inferredAutoCategory}`}</option>
+                          {WINE_CATEGORY_OPTIONS.map(cat=><option key={cat} value={cat}>{cat}</option>)}
+                        </select>
+                      </div>
+                    )}
                   </div>
                   <Field label="Vintage" value={f.vintage} onChange={v=>set("vintage",v)} type="number" placeholder="2019" optional/>
                   <Field label="Alc %" value={f.alcohol} onChange={v=>set("alcohol",v)} type="number" placeholder="14.5" optional/>
                 </div>
-                {hasVarietalInput&&(
-                  <div style={{display:"flex",justifyContent:"flex-end",marginTop:-4,marginBottom:4}}>
-                    <div style={{display:"inline-flex",alignItems:"center",gap:8,padding:"6px 10px",borderRadius:999,border:"1px solid rgba(var(--accentRgb),0.26)",background:"linear-gradient(180deg,rgba(var(--accentRgb),0.12),rgba(var(--accentRgb),0.06))"}}>
-                      <span style={{fontSize:10,fontWeight:800,color:"var(--accent)",letterSpacing:"0.7px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Category</span>
-                      <select
-                        value={f.manualCategory||"__auto__"}
-                        onChange={e=>set("manualCategory",e.target.value==="__auto__"?"":e.target.value)}
-                        style={{margin:0,padding:"6px 26px 6px 10px",fontSize:12,minHeight:30,borderRadius:999,border:"1px solid rgba(var(--accentRgb),0.33)",background:"var(--card)",fontWeight:700,maxWidth:190}}
-                      >
-                        <option value="__auto__">{`Auto · ${inferredAutoCategory}`}</option>
-                        {WINE_CATEGORY_OPTIONS.map(cat=><option key={cat} value={cat}>{cat}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                )}
               </div>
               {!isWishlist&&(
                 <>
@@ -4638,7 +4637,7 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile})=>{
         <div style={{display:"flex",alignItems:"center",gap:12}}><Icon n="export" size={16} color="var(--sub)"/><span style={{fontSize:14,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:500}}>Export to Excel (.xlsx)</span></div>
         <Icon n="chevR" size={16} color="var(--sub)"/>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v6.97 · {displayName}</div>
+      <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",opacity:0.6,marginBottom:8}}>Vinology v{APP_VERSION} · {displayName}</div>
       <Modal show={exportOpen} onClose={()=>setExportOpen(false)}>
         <ModalHeader title="Export Cellar Data" onClose={()=>setExportOpen(false)}/>
         <div style={{display:"grid",gap:10,marginBottom:16}}>
