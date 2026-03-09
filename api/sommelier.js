@@ -79,6 +79,17 @@ const parsePositiveCount = (q, fallback = 10) => {
   return Math.min(100, n);
 };
 
+const readyToDrinkIntent = q => {
+  const txt = low(q);
+  const hasWineRef = /\bwines?\b|\bbottles?\b/.test(txt);
+  const hasReady = /\bready\b/.test(txt);
+  const hasDrinkWord = /\bdrink\b|\bdrinking\b|\bdrunk\b|\bopen\b/.test(txt);
+  if (hasReady && hasDrinkWord) return true;
+  if (/\bready to be drunk\b/.test(txt)) return true;
+  if (/\bready now\b/.test(txt) && hasWineRef) return true;
+  return false;
+};
+
 const readinessState = wine => {
   const currentYear = new Date().getFullYear();
   const start = num(wine?.drinkFrom);
@@ -151,15 +162,22 @@ const validateModelAnswer = ({ message, text, cellar }) => {
 
   const lines = out.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   const last = lines[lines.length - 1] || "";
-  if (/,\s*\d{0,4}$/.test(last) || /[:\-–—]\s*$/.test(last)) {
+  if (/,\s*\d{0,4}$/.test(last) || /[:\-–—]\s*$/.test(last) || /\(\s*\d{0,4}\s*$/.test(last)) {
     return { ok: false, reason: "truncated-ending" };
   }
   if (((out.match(/\*\*/g) || []).length % 2) === 1) {
     return { ok: false, reason: "unbalanced-markdown" };
   }
+  if (((out.match(/\(/g) || []).length !== (out.match(/\)/g) || []).length)) {
+    return { ok: false, reason: "unbalanced-parentheses" };
+  }
 
   const numbered = lines.filter(l => /^\d+\.\s+/.test(l));
   const listExpected = isListIntent(message) || numbered.length >= 3;
+  const askedCount = parsePositiveCount(message, 0);
+  if (listExpected && askedCount > 0 && numbered.length > 0 && numbered.length < Math.min(askedCount, safeArr(cellar).length)) {
+    return { ok: false, reason: "short-list" };
+  }
   if (listExpected && numbered.length) {
     const badLines = numbered.filter(line => !pickExplicitWine(line, cellar));
     if (badLines.length > 0) {
@@ -219,7 +237,7 @@ const deterministicAnswer = ({ message, cellar, audits, history }) => {
     return `You currently have ${totalLeft} bottles left across ${wines.length} wines.`;
   }
 
-  if (/\bready\b.*\bdrink\b|\bdrink\b.*\bready\b/.test(q)) {
+  if (readyToDrinkIntent(q)) {
     const want = parsePositiveCount(q, 10);
     const ready = wines
       .filter(w => readinessState(w) === "ready")
