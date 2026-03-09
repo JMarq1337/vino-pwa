@@ -132,7 +132,7 @@ const db = {
 };
 
 const META_PREFIX = "[[VINO_META]]";
-const APP_VERSION = "7.20";
+const APP_VERSION = "7.22";
 const EXCEL_IMPORT_FLAG = "vino_excel_seed_v1";
 const EXCEL_RESTORE_FLAG = "vino_excel_restore_v1";
 const EXCEL_JOURNAL_FIX_FLAG = "vino_excel_journal_fix_v4";
@@ -1163,7 +1163,7 @@ const IC={
   camera:"M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2zM12 17a4 4 0 100-8 4 4 0 000 8z",
   location:"M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0118 0zM12 13a3 3 0 100-6 3 3 0 000 6z",
   settings:"M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z",
-  rewind:"M4 11H1l3-3m-3 3 3 3M4 11a8 8 0 1 1 2.4 5.6",
+  rewind:"M9 14 4 9l5-5M20 20a9 9 0 0 0-9-9H4",
   audit:"M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11",
   mappin:"M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0zM12 10a1 1 0 100-2 1 1 0 000 2",
   globe:"M12 22a10 10 0 110-20 10 10 0 010 20zM2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z",
@@ -1176,8 +1176,8 @@ const Icon=({n,size=20,color="currentColor",fill="none",sw=1.5})=>{
   if(n==="search")return(<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>);
   if(n==="rewind")return(
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 7v6h6"/>
-      <path d="M3 13a9 9 0 1 0 3-6.7"/>
+      <path d="M9 14 4 9l5-5"/>
+      <path d="M20 20a9 9 0 0 0-9-9H4"/>
     </svg>
   );
   return(<svg width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><path d={IC[n]}/></svg>);
@@ -3968,8 +3968,100 @@ const TYPE_STYLES={
   Other:    {hdr:"555555",row:"F5F5F5",alt:"EBEBEB"},
 };
 const TYPE_EMOJI={Red:"🍷",White:"🥂",Rosé:"🌸",Sparkling:"✨",Dessert:"🍯",Fortified:"🏰",Other:"🍾"};
+const EXCEL_MIME="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const loadExcelJsLib=async()=>{
+  if(window.ExcelJS) return window.ExcelJS;
+  await new Promise((res,rej)=>{
+    const existing=document.querySelector('script[data-lib="exceljs"]');
+    if(existing){
+      existing.addEventListener("load",res,{once:true});
+      existing.addEventListener("error",rej,{once:true});
+      return;
+    }
+    const s=document.createElement("script");
+    s.dataset.lib="exceljs";
+    s.src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js";
+    s.onload=res;
+    s.onerror=rej;
+    document.head.appendChild(s);
+  });
+  return window.ExcelJS;
+};
+const downloadArrayBufferAsFile=(buffer,fileName)=>{
+  const blob=new Blob([buffer],{type:EXCEL_MIME});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url;
+  a.download=fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1200);
+};
+const blobToDataUrl=blob=>new Promise((resolve,reject)=>{
+  const r=new FileReader();
+  r.onload=()=>resolve((r.result||"").toString());
+  r.onerror=()=>reject(new Error("blob-to-dataurl-failed"));
+  r.readAsDataURL(blob);
+});
+const dataUrlExt=dataUrl=>{
+  const m=(dataUrl||"").match(/^data:image\/([a-zA-Z0-9+.-]+);base64,/);
+  if(!m) return "";
+  const raw=(m[1]||"").toLowerCase();
+  if(raw==="jpg") return "jpeg";
+  if(raw==="jpeg"||raw==="png"||raw==="gif") return raw;
+  return "";
+};
+const dataUrlToPng=async dataUrl=>{
+  const img=await loadImageForPhoto(dataUrl);
+  const canvas=document.createElement("canvas");
+  canvas.width=Math.max(1,img.width||1);
+  canvas.height=Math.max(1,img.height||1);
+  const ctx=canvas.getContext("2d");
+  if(!ctx) return "";
+  ctx.drawImage(img,0,0);
+  return canvas.toDataURL("image/png");
+};
+const toExcelImagePayload=async src=>{
+  if(!src) return null;
+  let prepared=await getPreparedPhotoSrc(src);
+  if(!prepared) return null;
+  if(!prepared.startsWith("data:image/")){
+    try{
+      const fr=await fetch(prepared);
+      if(!fr.ok) return null;
+      const blob=await fr.blob();
+      prepared=await blobToDataUrl(blob);
+    }catch{
+      return null;
+    }
+  }
+  let ext=dataUrlExt(prepared);
+  if(!ext){
+    try{
+      const png=await dataUrlToPng(prepared);
+      if(!png) return null;
+      prepared=png;
+      ext="png";
+    }catch{
+      return null;
+    }
+  }
+  return {base64:prepared,extension:ext};
+};
+const styleExcelJsCell=(cell,{bg="FFFFFFFF",fg="FF2A1A14",bold=false,align="left",size=10,wrap=false}={})=>{
+  cell.font={name:"Arial",size,bold,color:{argb:fg}};
+  cell.fill={type:"pattern",pattern:"solid",fgColor:{argb:bg}};
+  cell.alignment={vertical:"middle",horizontal:align,wrapText:wrap};
+  cell.border={
+    top:{style:"thin",color:{argb:"FFE7DDD6"}},
+    left:{style:"thin",color:{argb:"FFE7DDD6"}},
+    bottom:{style:"thin",color:{argb:"FFE7DDD6"}},
+    right:{style:"thin",color:{argb:"FFE7DDD6"}},
+  };
+};
 
-const exportToExcel=async(wines,wishlist,notes,{includeWishlist=true,includeNotes=true}={})=>{
+const exportToExcel=async(wines,wishlist,notes,{includeWishlist=true,includeNotes=true,includePhotos=true}={})=>{
   if(!window.XLSX){
     await new Promise((res,rej)=>{
       const s=document.createElement("script");
@@ -4356,7 +4448,72 @@ const exportToExcel=async(wines,wishlist,notes,{includeWishlist=true,includeNote
     });
   }
 
-  X.writeFile(wb,`vinology-export-${now.toISOString().slice(0,10)}.xlsx`,{bookSST:false,cellStyles:true});
+  const fileName=`vinology-export-${now.toISOString().slice(0,10)}.xlsx`;
+  try{
+    const hasPhotos=includePhotos&&collection.some(w=>!!w.photo);
+    if(hasPhotos){
+      const exceljs=await loadExcelJsLib();
+      const baseBuffer=X.write(wb,{bookType:"xlsx",type:"array",bookSST:false,cellStyles:true});
+      const richWb=new exceljs.Workbook();
+      await richWb.xlsx.load(baseBuffer);
+      const ws=richWb.addWorksheet("Wine Photos");
+      ws.columns=[
+        {header:"Wine Name",key:"name",width:34},
+        {header:"Varietal",key:"varietal",width:20},
+        {header:"Vintage",key:"vintage",width:10},
+        {header:"Location",key:"location",width:28},
+        {header:"Photo",key:"photo",width:22},
+      ];
+      const header=ws.getRow(1);
+      header.height=24;
+      header.eachCell(cell=>styleExcelJsCell(cell,{bg:"FFF0E3DC",fg:"FF642718",bold:true,align:"center",size:10,wrap:true}));
+      let rowIndex=2;
+      let embedded=0;
+      for(const wine of collection){
+        if(!wine.photo) continue;
+        const row=ws.getRow(rowIndex);
+        row.values=[
+          null,
+          (wine.name||"").toString(),
+          resolveVarietal(wine),
+          wine.vintage||"",
+          locationLabel(wine),
+          "Embedded image",
+        ];
+        row.height=108;
+        styleExcelJsCell(row.getCell(1),{bg:"FFFFFFFF"});
+        styleExcelJsCell(row.getCell(2),{bg:"FFFFFFFF"});
+        styleExcelJsCell(row.getCell(3),{bg:"FFFFFFFF",align:"center"});
+        styleExcelJsCell(row.getCell(4),{bg:"FFFFFFFF"});
+        styleExcelJsCell(row.getCell(5),{bg:"FFFFFFFF",align:"center"});
+        const payload=await toExcelImagePayload(wine.photo);
+        if(payload){
+          const imageId=richWb.addImage(payload);
+          ws.addImage(imageId,{
+            tl:{col:4.1,row:rowIndex-1+0.08},
+            ext:{width:86,height:128},
+            editAs:"oneCell",
+          });
+          embedded++;
+        }else{
+          row.getCell(5).value="Photo unavailable";
+        }
+        rowIndex++;
+      }
+      if(embedded===0){
+        ws.getRow(2).values=[null,"No embeddable photos were found in this export.","","",""];
+        ws.mergeCells("A2:E2");
+        const c=ws.getCell("A2");
+        styleExcelJsCell(c,{bg:"FFFFFDFC",fg:"FF8A7267",align:"left"});
+      }
+      const finalBuffer=await richWb.xlsx.writeBuffer();
+      downloadArrayBufferAsFile(finalBuffer,fileName);
+      return;
+    }
+  }catch(e){
+    console.error("Photo embed export failed; falling back to base export.",e);
+  }
+  X.writeFile(wb,fileName,{bookSST:false,cellStyles:true});
 };
 
 /* ── WINE BOTTLE VIZ ──────────────────────────────────────────── */
