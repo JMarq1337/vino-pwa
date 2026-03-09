@@ -18,6 +18,44 @@ Additional strict output requirements:
 - Do not output truncated lines.
 - Prefer plain text (no markdown tables).
 - If data is insufficient, say that clearly instead of guessing.`;
+const INTENT_ROUTER_PROMPT = `You are an intent router for a wine cellar assistant.
+Return ONLY compact JSON with:
+{
+  "intent": "one of the allowed intents",
+  "wineName": "string or empty",
+  "count": number or null,
+  "targetYear": number or null,
+  "confidence": 0..1
+}
+Allowed intents:
+- list_ready_wines
+- list_not_ready_wines
+- list_past_peak_wines
+- list_no_window_wines
+- cellar_summary
+- latest_added
+- wine_location
+- wine_purchase_date
+- wine_added_date
+- wine_bottle_counts
+- list_wines
+- audit_latest_status
+- audit_missing
+- journal_for_wine
+- journal_with_notes
+- journal_without_notes
+- open_next
+- forecast_past_peak_soon
+- forecast_low_stock
+- forecast_ready_in_year
+- profile_memory
+- unknown
+Rules:
+- Understand natural language and paraphrases.
+- Prefer "list_*" intents for questions asking for wines + quantities.
+- If user asks for "past peak / over peak / beyond peak / peaked already", map to list_past_peak_wines.
+- Keep confidence realistic.
+- Output JSON only; no markdown.`;
 
 const clean = v => (v == null ? "" : String(v).trim());
 const low = v => clean(v).toLowerCase();
@@ -27,6 +65,23 @@ const num = v => {
 };
 const isArr = v => Array.isArray(v);
 const safeArr = v => (Array.isArray(v) ? v : []);
+const parseJsonObject = raw => {
+  const txt = clean(raw);
+  if (!txt) return null;
+  try {
+    return JSON.parse(txt);
+  } catch {}
+  const start = txt.indexOf("{");
+  const end = txt.lastIndexOf("}");
+  if (start === -1 || end === -1 || end <= start) return null;
+  const body = txt.slice(start, end + 1);
+  try {
+    return JSON.parse(body);
+  } catch {
+    return null;
+  }
+};
+const clamp01 = n => Math.max(0, Math.min(1, Number(n) || 0));
 
 const parseDate = raw => {
   const txt = clean(raw);
@@ -107,7 +162,7 @@ const classifyReadinessQuery = q => {
   const asksReadiness =
     /\bready\b/.test(txt) ||
     /\bdrink\b|\bdrinking\b|\bdrunk\b|\bopen\b/.test(txt) ||
-    /\btoo young\b|\bnot yet\b|\bwait\b|\bpast peak\b|\bover the hill\b/.test(txt);
+    /\btoo young\b|\bnot yet\b|\bwait\b|\bpast peak\b|\bover the hill\b|\bpeak\b/.test(txt);
   if (!asksReadiness) return "";
 
   if (
@@ -115,7 +170,11 @@ const classifyReadinessQuery = q => {
     /\baren't\s+ready\b|\baren't\s+yet\b|\bisn't\s+ready\b/.test(txt) ||
     /\bnot\b.{0,20}\bready\b/.test(txt)
   ) return "early";
-  if (/\bpast\s+peak\b|\bover\s+the\s+hill\b|\bpast\b.*\bdrink\b/.test(txt)) return "late";
+  if (
+    /\bpast\s+peak\b|\bover\s+the\s+hill\b|\bpast\b.*\bdrink\b/.test(txt) ||
+    /\bpast\b.{0,20}\bpeak\b|\bover\b.{0,20}\bpeak\b|\bbeyond\b.{0,20}\bpeak\b/.test(txt) ||
+    /\bpeak\b.{0,20}\bpassed\b/.test(txt)
+  ) return "late";
   if (/\bno\s+window\b|\bunknown\s+window\b/.test(txt)) return "none";
   if (readyToDrinkIntent(txt)) return "ready";
   return "";
@@ -244,6 +303,94 @@ const validateModelAnswer = ({ message, text, cellar }) => {
     }
   }
   return { ok: true, reason: "ok" };
+};
+
+const canonicalQuestionFromIntent = hint => {
+  const intent = clean(hint?.intent);
+  const wineName = clean(hint?.wineName);
+  const count = Math.max(1, Math.min(100, Number(hint?.count) || 10));
+  const year = Number(hint?.targetYear) || null;
+  switch (intent) {
+    case "list_ready_wines":
+      return `give me ${count} wines that are ready to drink`;
+    case "list_not_ready_wines":
+      return `give me ${count} wines that are not ready to drink`;
+    case "list_past_peak_wines":
+      return `give me ${count} wines that are past peak`;
+    case "list_no_window_wines":
+      return `give me ${count} wines with no drink window`;
+    case "cellar_summary":
+      return "cellar summary";
+    case "latest_added":
+      return "latest wine added";
+    case "wine_location":
+      return wineName ? `where is ${wineName}` : "wine location";
+    case "wine_purchase_date":
+      return wineName ? `when did i purchase ${wineName}` : "wine purchase date";
+    case "wine_added_date":
+      return wineName ? `when was ${wineName} added to inventory` : "wine added date";
+    case "wine_bottle_counts":
+      return wineName ? `how many bottles left for ${wineName}` : "how many bottles do i have";
+    case "list_wines":
+      return `list ${count} wines in my cellar`;
+    case "audit_latest_status":
+      return "latest audit status";
+    case "audit_missing":
+      return `list ${count} missing wines from latest audit`;
+    case "journal_for_wine":
+      return wineName ? `journal for ${wineName}` : "journal";
+    case "journal_with_notes":
+      return `list ${count} wines with journal notes`;
+    case "journal_without_notes":
+      return `list ${count} wines with no journal notes`;
+    case "open_next":
+      return `what should i open next`;
+    case "forecast_past_peak_soon":
+      return `which wines may pass peak soon`;
+    case "forecast_low_stock":
+      return `which wines are low stock`;
+    case "forecast_ready_in_year":
+      return year ? `which wines become ready in ${year}` : `what will be ready next year`;
+    case "profile_memory":
+      return "what do you remember about me";
+    default:
+      return "";
+  }
+};
+
+const classifyDeterministicIntent = async ({ message, history, runModel }) => {
+  const text = clean(message);
+  if (!text) return null;
+  const recentHistory = safeArr(history)
+    .slice(-4)
+    .map(h => `${h.role}: ${clean(h.text).slice(0, 180)}`)
+    .join("\n");
+  const userText = [
+    `Conversation tail (optional):`,
+    recentHistory || "(none)",
+    ``,
+    `User message: ${text}`,
+  ].join("\n");
+  const out = await runModel({
+    systemText: INTENT_ROUTER_PROMPT,
+    userText,
+    temperature: 0,
+    maxOutputTokens: 220,
+  });
+  if (!out?.aiRes?.ok) return null;
+  const parsed = parseJsonObject(out.text);
+  if (!parsed || typeof parsed !== "object") return null;
+  const intent = clean(parsed.intent);
+  if (!intent || intent === "unknown") return null;
+  const confidence = clamp01(parsed.confidence);
+  if (confidence < 0.55) return null;
+  return {
+    intent,
+    wineName: clean(parsed.wineName),
+    count: Number.isFinite(Number(parsed.count)) ? Number(parsed.count) : null,
+    targetYear: Number.isFinite(Number(parsed.targetYear)) ? Number(parsed.targetYear) : null,
+    confidence,
+  };
 };
 
 const deterministicAnswer = ({ message, cellar, audits, history, memory, profile }) => {
@@ -638,11 +785,6 @@ module.exports = async (req, res) => {
 
     const direct = deterministicAnswer({ message, cellar, audits, history, memory, profile });
     if (direct) return res.status(200).json({ text: direct });
-    if (isDeterministicDataQuery(message)) {
-      return res.status(200).json({
-        text: "I can answer that from your live cellar data, but I need one clearer detail (wine name, date type, or location scope).",
-      });
-    }
 
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(DEFAULT_MODEL)}:generateContent?key=${encodeURIComponent(apiKey)}`;
     const contextPayload = {
@@ -680,6 +822,18 @@ module.exports = async (req, res) => {
       const data = await aiRes.json().catch(() => ({}));
       return { aiRes, data, text: extractGeminiText(data) };
     };
+
+    if (isDeterministicDataQuery(message)) {
+      const hint = await classifyDeterministicIntent({ message, history, runModel });
+      const canonical = canonicalQuestionFromIntent(hint);
+      if (canonical) {
+        const rerouted = deterministicAnswer({ message: canonical, cellar, audits, history, memory, profile });
+        if (rerouted) return res.status(200).json({ text: rerouted });
+      }
+      return res.status(200).json({
+        text: "I can answer that from your live cellar data, but I need one clearer detail (wine name, date type, or location scope).",
+      });
+    }
 
     const baseUserText = `Context JSON:\n${JSON.stringify(contextPayload)}\n\nUser question: ${message}`;
     const first = await runModel({
