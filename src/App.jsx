@@ -7,6 +7,23 @@ const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsI
 const supa = t => `${SUPA_URL}/rest/v1/${t}`;
 const BH = { "Content-Type":"application/json","apikey":SUPA_KEY,"Authorization":`Bearer ${SUPA_KEY}` };
 const UH = { ...BH, "Prefer":"resolution=merge-duplicates,return=minimal" };
+const normalizeAiMemoryList = value => {
+  const src = Array.isArray(value)
+    ? value
+    : (typeof value === "string" ? (()=>{ try{return JSON.parse(value);}catch{return[];} })() : []);
+  if(!Array.isArray(src)) return [];
+  const unique = new Set();
+  const out = [];
+  src.forEach(item=>{
+    const text=(item||"").toString().trim().replace(/\s+/g," ");
+    if(!text) return;
+    const key=text.toLowerCase();
+    if(unique.has(key)) return;
+    unique.add(key);
+    out.push(text);
+  });
+  return out.slice(0,80);
+};
 
 const db = {
   async get(t) {
@@ -45,15 +62,25 @@ const db = {
         return false;
       };
 
-      if(await tryWrite(fullPayload)) return true;
-      return await tryWrite(basePayload);
+      const ok = await tryWrite(fullPayload) || await tryWrite(basePayload);
+      if(!ok) return false;
+      // Optional memory sync (safe: ignored when column doesn't exist).
+      try{
+        const aiMemory=normalizeAiMemoryList(p.aiMemory);
+        await fetch(`${supa("profile")}?id=eq.1`,{
+          method:"PATCH",
+          headers:{...BH,"Prefer":"return=minimal"},
+          body:JSON.stringify({ai_memory:aiMemory})
+        });
+      }catch{}
+      return true;
     }catch(e){console.error("saveProfile err",e);return false;}
   },
   async getProfile() {
     try {
       let r=await fetch(`${supa("profile")}?id=eq.1`,{headers:BH});
       const d=r.ok?await r.json():[]; const p=d[0]||null; if(!p)return null;
-      return{name:p.name,description:p.description,avatar:p.avatar||null,surname:p.surname||"",cellarName:p.cellar_name||"",bio:p.bio||"",country:p.country||"",profileBg:p.profile_bg||""};
+      return{name:p.name,description:p.description,avatar:p.avatar||null,surname:p.surname||"",cellarName:p.cellar_name||"",bio:p.bio||"",country:p.country||"",profileBg:p.profile_bg||"",aiMemory:normalizeAiMemoryList(p.ai_memory)};
     }
     catch{return null;}
   },
@@ -105,7 +132,7 @@ const db = {
 };
 
 const META_PREFIX = "[[VINO_META]]";
-const APP_VERSION = "7.15";
+const APP_VERSION = "7.17";
 const EXCEL_IMPORT_FLAG = "vino_excel_seed_v1";
 const EXCEL_RESTORE_FLAG = "vino_excel_restore_v1";
 const EXCEL_JOURNAL_FIX_FLAG = "vino_excel_journal_fix_v4";
@@ -113,6 +140,7 @@ const CACHE_KEY = "vino_local_cache_v2";
 const SAVED_LOCATIONS_KEY = "vino_saved_locations_v1";
 const DELETED_WINES_KEY = "vino_deleted_wines_v1";
 const AUDITS_KEY = "vino_audits_v1";
+const SOMMELIER_MEMORY_KEY = "vino_ai_memory_v1";
 const WINE_FORM_DRAFT_PREFIX = "vino_wine_form_draft_v1:";
 const ACCENTS = {
   wine:{id:"wine",label:"Wine Red",accent:"#9B2335",accentLight:"#F08FA0"},
@@ -555,6 +583,15 @@ const readAudits=()=>{
       .filter(a=>a&&a.id&&a.items&&typeof a.items==="object")
       .map(normalizeAuditRecord);
   }catch{return[];}
+};
+const readSommelierMemory=()=>{
+  try{
+    const raw=localStorage.getItem(SOMMELIER_MEMORY_KEY);
+    if(!raw) return [];
+    return normalizeAiMemoryList(JSON.parse(raw));
+  }catch{
+    return [];
+  }
 };
 
 const fromDb = {
@@ -1103,7 +1140,7 @@ const SEED_NOTES=[
   {id:"n1",wineId:"s1",title:"Christmas Dinner 2023",content:"Opened with family. Paired with slow-roasted lamb. Absolutely magical.",date:"2023-12-25"},
   {id:"n2",wineId:"s3",title:"Summer BBQ Pairings",content:"Incredible with fresh prawns on the barbie. Also tried with grilled snapper — even better.",date:"2023-11-12"},
 ];
-const DEFAULT_PROFILE={name:"Neale",description:"Winemaker & Collector",avatar:null,accent:"wine"};
+const DEFAULT_PROFILE={name:"Neale",description:"Winemaker & Collector",avatar:null,accent:"wine",aiMemory:[]};
 
 /* ── ICONS ────────────────────────────────────────────────────── */
 const IC={
@@ -1256,7 +1293,7 @@ const getSommelierAuditContext=()=>{
     return [];
   }
 };
-const callAI=async(msg,wines,history=[])=>{
+const callAI=async(msg,wines,history=[],memory=[],profile={})=>{
   const cellar=(wines||[])
     .filter(w=>!w.wishlist)
     .map(w=>({
@@ -1291,7 +1328,20 @@ const callAI=async(msg,wines,history=[])=>{
     const r=await fetch("/api/sommelier",{
       method:"POST",
       headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({message:msg,cellar,audits,history})
+      body:JSON.stringify({
+        message:msg,
+        cellar,
+        audits,
+        history,
+        memory:normalizeAiMemoryList(memory),
+        profile:{
+          name:(profile?.name||"").toString(),
+          surname:(profile?.surname||"").toString(),
+          cellarName:(profile?.cellarName||"").toString(),
+          country:(profile?.country||"").toString(),
+          description:(profile?.description||"").toString(),
+        }
+      })
     });
     const d=await r.json().catch(()=>({}));
     if(!r.ok) return d?.error||"Sommelier is unavailable. Check API configuration.";
@@ -3431,15 +3481,44 @@ const AuditScreen=({wines,desktop,onSetWineBottles,onRemoveWine,onRevokeAudit})=
 };
 
 /* ── AI ───────────────────────────────────────────────────────── */
-const AIScreen=({wines})=>{
+const AIScreen=({wines,profile,setProfile})=>{
   const STORE_KEY="vino_ai_sessions_v1";
   const TAB_BOOT_KEY="vino_ai_tab_boot_v1";
+  const parseMemoryIntent = text => {
+    const t=(text||"").toString().trim();
+    if(!t) return null;
+    let m=t.match(/^remember(?:\s+that)?\s+(.+)/i);
+    if(m) return {type:"add",value:m[1].trim()};
+    m=t.match(/^(?:forget|remove memory)\s+(.+)/i);
+    if(m) return {type:"remove",value:m[1].trim()};
+    if(/^clear memories$/i.test(t)) return {type:"clear",value:""};
+    return null;
+  };
+  const applyMemoryIntent = (memory,intent) => {
+    const current=normalizeAiMemoryList(memory);
+    if(!intent) return {next:current,reply:""};
+    if(intent.type==="clear"){
+      return {next:[],reply:"Sommelier memory cleared."};
+    }
+    if(intent.type==="add"){
+      const next=normalizeAiMemoryList([intent.value,...current]);
+      const added=next.length>current.length || !current.some(x=>x.toLowerCase()===intent.value.toLowerCase());
+      return {next,reply:added?`Saved memory: ${intent.value}`:"That memory already exists."};
+    }
+    if(intent.type==="remove"){
+      const needle=intent.value.toLowerCase();
+      const next=current.filter(x=>!x.toLowerCase().includes(needle));
+      const removed=next.length!==current.length;
+      return {next,reply:removed?`Removed matching memory: ${intent.value}`:"I couldn't find a matching memory to remove."};
+    }
+    return {next:current,reply:""};
+  };
   const makeSession=seed=>({
     id:`chat-${uid()}`,
     title:"New Chat",
     createdAt:new Date().toISOString(),
     updatedAt:new Date().toISOString(),
-    messages:seed||[{r:"a",t:"Hello. I'm Vinology — your personal sommelier.\n\nAsk me anything about your collection, food pairings, where wines are stored, purchase dates, or audit status."}]
+    messages:seed||[{r:"a",t:"Hello. I'm Vinology — your personal sommelier.\n\nI use live cellar, journal, audit and summary data.\n\nTry:\n• What should I open next?\n• Which wines are not ready yet?\n• Which wines may pass peak soon?\n\nMemory commands:\n• remember I prefer dry Riesling\n• forget dry Riesling\n• clear memories"}]
   });
   const [sessions,setSessions]=useState(()=>{
     try{
@@ -3455,8 +3534,13 @@ const AIScreen=({wines})=>{
   const [input,setInput]=useState("");
   const [loading,setLoading]=useState(false);
   const [historyOpen,setHistoryOpen]=useState(false);
+  const [sommelierMemory,setSommelierMemory]=useState(()=>{
+    const profileMemory=normalizeAiMemoryList(profile?.aiMemory||[]);
+    if(profileMemory.length) return profileMemory;
+    return readSommelierMemory();
+  });
   const scrollRef=useRef();
-  const chips=["What should I open tonight?","Best food pairings?","What's in my cellar?","Recommend a wine"];
+  const chips=["What should I open tonight?","Which wines may pass peak soon?","What will be ready next year?","What's in my cellar?"];
   const orderedSessions=[...sessions].sort((a,b)=>(b.updatedAt||"").localeCompare(a.updatedAt||""));
   const activeSession=sessions.find(s=>s.id===activeId)||orderedSessions[0]||makeSession();
   const msgs=activeSession.messages||[];
@@ -3468,6 +3552,18 @@ const AIScreen=({wines})=>{
   useEffect(()=>{
     try{localStorage.setItem(STORE_KEY,JSON.stringify(sessions.slice(0,25)))}catch{}
   },[sessions]);
+  useEffect(()=>{
+    const profileMemory=normalizeAiMemoryList(profile?.aiMemory||[]);
+    if(profileMemory.length){
+      setSommelierMemory(prev=>{
+        const merged=normalizeAiMemoryList([...profileMemory,...prev]);
+        return JSON.stringify(prev)===JSON.stringify(merged)?prev:merged;
+      });
+    }
+  },[profile?.aiMemory]);
+  useEffect(()=>{
+    try{localStorage.setItem(SOMMELIER_MEMORY_KEY,JSON.stringify(normalizeAiMemoryList(sommelierMemory)))}catch{}
+  },[sommelierMemory]);
   useEffect(()=>{
     let freshBoot=false;
     try{
@@ -3511,6 +3607,14 @@ const AIScreen=({wines})=>{
       return next.length?next:[makeSession()];
     });
   };
+  const syncSommelierMemory=useCallback(nextMemory=>{
+    const normalized=normalizeAiMemoryList(nextMemory);
+    setSommelierMemory(normalized);
+    try{localStorage.setItem(SOMMELIER_MEMORY_KEY,JSON.stringify(normalized));}catch{}
+    if(setProfile&&profile){
+      setProfile({...profile,aiMemory:normalized});
+    }
+  },[profile,setProfile]);
   const send=useCallback(async msg=>{
     const txt=msg||input.trim();
     if(!txt||loading)return;
@@ -3530,13 +3634,21 @@ const AIScreen=({wines})=>{
         messages
       };
     });
+    const memoryIntent=parseMemoryIntent(txt);
+    if(memoryIntent){
+      const outcome=applyMemoryIntent(sommelierMemory,memoryIntent);
+      syncSommelierMemory(outcome.next);
+      const assistantMsg={r:"a",t:outcome.reply,ts:new Date().toISOString()};
+      patchSession(sessionId,s=>({...s,updatedAt:new Date().toISOString(),messages:[...(s.messages||[]),assistantMsg]}));
+      return;
+    }
     setLoading(true);
-    const reply=await callAI(txt,wines,priorHistory);
+    const reply=await callAI(txt,wines,priorHistory,sommelierMemory,profile);
     const assistantMsg={r:"a",t:reply,ts:new Date().toISOString()};
     patchSession(sessionId,s=>({...s,updatedAt:new Date().toISOString(),messages:[...(s.messages||[]),assistantMsg]}));
     setLoading(false);
     setTimeout(()=>scrollRef.current?.scrollTo({top:99999,behavior:"smooth"}),80);
-  },[input,wines,loading,activeSession]);
+  },[input,wines,loading,activeSession,sommelierMemory,profile,syncSommelierMemory]);
   return(
     <div style={{display:"flex",flexDirection:"column",height:"calc(100vh - 140px)"}}>
       <div style={{marginBottom:18}}>
@@ -3544,6 +3656,9 @@ const AIScreen=({wines})=>{
           <div>
             <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"2px",textTransform:"uppercase",marginBottom:4}}>Vinology AI</div>
             <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:28,fontWeight:800,color:"var(--text)",lineHeight:1}}>Sommelier</div>
+            <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:11,color:"var(--sub)",marginTop:4}}>
+              Live cellar intelligence · Memory {sommelierMemory.length?`on (${sommelierMemory.length})`:"off"}
+            </div>
           </div>
           <div style={{display:"flex",gap:6}}>
             <button onClick={()=>setHistoryOpen(true)} style={{padding:"8px 10px",borderRadius:10,border:"1.5px solid var(--border)",background:"var(--card)",color:"var(--text)",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>History</button>
@@ -5025,7 +5140,7 @@ export default function App(){
           if(prof){
             // Remote profile is authoritative for cross-device sync.
             const bgAccent=detectAccentFromProfileBg(prof.profileBg||"");
-            const remoteProfile={name:prof.name,description:prof.description,avatar:prof.avatar||null,cellarName:prof.cellarName||"",bio:prof.bio||"",country:prof.country||"",surname:prof.surname||"",profileBg:prof.profileBg||"",accent:bgAccent||cache?.profile?.accent||DEFAULT_PROFILE.accent};
+            const remoteProfile={name:prof.name,description:prof.description,avatar:prof.avatar||null,cellarName:prof.cellarName||"",bio:prof.bio||"",country:prof.country||"",surname:prof.surname||"",profileBg:prof.profileBg||"",accent:bgAccent||cache?.profile?.accent||DEFAULT_PROFILE.accent,aiMemory:normalizeAiMemoryList((prof.aiMemory||[]).length?prof.aiMemory:((cache?.profile?.aiMemory||[]).length?cache.profile.aiMemory:readSommelierMemory()))};
             setProfileState(remoteProfile);
             // New user = profile name still matches the seed default or is empty
             setIsNewUser(!prof.name||(prof.name===DEFAULT_PROFILE.name&&!prof.cellarName));
@@ -5184,14 +5299,15 @@ export default function App(){
   const delNote=async id=>{setNotes(p=>p.filter(x=>x.id!==id));await db.del("tasting_notes",id);};
   const setProfile=async p=>{
     const syncedAccent=detectAccentFromProfileBg(p.profileBg||"")||p.accent||DEFAULT_PROFILE.accent;
-    const next={...p,accent:syncedAccent};
+    const next={...p,accent:syncedAccent,aiMemory:normalizeAiMemoryList(p.aiMemory||[])};
     setProfileState(next);
+    try{localStorage.setItem(SOMMELIER_MEMORY_KEY,JSON.stringify(next.aiMemory||[]));}catch{}
     const ok=await db.saveProfile(next);
     if(ok){
       const fresh=await db.getProfile();
       if(fresh){
         const finalAccent=detectAccentFromProfileBg(fresh.profileBg||"")||next.accent||DEFAULT_PROFILE.accent;
-        setProfileState(prev=>({...prev,...fresh,accent:finalAccent}));
+        setProfileState(prev=>({...prev,...fresh,accent:finalAccent,aiMemory:normalizeAiMemoryList(fresh.aiMemory||next.aiMemory||[])}));
       }
     }
   };
@@ -5312,7 +5428,7 @@ export default function App(){
     <>
       {tab==="collection"&&<CollectionScreen wines={wines} onAdd={addWine} onUpdate={updWine} onDelete={delWine} onAdjustConsumption={adjustWineConsumption} desktop={isDesktop} savedLocations={savedLocations} onSaveLocation={addSavedLocation} onRemoveLocation={removeSavedLocation} deletedWines={deletedWines} onRestoreDeleted={restoreDeletedWine} onDismissDeleted={dismissDeletedWine}/>}
       {tab==="audit"&&<AuditScreen wines={wines} desktop={isDesktop} onSetWineBottles={setWineBottleCount} onRemoveWine={delWine} onRevokeAudit={revokeAuditSnapshot}/>}
-      {tab==="ai"&&<AIScreen wines={wines}/>}
+      {tab==="ai"&&<AIScreen wines={wines} profile={profile} setProfile={setProfile}/>}
       {tab==="notes"&&<JournalScreen wines={wines} onUpdate={updWine} desktop={isDesktop}/>}
       {tab==="profile"&&<ProfileScreen wines={wines} notes={notes} theme={themeMode} setTheme={setThemeMode} profile={profile} setProfile={setProfile}/>}
     </>

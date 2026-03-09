@@ -5,6 +5,7 @@ const SYSTEM_PROMPT = `You are Vinology Sommelier, a practical assistant for one
 Rules:
 - Use ONLY the provided cellar + audit data for facts.
 - Never invent wines, locations, dates, prices, or bottle counts.
+- Treat user memory as personalization only, never as a source of cellar facts.
 - If data is missing, say exactly that.
 - Follow conversation context: if user says "it/that one", resolve from recent chat context.
 - Keep answers concise and structured.
@@ -79,6 +80,17 @@ const parsePositiveCount = (q, fallback = 10) => {
   return Math.min(100, n);
 };
 
+const parseFutureYearFromQuery = q => {
+  const txt = low(q);
+  const currentYear = new Date().getFullYear();
+  if (/\bnext year\b/.test(txt)) return currentYear + 1;
+  const inYears = txt.match(/\bin\s+(\d{1,2})\s+years?\b/);
+  if (inYears) return currentYear + Math.max(0, Number(inYears[1] || 0));
+  const explicitYear = txt.match(/\b(20\d{2})\b/);
+  if (explicitYear) return Number(explicitYear[1]);
+  return null;
+};
+
 const readyToDrinkIntent = q => {
   const txt = low(q);
   const hasWineRef = /\bwines?\b|\bbottles?\b/.test(txt);
@@ -91,14 +103,18 @@ const readyToDrinkIntent = q => {
 };
 
 const classifyReadinessQuery = q => {
-  const txt = low(q);
+  const txt = low(q).replace(/’/g, "'");
   const asksReadiness =
     /\bready\b/.test(txt) ||
     /\bdrink\b|\bdrinking\b|\bdrunk\b|\bopen\b/.test(txt) ||
     /\btoo young\b|\bnot yet\b|\bwait\b|\bpast peak\b|\bover the hill\b/.test(txt);
   if (!asksReadiness) return "";
 
-  if (/\bnot\s+ready\b|\bnot yet\b|\btoo\s+young\b|\bwait\b/.test(txt)) return "early";
+  if (
+    /\bnot\s+ready\b|\bnot yet\b|\btoo\s+young\b|\bwait\b/.test(txt) ||
+    /\baren't\s+ready\b|\baren't\s+yet\b|\bisn't\s+ready\b/.test(txt) ||
+    /\bnot\b.{0,20}\bready\b/.test(txt)
+  ) return "early";
   if (/\bpast\s+peak\b|\bover\s+the\s+hill\b|\bpast\b.*\bdrink\b/.test(txt)) return "late";
   if (/\bno\s+window\b|\bunknown\s+window\b/.test(txt)) return "none";
   if (readyToDrinkIntent(txt)) return "ready";
@@ -191,6 +207,7 @@ const isDeterministicDataQuery = q => {
   const inventorySignals =
     /\b(cellar|inventory|collection|summary|overview|journal|review|notes?|audit)\b/.test(txt) ||
     /\bready\b|\bdrink\b|\bpurchase|purchased|added\b|\blocation|stored|where\b/.test(txt) ||
+    /\bforecast|predict|projection|run out|depletion|low stock|past peak|peak\b/.test(txt) ||
     /\bhow many\b|\bbottles?\b|\brrp\b|\bvalue\b/.test(txt) ||
     (/\b(list|show|which|what)\b/.test(txt) && /\bwines?\b/.test(txt));
   const creativeSignals =
@@ -229,7 +246,7 @@ const validateModelAnswer = ({ message, text, cellar }) => {
   return { ok: true, reason: "ok" };
 };
 
-const deterministicAnswer = ({ message, cellar, audits, history }) => {
+const deterministicAnswer = ({ message, cellar, audits, history, memory, profile }) => {
   const q = low(message);
   const wines = safeArr(cellar);
   const target = resolveWine(message, wines, history);
@@ -237,8 +254,27 @@ const deterministicAnswer = ({ message, cellar, audits, history }) => {
   const latestAudit = safeArr(audits)
     .slice()
     .sort((a, b) => clean(b?.updatedAt).localeCompare(clean(a?.updatedAt)))[0];
+  const currentYear = new Date().getFullYear();
+  const mem = safeArr(memory).filter(Boolean);
 
   if (!wines.length) return "Your cellar is empty right now, so I do not have inventory data yet.";
+
+  if (/\b(who am i|my profile|my cellar name|cellar name)\b/.test(q)) {
+    const fullName = [clean(profile?.name), clean(profile?.surname)].filter(Boolean).join(" ");
+    const cellarName = clean(profile?.cellarName);
+    const title = clean(profile?.description);
+    const lines = [
+      fullName ? `Name: ${fullName}` : null,
+      cellarName ? `Cellar: ${cellarName}` : null,
+      title ? `Profile: ${title}` : null,
+    ].filter(Boolean);
+    return lines.length ? lines.join("\n") : "Profile details are not set yet.";
+  }
+
+  if (/\bwhat\b.*\bremember\b|\bmy preferences?\b|\bprofile\b/.test(q)) {
+    if (!mem.length) return "I don’t have saved tasting preferences yet. Tell me something like: remember I prefer dry high-acid whites.";
+    return `Saved memory:\n${mem.slice(0, 10).map((m, i) => `${i + 1}. ${m}`).join("\n")}`;
+  }
 
   if (/\bsummary\b|\boverview\b|\bsnapshot\b|\bcellar value\b|\brrp value\b|\bcollection value\b|\bwinery value\b/.test(q)) {
     const totalWines = wines.length;
@@ -395,6 +431,67 @@ const deterministicAnswer = ({ message, cellar, audits, history }) => {
     return `Here are ${ready.length} ${label} wines from your cellar:\n${lines.join("\n")}`;
   }
 
+  if (/\b(what should i|what to)\b.*\b(open|drink)\b|\bdrink next\b|\bopen next\b/.test(q)) {
+    const want = parsePositiveCount(q, 8);
+    const picks = wines
+      .filter(w => (num(w?.bottlesLeft) || 0) > 0 && readinessState(w) === "ready")
+      .sort((a, b) => {
+        const endA = num(a?.drinkBy) || 9999;
+        const endB = num(b?.drinkBy) || 9999;
+        if (endA !== endB) return endA - endB;
+        return clean(a?.name).localeCompare(clean(b?.name));
+      })
+      .slice(0, want);
+    if (!picks.length) return "No ready-to-drink wines are currently available with bottles left.";
+    return `Best wines to open next (ready now, earliest drink-by first):\n${picks.map((w, i) => {
+      const win = `(${clean(w?.drinkFrom) || "?"}-${clean(w?.drinkBy) || "?"})`;
+      return `${i + 1}. ${clean(w?.name)} ${win} · ${locationLine(w)}`;
+    }).join("\n")}`;
+  }
+
+  if (/\b(pass peak|past peak|expire|too late|over the hill)\b/.test(q) && /\bsoon|next|risk|which|list|show\b/.test(q)) {
+    const want = parsePositiveCount(q, 10);
+    const upperYear = currentYear + 1;
+    const risky = wines
+      .filter(w => {
+        const end = num(w?.drinkBy);
+        return end && end >= currentYear && end <= upperYear;
+      })
+      .sort((a, b) => (num(a?.drinkBy) || 9999) - (num(b?.drinkBy) || 9999))
+      .slice(0, want);
+    if (!risky.length) return "No wines are projected to pass peak within the next 12 months.";
+    return `Wines at risk of passing peak soon:\n${risky.map((w, i) => `${i + 1}. ${clean(w?.name)} (${clean(w?.drinkFrom) || "?"}-${clean(w?.drinkBy) || "?"})`).join("\n")}`;
+  }
+
+  if (/\bready\b/.test(q) && (/\bnext year\b|\bin\s+\d+\s+years?\b|\b20\d{2}\b/.test(q))) {
+    const targetYear = parseFutureYearFromQuery(q);
+    if (targetYear) {
+      const want = parsePositiveCount(q, 12);
+      const list = wines
+        .filter(w => {
+          const start = num(w?.drinkFrom);
+          return start && start === targetYear;
+        })
+        .sort((a, b) => clean(a?.name).localeCompare(clean(b?.name)))
+        .slice(0, want);
+      if (!list.length) return `No wines are scheduled to first become ready in ${targetYear}.`;
+      return `Wines that first become ready in ${targetYear}:\n${list.map((w, i) => `${i + 1}. ${clean(w?.name)} (${clean(w?.drinkFrom) || "?"}-${clean(w?.drinkBy) || "?"})`).join("\n")}`;
+    }
+  }
+
+  if (/\brun out|depletion|low stock|nearly out|almost out\b/.test(q)) {
+    const want = parsePositiveCount(q, 10);
+    const lowStock = wines
+      .filter(w => {
+        const left = Math.max(0, Math.round(num(w?.bottlesLeft) || 0));
+        return left > 0 && left <= 2;
+      })
+      .sort((a, b) => (num(a?.bottlesLeft) || 0) - (num(b?.bottlesLeft) || 0))
+      .slice(0, want);
+    if (!lowStock.length) return "No wines are currently in low-stock state (1–2 bottles left).";
+    return `Low-stock wines:\n${lowStock.map((w, i) => `${i + 1}. ${clean(w?.name)} — ${Math.max(0, Math.round(num(w?.bottlesLeft) || 0))} left`).join("\n")}`;
+  }
+
   if (
     (/\b(cellar|collection|inventory)\b/.test(q) && /\b(list|show|what|which|all)\b/.test(q)) ||
     /\blist\b.*\bwines?\b/.test(q)
@@ -497,6 +594,20 @@ const compactAudits = audits =>
       presentWineNames: safeArr(a?.presentWineNames).map(clean).filter(Boolean).slice(0, 200),
     }));
 
+const compactMemory = memory =>
+  safeArr(memory)
+    .map(clean)
+    .filter(Boolean)
+    .slice(0, 80);
+
+const compactProfile = profile => ({
+  name: clean(profile?.name),
+  surname: clean(profile?.surname),
+  cellarName: clean(profile?.cellarName),
+  country: clean(profile?.country),
+  description: clean(profile?.description),
+});
+
 const extractGeminiText = data =>
   safeArr(data?.candidates)
     .flatMap(c => safeArr(c?.content?.parts))
@@ -520,10 +631,12 @@ module.exports = async (req, res) => {
     const message = clean(body.message);
     const cellar = compactCellar(body.cellar);
     const audits = compactAudits(body.audits);
+    const memory = compactMemory(body.memory);
+    const profile = compactProfile(body.profile);
     const history = clampHistory(body.history);
     if (!message) return res.status(400).json({ error: "Message is required." });
 
-    const direct = deterministicAnswer({ message, cellar, audits, history });
+    const direct = deterministicAnswer({ message, cellar, audits, history, memory, profile });
     if (direct) return res.status(200).json({ text: direct });
     if (isDeterministicDataQuery(message)) {
       return res.status(200).json({
@@ -535,6 +648,8 @@ module.exports = async (req, res) => {
     const contextPayload = {
       cellar,
       audits,
+      memory,
+      profile,
       now: new Date().toISOString(),
     };
 
