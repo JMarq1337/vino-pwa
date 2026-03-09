@@ -1856,6 +1856,11 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
     setPurchasedManual(true);
     set("purchasedTotal",clean);
   };
+  const editPurchasedTotal=()=>{
+    const raw=window.prompt("Set purchased bottles",String(projectedPurchased));
+    if(raw===null) return;
+    handlePurchasedTotalChange(String(raw));
+  };
   const [q,setQ]=useState(initial?.name||"");
   const [sugs,setSugs]=useState([]);
   const [showFields,setShowFields]=useState(!!initial);
@@ -2175,17 +2180,13 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
                     <div style={{background:"linear-gradient(180deg,rgba(var(--accentRgb),0.08),var(--inputBg))",borderRadius:12,padding:"10px 12px",marginBottom:12,border:"1px solid rgba(var(--accentRgb),0.2)",boxShadow:"inset 0 1px 0 rgba(255,255,255,0.35)"}}>
                       <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Bottle Tracker</div>
                       <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:8}}>
-                        <div style={{background:"var(--card)",borderRadius:10,padding:"7px 8px",border:"1px solid var(--border)",boxShadow:"0 4px 10px rgba(0,0,0,0.05)"}}>
-                          <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:1,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Purchased</div>
-                          <input
-                            value={projectedPurchased}
-                            onChange={e=>handlePurchasedTotalChange(e.target.value)}
-                            inputMode="numeric"
-                            style={{margin:0,minHeight:30,padding:"4px 6px",fontSize:15,fontWeight:800,lineHeight:1.2,textAlign:"center",background:"var(--inputBg)",border:"1px solid var(--border)",borderRadius:8}}
-                          />
-                        </div>
-                        {[["Left",projectedLeft],["Consumed",projectedConsumed]].map(([label,val])=>(
-                          <div key={label} style={{background:"var(--card)",borderRadius:10,padding:"7px 8px",border:"1px solid var(--border)",boxShadow:"0 4px 10px rgba(0,0,0,0.05)"}}>
+                        {[["Purchased",projectedPurchased],["Left",projectedLeft],["Consumed",projectedConsumed]].map(([label,val])=>(
+                          <div
+                            key={label}
+                            onClick={label==="Purchased"?editPurchasedTotal:undefined}
+                            title={label==="Purchased"?"Click to edit purchased total":undefined}
+                            style={{background:"var(--card)",borderRadius:10,padding:"7px 8px",border:"1px solid var(--border)",boxShadow:"0 4px 10px rgba(0,0,0,0.05)",cursor:label==="Purchased"?"pointer":"default"}}
+                          >
                             <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:1,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{label}</div>
                             <div style={{fontSize:15,color:"var(--text)",fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.2}}>{val}</div>
                           </div>
