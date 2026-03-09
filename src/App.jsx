@@ -132,7 +132,7 @@ const db = {
 };
 
 const META_PREFIX = "[[VINO_META]]";
-const APP_VERSION = "7.25";
+const APP_VERSION = "7.26";
 const EXCEL_IMPORT_FLAG = "vino_excel_seed_v1";
 const EXCEL_RESTORE_FLAG = "vino_excel_restore_v1";
 const EXCEL_JOURNAL_FIX_FLAG = "vino_excel_journal_fix_v4";
@@ -5840,30 +5840,65 @@ export default function App(){
   if(isDesktop) return(
     <div style={{...cssVars,background:"radial-gradient(circle at 10% -10%,rgba(var(--accentRgb),.09),transparent 35%), var(--bg)",height:"100vh",display:"flex",overflow:"hidden",fontFamily:"'Plus Jakarta Sans',sans-serif",color:"var(--text)"}}>
       <style>{CSS}</style>
-      <div style={{width:236,flexShrink:0,background:navSolid,display:"flex",flexDirection:"column",padding:"30px 14px 24px",borderRight:"1px solid rgba(255,255,255,.08)"}}>
-        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:36,paddingLeft:8}}>
+      <div style={{width:246,flexShrink:0,background:`linear-gradient(180deg,${navSolid} 0%,${darkenHex(navSolid,0.05)} 100%)`,display:"flex",flexDirection:"column",padding:"24px 14px 18px",borderRight:"1px solid rgba(255,255,255,.09)",boxShadow:"inset -1px 0 0 rgba(255,255,255,0.03)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6,paddingLeft:8}}>
           <BrandLogo size={28}/>
           <span style={{fontSize:20,fontWeight:800,color:"#EDE6E0",letterSpacing:"-0.5px"}}>Vinology</span>
         </div>
-        <nav style={{flex:1,display:"flex",flexDirection:"column",gap:2}}>
+        <div style={{paddingLeft:8,fontSize:10,color:"rgba(255,255,255,0.5)",fontWeight:700,letterSpacing:"1.2px",textTransform:"uppercase",marginBottom:14}}>Workspace</div>
+        <nav style={{flex:1,display:"flex",flexDirection:"column",gap:6}}>
           {TABS.map(tb=>{
             const active=tab===tb.id;
             return(
-              <button key={tb.id} onClick={()=>setTab(tb.id)} style={{display:"flex",alignItems:"center",gap:11,padding:"11px 12px",borderRadius:11,border:"none",background:active?"rgba(255,255,255,0.14)":"transparent",color:active?"#FFFFFF":"rgba(255,255,255,0.82)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:active?700:500,fontSize:14,cursor:"pointer",transition:"all 0.15s",textAlign:"left",width:"100%"}}>
+              <button
+                key={tb.id}
+                onClick={()=>setTab(tb.id)}
+                style={{
+                  position:"relative",
+                  display:"flex",
+                  alignItems:"center",
+                  gap:11,
+                  padding:"12px 12px 12px 14px",
+                  borderRadius:12,
+                  border:active?"1px solid rgba(255,255,255,0.24)":"1px solid transparent",
+                  background:active?"rgba(255,255,255,0.16)":"rgba(255,255,255,0.02)",
+                  color:active?"#FFFFFF":"rgba(255,255,255,0.84)",
+                  fontFamily:"'Plus Jakarta Sans',sans-serif",
+                  fontWeight:active?750:600,
+                  fontSize:13.5,
+                  cursor:"pointer",
+                  transition:"all 0.16s ease",
+                  textAlign:"left",
+                  width:"100%",
+                  boxShadow:active?"0 8px 20px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.14)":"none",
+                }}
+                onMouseEnter={e=>{
+                  if(active) return;
+                  e.currentTarget.style.background="rgba(255,255,255,0.08)";
+                  e.currentTarget.style.borderColor="rgba(255,255,255,0.14)";
+                }}
+                onMouseLeave={e=>{
+                  if(active) return;
+                  e.currentTarget.style.background="rgba(255,255,255,0.02)";
+                  e.currentTarget.style.borderColor="transparent";
+                }}
+              >
+                <span style={{position:"absolute",left:4,top:7,bottom:7,width:3,borderRadius:99,background:"#FFFFFF",opacity:active?1:0,transition:"opacity .16s"}}/>
                 <Icon n={tb.ic} size={17} color={active?"#FFFFFF":"rgba(255,255,255,0.78)"}/>
                 {tb.label}
-                {active&&<div style={{marginLeft:"auto",width:5,height:5,borderRadius:"50%",background:"#FFFFFF",flexShrink:0}}/>}
               </button>
             );
           })}
         </nav>
-        <div style={{borderTop:"1px solid rgba(255,255,255,0.07)",paddingTop:16,display:"flex",alignItems:"center",gap:10}}>
-          <div style={{width:34,height:34,borderRadius:"50%",background:"rgba(var(--accentRgb),0.3)",overflow:"hidden",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div style={{marginTop:12,borderTop:"1px solid rgba(255,255,255,0.1)",paddingTop:14}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 10px",borderRadius:12,background:"rgba(0,0,0,0.16)",border:"1px solid rgba(255,255,255,0.08)"}}>
+          <div style={{width:34,height:34,borderRadius:"50%",background:"rgba(var(--accentRgb),0.3)",overflow:"hidden",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 8px rgba(0,0,0,0.25)"}}>
             {profile.avatar?<img src={profile.avatar} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<Icon n="user" size={15} color="var(--accentLight)"/>}
           </div>
           <div style={{minWidth:0}}>
             <div style={{fontSize:13,fontWeight:700,color:"#FFFFFF",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",textShadow:"0 1px 8px rgba(0,0,0,.35)"}}>{displayName}</div>
             <div style={{fontSize:11,color:"rgba(255,255,255,0.78)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{profile.cellarName||profile.description||"My Cellar"}</div>
+          </div>
           </div>
         </div>
       </div>
@@ -5881,13 +5916,13 @@ export default function App(){
       <div data-scroll="main" style={{flex:1,overflowY:"auto",overflowX:"hidden",padding:"20px 20px 96px",WebkitOverflowScrolling:"touch"}}>
         {screens}
       </div>
-      <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:480,background:navSolid,backdropFilter:"blur(24px)",WebkitBackdropFilter:"blur(24px)",borderTop:"1px solid rgba(255,255,255,0.12)",padding:"10px 0 22px",zIndex:100}}>
+      <div style={{position:"fixed",bottom:8,left:"50%",transform:"translateX(-50%)",width:"calc(100% - 14px)",maxWidth:466,background:`linear-gradient(180deg,${darkenHex(navSolid,0.03)},${navSolid})`,backdropFilter:"blur(24px)",WebkitBackdropFilter:"blur(24px)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:20,padding:"8px 6px calc(10px + env(safe-area-inset-bottom, 0px))",zIndex:100,boxShadow:"0 16px 34px rgba(0,0,0,0.28)"}}>
         <div style={{display:"flex",justifyContent:"space-around"}}>
           {TABS.map(tb=>{
             const active=tab===tb.id;
             return(
-              <button key={tb.id} onClick={()=>setTab(tb.id)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,background:"none",border:"none",padding:"4px 12px",color:active?"#FFFFFF":"rgba(255,255,255,0.78)",transition:"color 0.18s",fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:"pointer"}}>
-                <div style={{transform:active?"scale(1.1)":"scale(1)",transition:"transform 0.18s"}}><Icon n={tb.ic} size={22} color={active?"#FFFFFF":"rgba(255,255,255,0.72)"}/></div>
+              <button key={tb.id} onClick={()=>setTab(tb.id)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,background:active?"rgba(255,255,255,0.16)":"transparent",border:active?"1px solid rgba(255,255,255,0.2)":"1px solid transparent",borderRadius:13,padding:"6px 11px 5px",color:active?"#FFFFFF":"rgba(255,255,255,0.82)",transition:"all 0.18s",fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:"pointer",boxShadow:active?"0 7px 15px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.12)":"none"}}>
+                <div style={{transform:active?"scale(1.08)":"scale(1)",transition:"transform 0.18s"}}><Icon n={tb.ic} size={21} color={active?"#FFFFFF":"rgba(255,255,255,0.74)"}/></div>
                 <span style={{fontSize:9.5,fontWeight:active?700:500,letterSpacing:"0.3px"}}>{tb.label}</span>
                 <div style={{width:4,height:4,borderRadius:"50%",background:active?"#FFFFFF":"transparent",transition:"background 0.18s"}}/>
               </button>
