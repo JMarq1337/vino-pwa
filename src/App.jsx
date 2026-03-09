@@ -132,7 +132,7 @@ const db = {
 };
 
 const META_PREFIX = "[[VINO_META]]";
-const APP_VERSION = "7.34";
+const APP_VERSION = "7.35";
 const EXCEL_IMPORT_FLAG = "vino_excel_seed_v1";
 const EXCEL_RESTORE_FLAG = "vino_excel_restore_v1";
 const EXCEL_JOURNAL_FIX_FLAG = "vino_excel_journal_fix_v4";
@@ -4277,7 +4277,7 @@ const dataUrlExt=dataUrl=>{
   if(!m) return "";
   const raw=(m[1]||"").toLowerCase();
   if(raw==="jpg") return "jpeg";
-  if(raw==="jpeg"||raw==="png"||raw==="gif") return raw;
+  if(raw==="jpeg"||raw==="png") return raw;
   return "";
 };
 const dataUrlToPng=async dataUrl=>{
@@ -4305,7 +4305,8 @@ const toExcelImagePayload=async src=>{
     }
   }
   let ext=dataUrlExt(prepared);
-  if(!ext){
+  // ExcelJS image embedding is stable with png/jpeg. Convert any other format to png.
+  if(ext!=="png"&&ext!=="jpeg"){
     try{
       const png=await dataUrlToPng(prepared);
       if(!png) return null;
@@ -4403,7 +4404,9 @@ const exportToExcel=async(wines,wishlist,notes,{includeWishlist=true,includeNote
 
   const excelSafeText=v=>{
     let t=(v??"").toString();
-    if(t.length>32000) t=t.slice(0,32000)+"…";
+    // Remove XML-invalid control chars to prevent Excel recovery warnings.
+    t=t.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g," ");
+    if(t.length>32760) t=t.slice(0,32760)+"…";
     if(/^[=+\-@]/.test(t)) t=`'${t}`;
     return t;
   };
