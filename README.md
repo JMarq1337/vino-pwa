@@ -66,6 +66,26 @@ wrap them with localStorage persistence).
 ### Updating the app
 Any time you push new code to GitHub, Vercel automatically redeploys within 30 seconds.
 
+### Free Daily Supabase Backups (No paid IPv4 required)
+This repo includes a GitHub Action that backs up Supabase over the REST API (HTTPS), so it works on free plans.
+
+1. In GitHub, open your repo -> **Settings** -> **Secrets and variables** -> **Actions** -> **New repository secret**
+2. Add:
+   - `SUPABASE_URL` = `https://YOUR_PROJECT_REF.supabase.co`
+   - `SUPABASE_ANON_KEY` = your anon API key  
+     (or set `SUPABASE_SERVICE_ROLE_KEY` instead, if you prefer)
+3. Go to **Actions** -> **Supabase Daily Backup (REST)** -> **Run workflow**
+4. Backups are saved to:
+   - GitHub artifact (`supabase-rest-backup-*`)
+   - Repo folder `backups/vinology-...` (committed snapshot)
+
+Restore command (from local terminal):
+```bash
+SUPABASE_URL="https://YOUR_PROJECT_REF.supabase.co" \
+SUPABASE_ANON_KEY="YOUR_ANON_KEY" \
+npm run restore:supabase -- --file backups/vinology-YYYY-MM-DDTHH-MM-SSZ/backup.json.gz
+```
+
 ---
 
 ## Project Structure

@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "backup:supabase": "node scripts/backup-supabase-rest.mjs",
+    "restore:supabase": "node scripts/restore-supabase-rest.mjs"
   },
   "dependencies": {
     "react": "^18.2.0",
