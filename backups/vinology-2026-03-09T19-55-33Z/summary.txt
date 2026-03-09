@@ -1,0 +1,10 @@
+generated_at=2026-03-09T19:55:41.363Z
+project_url=https://dfnvmwoacprkhxfbpybv.supabase.co
+tables=wines,profile,audits,tasting_notes,grape_aliases
+wines=240
+profile=1
+audits=1
+tasting_notes=0
+grape_aliases=38
+backup_json_sha256=72e886cb881e0233f9e7e067819091360caa91645fd32373bd690fbefa6534f0
+backup_json_gz_sha256=8d456bf1da725276c8369cd83002605205bc6fe24522813f779d275f0f4b6b84
