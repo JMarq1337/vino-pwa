@@ -132,7 +132,7 @@ const db = {
 };
 
 const META_PREFIX = "[[VINO_META]]";
-const APP_VERSION = "7.33";
+const APP_VERSION = "7.34";
 const EXCEL_IMPORT_FLAG = "vino_excel_seed_v1";
 const EXCEL_RESTORE_FLAG = "vino_excel_restore_v1";
 const EXCEL_JOURNAL_FIX_FLAG = "vino_excel_journal_fix_v4";
@@ -2111,6 +2111,10 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
     clearWineFormDraft(draftKey);
     onClose();
   };
+  const cancel=()=>{
+    clearWineFormDraft(draftKey);
+    onClose();
+  };
   return(
     <div>
       <ModalHeader title={initial?"Edit Wine":isWishlist?"Add to Wishlist":"Add Wine"} onClose={onClose}/>
@@ -2411,7 +2415,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
           <div style={actionRailStyle}>
             {usesStepTabs&&step==="details"&&(
               <div style={{display:"flex",gap:8,padding:"10px",borderRadius:14,border:"1px solid var(--border)",background:"var(--card)",boxShadow:"0 10px 22px rgba(0,0,0,0.12)"}}>
-                <Btn variant="secondary" onClick={onClose} full>Cancel</Btn>
+                <Btn variant="secondary" onClick={cancel} full>Cancel</Btn>
                 <Btn onClick={()=>setStep("journal")} full disabled={!canSubmit}>Continue</Btn>
               </div>
             )}
@@ -2423,7 +2427,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
             )}
             {!usesStepTabs&&(
               <div style={{display:"flex",gap:8,padding:"10px",borderRadius:14,border:"1px solid var(--border)",background:"var(--card)",boxShadow:"0 10px 22px rgba(0,0,0,0.12)"}}>
-                <Btn variant="secondary" onClick={onClose} full>Cancel</Btn>
+                <Btn variant="secondary" onClick={cancel} full>Cancel</Btn>
                 <Btn onClick={save} full disabled={!canSubmit}>{initial?"Save Changes":"Save Wine"}</Btn>
               </div>
             )}
