@@ -105,7 +105,7 @@ const db = {
 };
 
 const META_PREFIX = "[[VINO_META]]";
-const APP_VERSION = "7.13";
+const APP_VERSION = "7.15";
 const EXCEL_IMPORT_FLAG = "vino_excel_seed_v1";
 const EXCEL_RESTORE_FLAG = "vino_excel_restore_v1";
 const EXCEL_JOURNAL_FIX_FLAG = "vino_excel_journal_fix_v4";
@@ -1226,6 +1226,16 @@ const getSommelierAuditContext=()=>{
         const present=items.filter(i=>i?.decision==="present").length;
         const missing=items.filter(i=>i?.decision==="missing").length;
         const pending=items.filter(i=>!i?.decision||i.decision==="pending").length;
+        const missingWineNames=items
+          .filter(i=>i?.decision==="missing")
+          .map(i=>(i?.wineName||"").toString().trim())
+          .filter(Boolean)
+          .slice(0,120);
+        const presentWineNames=items
+          .filter(i=>i?.decision==="present")
+          .map(i=>(i?.wineName||"").toString().trim())
+          .filter(Boolean)
+          .slice(0,120);
         return {
           id:a.id,
           name:a.name||"Audit",
@@ -1238,6 +1248,8 @@ const getSommelierAuditContext=()=>{
           missing,
           pending,
           total:items.length,
+          missingWineNames,
+          presentWineNames,
         };
       });
   }catch{

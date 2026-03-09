@@ -115,6 +115,18 @@ const readinessState = wine => {
   return "ready";
 };
 
+const journalHasContent = wine => {
+  if (clean(wine?.review)) return true;
+  if (clean(wine?.personalNotes)) return true;
+  return safeArr(wine?.otherReviews).some(r => clean(r?.text) || clean(r?.reviewer) || clean(r?.rating));
+};
+
+const rrpValueForWine = wine => {
+  const per = num(wine?.rrpPerBottle) || 0;
+  const purchased = Math.max(0, Math.round(num(wine?.bottlesPurchased) || 0));
+  return per * purchased;
+};
+
 const locationLine = wine => {
   const parts = [clean(wine?.location), clean(wine?.locationSection), clean(wine?.locationSlot)].filter(Boolean);
   return parts.length ? parts.join(" · ") : "Location not recorded";
@@ -165,11 +177,26 @@ const resolveWine = (message, cellar, history) => {
   if (explicit) return explicit;
   const q = low(message);
   if (/(latest|last|newest)\s+(wine|bottle|one)/.test(q)) return latestWine(cellar);
-  if (/\b(it|that|this|the one)\b/.test(q)) return pickFromHistory(history, cellar);
+  if (/\b(it|that|this|the one|that wine|this wine)\b/.test(q)) return pickFromHistory(history, cellar);
+  const words = clean(message).split(/\s+/).filter(Boolean).length;
+  if (words <= 8 && /\b(when|where|date|location|how many|how much)\b/.test(q)) {
+    return pickFromHistory(history, cellar);
+  }
   return null;
 };
 
 const isListIntent = q => /\b(list|show|give me|top|which)\b/.test(low(q)) && /\bwines?\b/.test(low(q));
+const isDeterministicDataQuery = q => {
+  const txt = low(q);
+  const inventorySignals =
+    /\b(cellar|inventory|collection|summary|overview|journal|review|notes?|audit)\b/.test(txt) ||
+    /\bready\b|\bdrink\b|\bpurchase|purchased|added\b|\blocation|stored|where\b/.test(txt) ||
+    /\bhow many\b|\bbottles?\b|\brrp\b|\bvalue\b/.test(txt) ||
+    (/\b(list|show|which|what)\b/.test(txt) && /\bwines?\b/.test(txt));
+  const creativeSignals =
+    /\b(pair|pairing|food|dinner|menu|taste|decant|serving|temperature|recipe|occasion|gift|compare|blend)\b/.test(txt);
+  return inventorySignals && !creativeSignals;
+};
 
 const validateModelAnswer = ({ message, text, cellar }) => {
   const out = clean(text);
@@ -213,6 +240,34 @@ const deterministicAnswer = ({ message, cellar, audits, history }) => {
 
   if (!wines.length) return "Your cellar is empty right now, so I do not have inventory data yet.";
 
+  if (/\bsummary\b|\boverview\b|\bsnapshot\b|\bcellar value\b|\brrp value\b|\bcollection value\b|\bwinery value\b/.test(q)) {
+    const totalWines = wines.length;
+    const left = wines.reduce((s, w) => s + Math.max(0, Math.round(num(w.bottlesLeft) || 0)), 0);
+    const purchased = wines.reduce((s, w) => s + Math.max(0, Math.round(num(w.bottlesPurchased) || 0)), 0);
+    const consumed = wines.reduce((s, w) => s + Math.max(0, Math.round(num(w.bottlesConsumed) || 0)), 0);
+    const rrpValue = wines.reduce((s, w) => s + rrpValueForWine(w), 0);
+    const ready = wines.filter(w => readinessState(w) === "ready").length;
+    const early = wines.filter(w => readinessState(w) === "early").length;
+    const late = wines.filter(w => readinessState(w) === "late").length;
+    const none = wines.filter(w => readinessState(w) === "none").length;
+    const locCounts = wines.reduce((acc, w) => {
+      const key = clean(w?.location) || "Unknown";
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {});
+    const topLoc = Object.entries(locCounts).sort((a, b) => b[1] - a[1])[0];
+    return [
+      `Cellar summary:`,
+      `- Wines: ${totalWines}`,
+      `- Bottles left: ${left}`,
+      `- Bottles purchased: ${purchased}`,
+      `- Bottles consumed: ${consumed}`,
+      `- RRP value (purchased bottles): $${rrpValue.toFixed(2)}`,
+      `- Readiness: ready ${ready}, not-ready ${early}, past-peak ${late}, no-window ${none}`,
+      topLoc ? `- Most common location: ${topLoc[0]} (${topLoc[1]} wines)` : null,
+    ].filter(Boolean).join("\n");
+  }
+
   if (/(latest|last|newest).*(wine|added|bottle)/.test(q)) {
     if (!latest) return "I could not determine a latest wine because no added or purchase date is recorded.";
     const when = fmtDate(latest.addedDate || latest.datePurchased);
@@ -240,6 +295,17 @@ const deterministicAnswer = ({ message, cellar, audits, history }) => {
       ? `${clean(target.name)} was added to inventory on ${dt}.`
       : `Added date for ${clean(target.name)} is not recorded.`;
   }
+  if (target && clean(message).split(/\s+/).filter(Boolean).length <= 8 && /\b(when|what date|date)\b/.test(q)) {
+    const added = fmtDate(target.addedDate);
+    const bought = fmtDate(target.datePurchased);
+    if (added && bought && added !== bought) {
+      return `${clean(target.name)} was added on ${added}, and purchased on ${bought}.`;
+    }
+    const best = added || bought;
+    return best
+      ? `${clean(target.name)} date on record: ${best}.`
+      : `No date is recorded yet for ${clean(target.name)}.`;
+  }
 
   if (/\bhow many\b|\bcount\b|\bbottles?\b.*\b(left|remaining|have)\b/.test(q)) {
     if (target) {
@@ -250,6 +316,37 @@ const deterministicAnswer = ({ message, cellar, audits, history }) => {
     }
     const totalLeft = wines.reduce((s, w) => s + Math.max(0, Math.round(num(w.bottlesLeft) || 0)), 0);
     return `You currently have ${totalLeft} bottles left across ${wines.length} wines.`;
+  }
+
+  if (/\bjournal\b|\bnotes?\b|\breview(s)?\b|\bopinion(s)?\b/.test(q)) {
+    if (target) {
+      const primaryReviewer = clean(target?.reviewPrimaryReviewer);
+      const primaryRating = clean(target?.reviewPrimaryRating);
+      const primaryText = clean(target?.review);
+      const others = safeArr(target?.otherReviews).filter(r => clean(r?.text) || clean(r?.reviewer) || clean(r?.rating));
+      const notes = clean(target?.personalNotes);
+      if (!primaryReviewer && !primaryRating && !primaryText && !others.length && !notes) {
+        return `No journal content is saved yet for ${clean(target?.name)}.`;
+      }
+      return [
+        `Journal for ${clean(target?.name)}:`,
+        primaryReviewer || primaryRating || primaryText
+          ? `- Primary review: ${[primaryReviewer, primaryRating].filter(Boolean).join(" · ")}${primaryText ? ` — ${primaryText}` : ""}`
+          : null,
+        ...others.slice(0, 3).map((r, idx) => `- Other review ${idx + 1}: ${[clean(r?.reviewer), clean(r?.rating)].filter(Boolean).join(" · ")}${clean(r?.text) ? ` — ${clean(r?.text)}` : ""}`),
+        notes ? `- Personal notes: ${notes}` : null,
+      ].filter(Boolean).join("\n");
+    }
+
+    const want = parsePositiveCount(q, 10);
+    if (/\bwithout\b.*\bnotes?\b|\bno\s+notes?\b/.test(q)) {
+      const noNotes = wines.filter(w => !journalHasContent(w)).slice(0, want);
+      if (!noNotes.length) return "All wines currently have some journal content.";
+      return `Here are ${noNotes.length} wines with no journal notes/reviews:\n${noNotes.map((w, i) => `${i + 1}. ${clean(w.name)}`).join("\n")}`;
+    }
+    const withNotes = wines.filter(journalHasContent).slice(0, want);
+    if (!withNotes.length) return "No wines have journal content yet.";
+    return `Here are ${withNotes.length} wines with journal content:\n${withNotes.map((w, i) => `${i + 1}. ${clean(w.name)}`).join("\n")}`;
   }
 
   const readinessMode = classifyReadinessQuery(q);
@@ -298,12 +395,44 @@ const deterministicAnswer = ({ message, cellar, audits, history }) => {
     return `Here are ${ready.length} ${label} wines from your cellar:\n${lines.join("\n")}`;
   }
 
+  if (
+    (/\b(cellar|collection|inventory)\b/.test(q) && /\b(list|show|what|which|all)\b/.test(q)) ||
+    /\blist\b.*\bwines?\b/.test(q)
+  ) {
+    const want = parsePositiveCount(q, 10);
+    const sorted = wines
+      .slice()
+      .sort((a, b) => {
+        if (/\b(recent|latest|newest)\b/.test(q)) {
+          return sortableTimestamp(b) - sortableTimestamp(a);
+        }
+        return clean(a?.name).localeCompare(clean(b?.name));
+      })
+      .slice(0, want);
+    const lines = sorted.map((w, idx) => {
+      const parts = [clean(w?.vintage), clean(w?.varietal)].filter(Boolean).join(" · ");
+      return `${idx + 1}. ${clean(w?.name)}${parts ? ` — ${parts}` : ""} (${locationLine(w)})`;
+    });
+    return `Here are ${sorted.length} wines from your current cellar:\n${lines.join("\n")}`;
+  }
+
   if (/\baudit\b/.test(q) && /(latest|last|recent|status)/.test(q)) {
     if (!latestAudit) return "No audit history found yet.";
     const status = clean(latestAudit.status || "in_progress").replace("_", " ");
     const when = fmtDate(latestAudit.updatedAt || latestAudit.completedAt || latestAudit.createdAt);
     const counts = `present ${num(latestAudit.present) || 0}, missing ${num(latestAudit.missing) || 0}, pending ${num(latestAudit.pending) || 0}`;
     return `Latest audit is "${clean(latestAudit.name || "Audit")}" (${status})${when ? `, updated ${when}` : ""}. Counts: ${counts}.`;
+  }
+
+  if (/\baudit\b/.test(q) && (/\bmissing\b|\bnot present\b|\babsent\b/.test(q))) {
+    if (!latestAudit) return "No audit history found yet.";
+    const names = safeArr(latestAudit.missingWineNames).filter(Boolean);
+    if (!names.length) {
+      return `Latest audit "${clean(latestAudit.name || "Audit")}" has no named missing-wine entries recorded.`;
+    }
+    const want = parsePositiveCount(q, 10);
+    const list = names.slice(0, want).map((n, i) => `${i + 1}. ${n}`);
+    return `Missing wines from latest audit "${clean(latestAudit.name || "Audit")}":\n${list.join("\n")}`;
   }
 
   return null;
@@ -349,6 +478,25 @@ const compactCellar = cellar =>
     })),
   }));
 
+const compactAudits = audits =>
+  safeArr(audits)
+    .slice(0, 20)
+    .map(a => ({
+      id: clean(a?.id),
+      name: clean(a?.name),
+      status: clean(a?.status),
+      createdAt: clean(a?.createdAt),
+      updatedAt: clean(a?.updatedAt),
+      completedAt: clean(a?.completedAt),
+      locations: safeArr(a?.locations).map(clean).filter(Boolean).slice(0, 20),
+      present: num(a?.present) || 0,
+      missing: num(a?.missing) || 0,
+      pending: num(a?.pending) || 0,
+      total: num(a?.total) || 0,
+      missingWineNames: safeArr(a?.missingWineNames).map(clean).filter(Boolean).slice(0, 200),
+      presentWineNames: safeArr(a?.presentWineNames).map(clean).filter(Boolean).slice(0, 200),
+    }));
+
 const extractGeminiText = data =>
   safeArr(data?.candidates)
     .flatMap(c => safeArr(c?.content?.parts))
@@ -371,12 +519,17 @@ module.exports = async (req, res) => {
     const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {};
     const message = clean(body.message);
     const cellar = compactCellar(body.cellar);
-    const audits = safeArr(body.audits).slice(0, 20);
+    const audits = compactAudits(body.audits);
     const history = clampHistory(body.history);
     if (!message) return res.status(400).json({ error: "Message is required." });
 
     const direct = deterministicAnswer({ message, cellar, audits, history });
     if (direct) return res.status(200).json({ text: direct });
+    if (isDeterministicDataQuery(message)) {
+      return res.status(200).json({
+        text: "I can answer that from your live cellar data, but I need one clearer detail (wine name, date type, or location scope).",
+      });
+    }
 
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(DEFAULT_MODEL)}:generateContent?key=${encodeURIComponent(apiKey)}`;
     const contextPayload = {
@@ -384,21 +537,6 @@ module.exports = async (req, res) => {
       audits,
       now: new Date().toISOString(),
     };
-
-    const contents = [
-      ...history.map(h => ({
-        role: h.role,
-        parts: [{ text: h.text }],
-      })),
-      {
-        role: "user",
-        parts: [
-          {
-            text: `Context JSON:\n${JSON.stringify(contextPayload)}\n\nUser question: ${message}`,
-          },
-        ],
-      },
-    ];
 
     const runModel = async ({ systemText, userText, temperature = 0.2, maxOutputTokens = 900 }) => {
       const reqContents = [
