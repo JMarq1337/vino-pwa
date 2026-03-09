@@ -90,6 +90,21 @@ const readyToDrinkIntent = q => {
   return false;
 };
 
+const classifyReadinessQuery = q => {
+  const txt = low(q);
+  const asksReadiness =
+    /\bready\b/.test(txt) ||
+    /\bdrink\b|\bdrinking\b|\bdrunk\b|\bopen\b/.test(txt) ||
+    /\btoo young\b|\bnot yet\b|\bwait\b|\bpast peak\b|\bover the hill\b/.test(txt);
+  if (!asksReadiness) return "";
+
+  if (/\bnot\s+ready\b|\bnot yet\b|\btoo\s+young\b|\bwait\b/.test(txt)) return "early";
+  if (/\bpast\s+peak\b|\bover\s+the\s+hill\b|\bpast\b.*\bdrink\b/.test(txt)) return "late";
+  if (/\bno\s+window\b|\bunknown\s+window\b/.test(txt)) return "none";
+  if (readyToDrinkIntent(txt)) return "ready";
+  return "";
+};
+
 const readinessState = wine => {
   const currentYear = new Date().getFullYear();
   const start = num(wine?.drinkFrom);
@@ -237,10 +252,11 @@ const deterministicAnswer = ({ message, cellar, audits, history }) => {
     return `You currently have ${totalLeft} bottles left across ${wines.length} wines.`;
   }
 
-  if (readyToDrinkIntent(q)) {
+  const readinessMode = classifyReadinessQuery(q);
+  if (readinessMode) {
     const want = parsePositiveCount(q, 10);
     const ready = wines
-      .filter(w => readinessState(w) === "ready")
+      .filter(w => readinessState(w) === readinessMode)
       .sort((a, b) => {
         const endA = num(a?.drinkBy) || 9999;
         const endB = num(b?.drinkBy) || 9999;
@@ -250,7 +266,16 @@ const deterministicAnswer = ({ message, cellar, audits, history }) => {
       .slice(0, want);
 
     if (!ready.length) {
-      return "No wines are currently flagged as ready to drink based on your drink window dates.";
+      if (readinessMode === "ready") {
+        return "No wines are currently flagged as ready to drink based on your drink window dates.";
+      }
+      if (readinessMode === "early") {
+        return "No wines are currently flagged as not ready yet based on your drink window dates.";
+      }
+      if (readinessMode === "late") {
+        return "No wines are currently flagged as past peak based on your drink window dates.";
+      }
+      return "No wines are currently flagged with missing drink windows.";
     }
 
     const lines = ready.map((w, idx) => {
@@ -265,7 +290,12 @@ const deterministicAnswer = ({ message, cellar, audits, history }) => {
       return `${idx + 1}. ${name}${subTxt}${windowTxt}`;
     });
 
-    return `Here are ${ready.length} ready-to-drink wines from your cellar:\n${lines.join("\n")}`;
+    const label =
+      readinessMode === "ready" ? "ready-to-drink" :
+      readinessMode === "early" ? "not-ready-yet" :
+      readinessMode === "late" ? "past-peak" :
+      "no-window";
+    return `Here are ${ready.length} ${label} wines from your cellar:\n${lines.join("\n")}`;
   }
 
   if (/\baudit\b/.test(q) && /(latest|last|recent|status)/.test(q)) {
