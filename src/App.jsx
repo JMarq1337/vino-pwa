@@ -105,7 +105,7 @@ const db = {
 };
 
 const META_PREFIX = "[[VINO_META]]";
-const APP_VERSION = "7.08";
+const APP_VERSION = "7.09";
 const EXCEL_IMPORT_FLAG = "vino_excel_seed_v1";
 const EXCEL_RESTORE_FLAG = "vino_excel_restore_v1";
 const EXCEL_JOURNAL_FIX_FLAG = "vino_excel_journal_fix_v4";
@@ -1139,8 +1139,8 @@ const Icon=({n,size=20,color="currentColor",fill="none",sw=1.5})=>{
   if(n==="search")return(<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>);
   if(n==="rewind")return(
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4.8 12.2A8.7 8.7 0 1 1 5.7 4.6"/>
-      <path d="M5.7 4.6L8 6.9L4.6 7.6Z" fill={color} stroke="none"/>
+      <path d="M3 7v6h6"/>
+      <path d="M3 13a9 9 0 1 0 3-6.7"/>
     </svg>
   );
   return(<svg width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><path d={IC[n]}/></svg>);
