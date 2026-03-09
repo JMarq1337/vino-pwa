@@ -828,9 +828,42 @@ const guessWineType = (grape="",name="",aliasMap=GRAPE_ALIAS_CACHE) => {
   if(g.includes("amber"))return"White";
   return"Other";
 };
-const resolveWineType = wine => (wine?.wineType && wine.wineType!=="Other")
-  ? wine.wineType
-  : guessWineType(wine?.grape||"",wine?.name||"");
+const manualWineTypeFromMeta = wine => {
+  const key=normalizeWineText(wine?.cellarMeta?.manualWineCategory||"");
+  if(!key) return "";
+  if(key==="champagne") return "Sparkling";
+  if(key==="rose") return "Rosé";
+  return WINE_TYPES.find(type=>normalizeWineText(type)===key)||"";
+};
+const resolveWineType = wine => {
+  const manualType=manualWineTypeFromMeta(wine);
+  if(manualType) return manualType;
+  if(wine?.wineType && wine.wineType!=="Other") return wine.wineType;
+  return guessWineType(wine?.grape||"",wine?.name||"");
+};
+const WINE_CATEGORY_OPTIONS = ["Red","White","Rosé","Sparkling","Champagne","Dessert","Fortified","Other"];
+const WINE_CATEGORY_INDEX = Object.fromEntries(WINE_CATEGORY_OPTIONS.map((name,idx)=>[name,idx]));
+const normalizeWineCategory = (value="") => {
+  const raw=(value||"").toString().trim();
+  if(!raw) return "";
+  const key=normalizeWineText(raw);
+  if(key==="rose") return "Rosé";
+  if(key==="champagne") return "Champagne";
+  return WINE_CATEGORY_OPTIONS.find(opt=>normalizeWineText(opt)===key)||"";
+};
+const wineTypeFromCategory = category => {
+  const normalized=normalizeWineCategory(category);
+  if(!normalized) return "";
+  if(normalized==="Champagne") return "Sparkling";
+  return WINE_TYPES_SET.has(normalized)?normalized:"Other";
+};
+const resolveWineCategory = wine => {
+  const manual=normalizeWineCategory(wine?.cellarMeta?.manualWineCategory||"");
+  if(manual) return manual;
+  const hint=normalizeWineText(`${wine?.name||""} ${wine?.origin||""} ${wine?.grape||""}`);
+  if(hint.includes("champagne")) return "Champagne";
+  return normalizeWineCategory(resolveWineType(wine))||"Other";
+};
 const normalizeVarietal = (value="") => (value||"").replace(/\s+/g," ").trim();
 const resolveVarietal = wine => {
   const hint=normalizeWineText(`${wine?.name||""} ${wine?.origin||""} ${wine?.grape||""}`);
@@ -1287,6 +1320,8 @@ const makeCSS=dark=>`
   input:focus,textarea:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 4px ${dark?"rgba(var(--accentRgb),.2)":"rgba(var(--accentRgb),.12)"};}
   select option{background:${dark?"#201A1A":"#fff"};}
   button{cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;transition:all .16s ease;}
+  input[type="number"]::-webkit-outer-spin-button,input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+  input[type="number"]{-moz-appearance:textfield;appearance:textfield;}
 `;
 
 /* ── PRIMITIVES ───────────────────────────────────────────────── */
@@ -1762,13 +1797,18 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
     const purchased=getTotalPurchased(initial);
     return purchased>0?String(purchased):"";
   })();
-  const blank={name:"",origin:"",grape:"",alcohol:"",vintage:"",bottles:"1",addPurchased:"",rating:0,notes:"",review:"",reviewPrimaryReviewer:"",reviewPrimaryRating:"",otherReviews:[normalizeReviewEntry({})],tastingNotes:"",datePurchased:"",addedDate:todayIsoLocal(),wishlist:!!isWishlist,photo:null,location:defaultLocation,locationSlot:"",locationSection:"",drinkStart:"",drinkEnd:"",pricePerBottle:"",rrp:"",totalPaid:"",priceForBottles:"1",insuranceValue:"",supplier:""};
+  const inferredPurchasedTotal=(()=>{
+    if(!initial) return "1";
+    const purchased=getTotalPurchased(initial);
+    return purchased>0?String(purchased):"1";
+  })();
+  const blank={name:"",origin:"",grape:"",manualCategory:"",alcohol:"",vintage:"",bottles:"1",addPurchased:"",purchasedTotal:"1",rating:0,notes:"",review:"",reviewPrimaryReviewer:"",reviewPrimaryRating:"",otherReviews:[normalizeReviewEntry({})],tastingNotes:"",datePurchased:"",addedDate:todayIsoLocal(),wishlist:!!isWishlist,photo:null,location:defaultLocation,locationSlot:"",locationSection:"",drinkStart:"",drinkEnd:"",pricePerBottle:"",rrp:"",totalPaid:"",priceForBottles:"1",insuranceValue:"",supplier:""};
   const [f,setF]=useState(initial?{
     ...blank,...initial,
     reviewPrimaryReviewer:(initial.reviewPrimaryReviewer||"").toString(),
     reviewPrimaryRating:(initial.reviewPrimaryRating||"").toString(),
     otherReviews:normalizeOtherReviews(initial.otherReviews||[]).length?normalizeOtherReviews(initial.otherReviews||[]):[normalizeReviewEntry({})],
-    location:initialLocation,alcohol:initial.alcohol?.toString()||"",vintage:initial.vintage?.toString()||"",bottles:initial.bottles?.toString()||"",addPurchased:"",
+    location:initialLocation,manualCategory:normalizeWineCategory(initial.cellarMeta?.manualWineCategory||""),alcohol:initial.alcohol?.toString()||"",vintage:initial.vintage?.toString()||"",bottles:initial.bottles?.toString()||"",addPurchased:"",purchasedTotal:inferredPurchasedTotal,
     locationSlot:initial.locationSlot||"",locationSection:normalizeKennardsSection(initial.cellarMeta?.locationSection||""),drinkStart:initial.cellarMeta?.drinkStart?.toString()||"",drinkEnd:initial.cellarMeta?.drinkEnd?.toString()||"",
     pricePerBottle:initial.cellarMeta?.pricePerBottle?.toString()||"",rrp:initial.cellarMeta?.rrp?.toString()||"",totalPaid:initial.cellarMeta?.totalPaid?.toString()||"",priceForBottles:inferredPriceForBottles,insuranceValue:initial.cellarMeta?.insuranceValue?.toString()||"",supplier:initial.cellarMeta?.supplier||"",addedDate:initial.cellarMeta?.addedDate||todayIsoLocal()
   }:blank);
@@ -1776,6 +1816,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
   const [customLocation,setCustomLocation]=useState("");
   const [rememberLocation,setRememberLocation]=useState(false);
   const [priceBottlesManual,setPriceBottlesManual]=useState(false);
+  const [purchasedManual,setPurchasedManual]=useState(false);
   const isTwoStepNewCellar=!initial&&!isWishlist;
   const usesStepTabs=!isWishlist&&(isTwoStepNewCellar||!!initial);
   const [step,setStep]=useState("details");
@@ -1794,12 +1835,23 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
     setF(p=>({
       ...p,
       bottles:clean,
+      purchasedTotal:!purchasedManual?clean:p.purchasedTotal,
       priceForBottles:(!initial&&!priceBottlesManual)?clean:p.priceForBottles
     }));
   };
   const handlePriceForBottlesChange=v=>{
     setPriceBottlesManual(true);
     set("priceForBottles",v.replace(/[^0-9]/g,""));
+  };
+  const handlePurchasedTotalChange=v=>{
+    const clean=v.replace(/[^0-9]/g,"");
+    if(clean===""){
+      setPurchasedManual(false);
+      set("purchasedTotal","");
+      return;
+    }
+    setPurchasedManual(true);
+    set("purchasedTotal",clean);
   };
   const [q,setQ]=useState(initial?.name||"");
   const [sugs,setSugs]=useState([]);
@@ -1814,9 +1866,11 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
   const isKennardsLocation=canonicalLocation(currentLocationRaw,selectableLocations)==="Kennards";
   const leftInput=Math.max(0,parseInt(f.bottles)||0);
   const addPurchased=Math.max(0,parseInt(f.addPurchased)||0);
+  const enteredPurchased=Math.max(0,parseInt(f.purchasedTotal)||0);
   const basePurchased=initial?getTotalPurchased(initial):leftInput;
   const projectedLeft=leftInput+addPurchased;
-  const projectedPurchased=Math.max(basePurchased+addPurchased,projectedLeft);
+  const autoPurchased=Math.max(basePurchased+addPurchased,projectedLeft);
+  const projectedPurchased=purchasedManual?Math.max(enteredPurchased,projectedLeft):autoPurchased;
   const projectedConsumed=Math.max(0,projectedPurchased-projectedLeft);
   const paidAmount=safeNum(f.totalPaid);
   const paidForBottles=Math.max(0,parseInt(f.priceForBottles)||0);
@@ -1863,6 +1917,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
     setCustomLocation((draft.customLocation||"").toString());
     setRememberLocation(!!draft.rememberLocation);
     setPriceBottlesManual(!!draft.priceBottlesManual);
+    setPurchasedManual(!!draft.purchasedManual);
     setStep(draft.step==="journal"?"journal":"details");
     setShowFields(typeof draft.showFields==="boolean"?draft.showFields:true);
     setQ((draft.q||restoredForm.name||"").toString());
@@ -1875,13 +1930,19 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
       customLocation,
       rememberLocation,
       priceBottlesManual,
+      purchasedManual,
       step,
       showFields,
       q,
       initialId:initial?.id||null,
       wishlist:!!isWishlist,
     });
-  },[draftKey,f,locationMode,customLocation,rememberLocation,priceBottlesManual,step,showFields,q,initial?.id,isWishlist]);
+  },[draftKey,f,locationMode,customLocation,rememberLocation,priceBottlesManual,purchasedManual,step,showFields,q,initial?.id,isWishlist]);
+  useEffect(()=>{
+    if(purchasedManual) return;
+    const nextValue=String(autoPurchased||0);
+    setF(prev=>prev.purchasedTotal===nextValue?prev:{...prev,purchasedTotal:nextValue});
+  },[purchasedManual,autoPurchased]);
   const handleQ=v=>{setQ(v);set("name",v);setSugs(v.length>=2?fuzzySearch(v):[]);};
   const pickSug=w=>{setF(p=>({...p,name:w.name,origin:w.origin||"",grape:w.grape||"",alcohol:w.alcohol?.toString()||"",tastingNotes:w.tastingNotes||""}));setQ(w.name);setSugs([]);setShowFields(true);};
   const handleLocationSelect=value=>{
@@ -1901,7 +1962,9 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
     const finalLocation=canonicalLocation(locationSource,selectableLocations)||LOCATIONS[0]||"Kennards";
     const finalSection=finalLocation==="Kennards"?(normalizeKennardsSection(f.locationSection)||"Cube"):"";
     const finalAddedDate=f.addedDate||initial?.cellarMeta?.addedDate||todayIsoLocal();
-    const wt=guessWineType(f.grape,f.name);
+    const selectedManualCategory=normalizeWineCategory(f.manualCategory);
+    const inferredType=guessWineType(f.grape,f.name);
+    const wt=wineTypeFromCategory(selectedManualCategory)||inferredType;
     const tc=WINE_TYPE_COLORS[wt]||WINE_TYPE_COLORS.Other;
     const normalizedOtherReviews=normalizeOtherReviews(f.otherReviews||[]);
     const reviewPrimaryRating=(f.reviewPrimaryRating||"").toString().trim();
@@ -1927,7 +1990,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
     const journalUpdatedAt=journalChanged
       ? new Date().toISOString()
       : ((initial?.cellarMeta?.journalUpdatedAt)||((hasNextJournal&&finalAddedDate)?`${finalAddedDate}T00:00:00`:""));
-    const {addPurchased:_addIgnore,locationSection:_locSectionIgnore,addedDate:_addedIgnore,priceForBottles:_priceCountIgnore,pricePerBottle:_pricePerBottleIgnore,...payload}=f;
+    const {addPurchased:_addIgnore,purchasedTotal:_purchasedIgnore,manualCategory:_catIgnore,locationSection:_locSectionIgnore,addedDate:_addedIgnore,priceForBottles:_priceCountIgnore,pricePerBottle:_pricePerBottleIgnore,...payload}=f;
     if(!isWishlist&&locationMode==="custom"&&rememberLocation&&finalLocation){
       onSaveLocation?.(finalLocation);
     }
@@ -1938,7 +2001,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
       reviewPrimaryRating:reviewPrimaryRating,
       otherReviews:normalizedOtherReviews,
       tastingNotes:serializeOtherRatings(normalizedOtherReviews),
-      cellarMeta:{...(initial?.cellarMeta||{}),drinkStart:parseInt(f.drinkStart)||null,drinkEnd:parseInt(f.drinkEnd)||null,pricePerBottle:finalPricePerBottle,rrp:finalRrp,totalPaid:finalTotalPaid,insuranceValue:parseFloat(f.insuranceValue)||null,supplier:f.supplier||"",locationSection:finalSection,totalPurchased:projectedPurchased,addedDate:finalAddedDate,journalUpdatedAt}
+      cellarMeta:{...(initial?.cellarMeta||{}),manualWineCategory:selectedManualCategory||"",drinkStart:parseInt(f.drinkStart)||null,drinkEnd:parseInt(f.drinkEnd)||null,pricePerBottle:finalPricePerBottle,rrp:finalRrp,totalPaid:finalTotalPaid,insuranceValue:parseFloat(f.insuranceValue)||null,supplier:f.supplier||"",locationSection:finalSection,totalPurchased:projectedPurchased,addedDate:finalAddedDate,journalUpdatedAt}
     });
     clearWineFormDraft(draftKey);
     onClose();
@@ -2049,6 +2112,12 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
                   <Field label="Vintage" value={f.vintage} onChange={v=>set("vintage",v)} type="number" placeholder="2019" optional/>
                   <Field label="Alc %" value={f.alcohol} onChange={v=>set("alcohol",v)} type="number" placeholder="14.5" optional/>
                 </div>
+                <SelField
+                  label="Wine Category (manual override)"
+                  value={f.manualCategory||""}
+                  onChange={v=>set("manualCategory",v)}
+                  options={[{value:"",label:"Auto classify from varietal / name"},...WINE_CATEGORY_OPTIONS.map(cat=>({value:cat,label:cat}))]}
+                />
               </div>
               {!isWishlist&&(
                 <>
@@ -2094,6 +2163,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
                           </div>
                         ))}
                       </div>
+                      <Field label="Purchased Total (editable)" value={f.purchasedTotal} onChange={handlePurchasedTotalChange} type="number" placeholder="1" optional/>
                       {initial&&<Field label="Add Newly Purchased Bottles" value={f.addPurchased} onChange={v=>set("addPurchased",v.replace(/[^0-9]/g,""))} type="number" placeholder="0" optional/>}
                     </div>
                     {savedLocations.length>0&&(
@@ -2217,12 +2287,13 @@ const SORTS=[
   {value:"costAsc",label:"Least Expensive"},
   {value:"recent",label:"Recently Added"},
 ];
-const DEFAULT_FILTERS={sort:"name",sortDir:"desc",varietal:"",location:"",section:"",readiness:"",region:"",country:"",priceBand:""};
-const hasFilters=f=>f.sort!=="name"||f.varietal||f.location||f.section||f.readiness||f.region||f.country||f.priceBand;
+const DEFAULT_FILTERS={sort:"name",sortDir:"desc",varietal:"",category:"",location:"",section:"",readiness:"",region:"",country:"",priceBand:""};
+const hasFilters=f=>f.sort!=="name"||f.varietal||f.category||f.location||f.section||f.readiness||f.region||f.country||f.priceBand;
 const applyFilters=(wines,f,s)=>{
   let r=wines.filter(w=>!w.wishlist);
   if(s)r=r.filter(w=>`${w.name} ${w.grape} ${resolveVarietal(w)} ${w.origin} ${w.location} ${w.cellarMeta?.locationSection||""} ${w.locationSlot||""}`.toLowerCase().includes(s.toLowerCase()));
   if(f.varietal)r=r.filter(w=>resolveVarietal(w)===f.varietal);
+  if(f.category)r=r.filter(w=>resolveWineCategory(w)===f.category);
   if(f.location)r=r.filter(w=>locationKey(w.location)===locationKey(f.location));
   if(f.section)r=r.filter(w=>normalizeKennardsSection(w.cellarMeta?.locationSection||"")===f.section);
   if(f.region)r=r.filter(w=>deriveRegionCountry(w.origin||"").region===f.region);
@@ -2280,6 +2351,8 @@ const FilterPanel=({filters,setFilters,wines,onClose})=>{
       .filter(Boolean)
   );
   const varietals=[...new Set(col.map(resolveVarietal).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  const categories=[...new Set(col.map(resolveWineCategory).filter(Boolean))]
+    .sort((a,b)=>(WINE_CATEGORY_INDEX[a]??999)-(WINE_CATEGORY_INDEX[b]??999)||a.localeCompare(b));
   const regions=[...new Set(col
     .map(w=>deriveRegionCountry(w.origin||"").region)
     .filter(Boolean)
@@ -2354,6 +2427,14 @@ const FilterPanel=({filters,setFilters,wines,onClose})=>{
         {varietals.map(v=>(
           <button key={v} onClick={()=>setLocal(p=>({...p,varietal:p.varietal===v?"":v}))} style={chip(local.varietal===v)}>
             {v}
+          </button>
+        ))}
+      </div>
+      <div style={{fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Wine Category</div>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:18}}>
+        {categories.map(c=>(
+          <button key={c} onClick={()=>setLocal(p=>({...p,category:p.category===c?"":c}))} style={chip(local.category===c)}>
+            {c}
           </button>
         ))}
       </div>
@@ -2488,6 +2569,7 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAdjustConsumption,deskt
             </button>
           )}
           {filters.varietal&&<Chip label={filters.varietal} onX={()=>setFilters(p=>({...p,varietal:""}))}/>}
+          {filters.category&&<Chip label={filters.category} onX={()=>setFilters(p=>({...p,category:""}))}/>}
           {filters.readiness&&<Chip label={{ready:"Ready",notReady:"Not Ready",past:"Past Peak",noWindow:"No Window"}[filters.readiness]||filters.readiness} onX={()=>setFilters(p=>({...p,readiness:""}))}/>}
           {filters.priceBand&&<Chip label={{budget:"<$25",mid:"$25-$59",premium:"$60-$119",luxury:"$120+"}[filters.priceBand]||filters.priceBand} onX={()=>setFilters(p=>({...p,priceBand:""}))}/>}
           {filters.region&&<Chip label={filters.region} onX={()=>setFilters(p=>({...p,region:""}))}/>}
@@ -4654,6 +4736,7 @@ export default function App(){
           // 1) Remove empty placeholder rows from the old spreadsheet conversion.
           // 2) Reclassify wines that were previously persisted as "Other".
           const toReclassify=all.filter(w=>{
+            if(normalizeWineCategory(w?.cellarMeta?.manualWineCategory||"")) return false;
             const inferred=guessWineType(w?.grape||"",w?.name||"",grapeAliasMapRef.current);
             if(!inferred||inferred==="Other") return false;
             return (w.wineType||"Other")!==inferred;
@@ -4912,12 +4995,13 @@ export default function App(){
   },[wines,notes,profile]);
 
   const applyWineTypeAndLearnAliases = useCallback(async wineInput=>{
+    const manualCategory=normalizeWineCategory(wineInput?.cellarMeta?.manualWineCategory||"");
     const inferred=guessWineType(wineInput?.grape||"",wineInput?.name||"",grapeAliasMapRef.current);
-    const finalType=inferred||"Other";
+    const finalType=wineTypeFromCategory(manualCategory)||inferred||"Other";
     const color=(WINE_TYPE_COLORS[finalType]||WINE_TYPE_COLORS.Other).dot;
     const nextWine={...wineInput,wineType:finalType,color};
     const aliases=splitGrapeAliases(wineInput?.grape||"");
-    if(finalType==="Other"||aliases.length===0) return nextWine;
+    if(manualCategory||finalType==="Other"||aliases.length===0) return nextWine;
     let nextAliasMap=grapeAliasMapRef.current;
     let changed=false;
     aliases.forEach(alias=>{
