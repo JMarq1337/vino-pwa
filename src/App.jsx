@@ -1856,12 +1856,6 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
     setPurchasedManual(true);
     set("purchasedTotal",clean);
   };
-  const adjustPurchasedTotal=delta=>{
-    const current=purchasedManual?enteredPurchased:autoPurchased;
-    const next=Math.max(projectedLeft,current+delta);
-    setPurchasedManual(true);
-    set("purchasedTotal",String(next));
-  };
   const [q,setQ]=useState(initial?.name||"");
   const [sugs,setSugs]=useState([]);
   const [showFields,setShowFields]=useState(!!initial);
@@ -2182,12 +2176,13 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
                       <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Bottle Tracker</div>
                       <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:8}}>
                         <div style={{background:"var(--card)",borderRadius:10,padding:"7px 8px",border:"1px solid var(--border)",boxShadow:"0 4px 10px rgba(0,0,0,0.05)"}}>
-                          <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:5,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Purchased</div>
-                          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:4}}>
-                            <button type="button" onClick={()=>adjustPurchasedTotal(-1)} disabled={projectedPurchased<=projectedLeft} style={{width:22,height:22,borderRadius:8,border:"1px solid var(--border)",background:"var(--inputBg)",color:"var(--text)",fontSize:14,lineHeight:1,cursor:projectedPurchased>projectedLeft?"pointer":"default",opacity:projectedPurchased>projectedLeft?1:0.45}}>−</button>
-                            <input value={projectedPurchased} onChange={e=>handlePurchasedTotalChange(e.target.value)} style={{width:46,textAlign:"center",padding:"5px 4px",fontSize:14,fontWeight:800,minHeight:30,borderRadius:8}} inputMode="numeric"/>
-                            <button type="button" onClick={()=>adjustPurchasedTotal(1)} style={{width:22,height:22,borderRadius:8,border:"1px solid var(--border)",background:"var(--inputBg)",color:"var(--text)",fontSize:14,lineHeight:1,cursor:"pointer"}}>+</button>
-                          </div>
+                          <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:1,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Purchased</div>
+                          <input
+                            value={projectedPurchased}
+                            onChange={e=>handlePurchasedTotalChange(e.target.value)}
+                            inputMode="numeric"
+                            style={{margin:0,minHeight:30,padding:"4px 6px",fontSize:15,fontWeight:800,lineHeight:1.2,textAlign:"center",background:"var(--inputBg)",border:"1px solid var(--border)",borderRadius:8}}
+                          />
                         </div>
                         {[["Left",projectedLeft],["Consumed",projectedConsumed]].map(([label,val])=>(
                           <div key={label} style={{background:"var(--card)",borderRadius:10,padding:"7px 8px",border:"1px solid var(--border)",boxShadow:"0 4px 10px rgba(0,0,0,0.05)"}}>
