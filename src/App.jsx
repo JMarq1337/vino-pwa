@@ -1676,6 +1676,7 @@ const WineCard=({wine,onClick})=>{
 /* ── WINE DETAIL ──────────────────────────────────────────────── */
 const WineDetail=({wine,onEdit,onDelete,onMove,onAdjustConsumption})=>{
   const type=resolveWineType(wine);
+  const category=resolveWineCategory(wine);
   const varietal=resolveVarietal(wine);
   const tc=WINE_TYPE_COLORS[type]||WINE_TYPE_COLORS.Other;
   const ready=wineReadiness(wine);
@@ -1764,7 +1765,7 @@ const WineDetail=({wine,onEdit,onDelete,onMove,onAdjustConsumption})=>{
           </div>
         )}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
-          {[["Varietal",varietal],["Alcohol",wine.alcohol?`${wine.alcohol}%`:null],!wine.wishlist&&["Readiness",ready.label],!wine.wishlist&&["Drink Window",drinkWindow],!wine.wishlist&&["RRP / Bottle",rrpPerBottle?`$${rrpPerBottle.toFixed(2)}`:null],!wine.wishlist&&["Paid / Bottle",paidPerBottle?`$${paidPerBottle.toFixed(2)}`:null],!wine.wishlist&&["Location",formatWineLocation(wine)||null],["Purchased Date",fmt(wine.datePurchased)]].filter(x=>x&&x[1]).map(([l,v])=>(
+          {[["Varietal",varietal],["Alcohol",wine.alcohol?`${wine.alcohol}%`:null],["Category",category],!wine.wishlist&&["Readiness",ready.label],!wine.wishlist&&["Drink Window",drinkWindow],!wine.wishlist&&["RRP / Bottle",rrpPerBottle?`$${rrpPerBottle.toFixed(2)}`:null],!wine.wishlist&&["Paid / Bottle",paidPerBottle?`$${paidPerBottle.toFixed(2)}`:null],!wine.wishlist&&["Location",formatWineLocation(wine)||null],["Purchased Date",fmt(wine.datePurchased)]].filter(x=>x&&x[1]).map(([l,v])=>(
             <div key={l} style={{background:"var(--inputBg)",borderRadius:12,padding:"11px 13px"}}>
               <div style={{fontSize:10,color:"var(--sub)",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:3,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{l}</div>
               <div style={{fontSize:14,color:"var(--text)",fontWeight:500,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{v}</div>
@@ -1855,11 +1856,6 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
     }
     setPurchasedManual(true);
     set("purchasedTotal",clean);
-  };
-  const editPurchasedTotal=()=>{
-    const raw=window.prompt("Set purchased bottles",String(projectedPurchased));
-    if(raw===null) return;
-    handlePurchasedTotalChange(String(raw));
   };
   const [q,setQ]=useState(initial?.name||"");
   const [sugs,setSugs]=useState([]);
@@ -2183,12 +2179,20 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
                         {[["Purchased",projectedPurchased],["Left",projectedLeft],["Consumed",projectedConsumed]].map(([label,val])=>(
                           <div
                             key={label}
-                            onClick={label==="Purchased"?editPurchasedTotal:undefined}
-                            title={label==="Purchased"?"Click to edit purchased total":undefined}
-                            style={{background:"var(--card)",borderRadius:10,padding:"7px 8px",border:"1px solid var(--border)",boxShadow:"0 4px 10px rgba(0,0,0,0.05)",cursor:label==="Purchased"?"pointer":"default"}}
+                            style={{background:"var(--card)",borderRadius:10,padding:"7px 8px",border:"1px solid var(--border)",boxShadow:"0 4px 10px rgba(0,0,0,0.05)"}}
                           >
                             <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:1,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{label}</div>
-                            <div style={{fontSize:15,color:"var(--text)",fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.2}}>{val}</div>
+                            {label==="Purchased"
+                              ? (
+                                <input
+                                  value={projectedPurchased}
+                                  onChange={e=>handlePurchasedTotalChange(e.target.value)}
+                                  inputMode="numeric"
+                                  style={{margin:0,padding:0,minHeight:0,height:"auto",background:"transparent",border:"none",borderRadius:0,boxShadow:"none",fontSize:15,color:"var(--text)",fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.2,textAlign:"left"}}
+                                />
+                              )
+                              : <div style={{fontSize:15,color:"var(--text)",fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.2}}>{val}</div>
+                            }
                           </div>
                         ))}
                       </div>
