@@ -1361,11 +1361,14 @@ const ModalHeader=({title,onClose})=>(
   </div>
 );
 
-const Field=({label,value,onChange,type="text",placeholder,rows,optional})=>(
+const Field=({label,value,onChange,type="text",placeholder,rows,optional,clearable,onClear,clearLabel="Clear"})=>(
   <div style={{marginBottom:14}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
       <label style={{fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{label}</label>
-      {optional&&<span style={{fontSize:10,color:"var(--sub)",opacity:0.6,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>optional</span>}
+      <div style={{display:"flex",alignItems:"center",gap:8}}>
+        {clearable&&!!value&&<button type="button" onClick={onClear} style={{fontSize:10,color:"var(--accent)",fontWeight:700,letterSpacing:"0.6px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif",background:"none",border:"none",padding:0,cursor:"pointer"}}>{clearLabel}</button>}
+        {optional&&<span style={{fontSize:10,color:"var(--sub)",opacity:0.6,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>optional</span>}
+      </div>
     </div>
     {rows?<textarea value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} rows={rows} style={{resize:"none"}}/>:<input type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder}/>}
   </div>
@@ -1802,7 +1805,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
     const purchased=getTotalPurchased(initial);
     return purchased>0?String(purchased):"1";
   })();
-  const blank={name:"",origin:"",grape:"",manualCategory:"",alcohol:"",vintage:"",bottles:"1",addPurchased:"",purchasedTotal:"1",rating:0,notes:"",review:"",reviewPrimaryReviewer:"",reviewPrimaryRating:"",otherReviews:[normalizeReviewEntry({})],tastingNotes:"",datePurchased:"",addedDate:todayIsoLocal(),wishlist:!!isWishlist,photo:null,location:defaultLocation,locationSlot:"",locationSection:"",drinkStart:"",drinkEnd:"",pricePerBottle:"",rrp:"",totalPaid:"",priceForBottles:"1",insuranceValue:"",supplier:""};
+  const blank={name:"",origin:"",grape:"",manualCategory:"",alcohol:"",vintage:"",bottles:"1",addPurchased:"",purchasedTotal:"1",rating:0,notes:"",review:"",reviewPrimaryReviewer:"",reviewPrimaryRating:"",otherReviews:[normalizeReviewEntry({})],tastingNotes:"",datePurchased:todayIsoLocal(),addedDate:todayIsoLocal(),wishlist:!!isWishlist,photo:null,location:defaultLocation,locationSlot:"",locationSection:"",drinkStart:"",drinkEnd:"",pricePerBottle:"",rrp:"",totalPaid:"",priceForBottles:"1",insuranceValue:"",supplier:""};
   const [f,setF]=useState(initial?{
     ...blank,...initial,
     reviewPrimaryReviewer:(initial.reviewPrimaryReviewer||"").toString(),
@@ -1853,6 +1856,12 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
     setPurchasedManual(true);
     set("purchasedTotal",clean);
   };
+  const adjustPurchasedTotal=delta=>{
+    const current=purchasedManual?enteredPurchased:autoPurchased;
+    const next=Math.max(projectedLeft,current+delta);
+    setPurchasedManual(true);
+    set("purchasedTotal",String(next));
+  };
   const [q,setQ]=useState(initial?.name||"");
   const [sugs,setSugs]=useState([]);
   const [showFields,setShowFields]=useState(!!initial);
@@ -1894,6 +1903,13 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
   const showDetailsStep=!usesStepTabs||step==="details";
   const showJournalStep=usesStepTabs&&step==="journal";
   const grapeSuggestions=getVarietalSuggestions(f.grape,GRAPE_ALIAS_CACHE);
+  const hasVarietalInput=!!normalizeWineText(f.grape||"");
+  const inferredAutoCategory=(()=>{
+    const inferredType=guessWineType(f.grape,f.name);
+    const hint=normalizeWineText(`${f.grape||""} ${f.name||""} ${f.origin||""}`);
+    if(hint.includes("champagne")) return "Champagne";
+    return normalizeWineCategory(inferredType)||"Other";
+  })();
   const sectionCardStyle={background:"linear-gradient(180deg,rgba(var(--accentRgb),0.085) 0%,var(--card) 34%)",border:"1px solid rgba(var(--accentRgb),0.22)",borderRadius:14,padding:"13px 13px 11px",marginBottom:12,boxShadow:"0 9px 20px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.35)"};
   const sectionTitleStyle={display:"flex",alignItems:"center",gap:8,fontSize:10,color:"var(--accent)",fontWeight:800,textTransform:"uppercase",letterSpacing:"0.95px",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"};
   const sectionTitleDotStyle={width:7,height:7,borderRadius:"50%",background:"var(--accent)",boxShadow:"0 0 0 3px rgba(var(--accentRgb),0.15)"};
@@ -1961,7 +1977,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
     const locationSource=locationMode==="custom"?customLocation:f.location;
     const finalLocation=canonicalLocation(locationSource,selectableLocations)||LOCATIONS[0]||"Kennards";
     const finalSection=finalLocation==="Kennards"?(normalizeKennardsSection(f.locationSection)||"Cube"):"";
-    const finalAddedDate=f.addedDate||initial?.cellarMeta?.addedDate||todayIsoLocal();
+    const finalAddedDate=(f.addedDate||"").toString().slice(0,10);
     const selectedManualCategory=normalizeWineCategory(f.manualCategory);
     const inferredType=guessWineType(f.grape,f.name);
     const wt=wineTypeFromCategory(selectedManualCategory)||inferredType;
@@ -2071,8 +2087,8 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
                   {sectionTitle("Timeline")}
                   <div style={sectionHintStyle}>Set purchase and inventory dates first.</div>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                    <Field label="Date Purchased" value={f.datePurchased} onChange={v=>set("datePurchased",v)} type="date" optional/>
-                    <Field label="Added to Inventory" value={f.addedDate} onChange={v=>set("addedDate",v)} type="date" optional/>
+                    <Field label="Date Purchased" value={f.datePurchased} onChange={v=>set("datePurchased",v)} type="date" clearable onClear={()=>set("datePurchased","")} optional/>
+                    <Field label="Added to Inventory" value={f.addedDate} onChange={v=>set("addedDate",v)} type="date" clearable onClear={()=>set("addedDate","")} optional/>
                   </div>
                 </div>
               )}
@@ -2112,12 +2128,21 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
                   <Field label="Vintage" value={f.vintage} onChange={v=>set("vintage",v)} type="number" placeholder="2019" optional/>
                   <Field label="Alc %" value={f.alcohol} onChange={v=>set("alcohol",v)} type="number" placeholder="14.5" optional/>
                 </div>
-                <SelField
-                  label="Wine Category (manual override)"
-                  value={f.manualCategory||""}
-                  onChange={v=>set("manualCategory",v)}
-                  options={[{value:"",label:"Auto classify from varietal / name"},...WINE_CATEGORY_OPTIONS.map(cat=>({value:cat,label:cat}))]}
-                />
+                {hasVarietalInput&&(
+                  <div style={{display:"flex",justifyContent:"flex-end",marginTop:-4,marginBottom:4}}>
+                    <div style={{display:"inline-flex",alignItems:"center",gap:8,padding:"6px 10px",borderRadius:999,border:"1px solid rgba(var(--accentRgb),0.26)",background:"linear-gradient(180deg,rgba(var(--accentRgb),0.12),rgba(var(--accentRgb),0.06))"}}>
+                      <span style={{fontSize:10,fontWeight:800,color:"var(--accent)",letterSpacing:"0.7px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Category</span>
+                      <select
+                        value={f.manualCategory||"__auto__"}
+                        onChange={e=>set("manualCategory",e.target.value==="__auto__"?"":e.target.value)}
+                        style={{margin:0,padding:"6px 26px 6px 10px",fontSize:12,minHeight:30,borderRadius:999,border:"1px solid rgba(var(--accentRgb),0.33)",background:"var(--card)",fontWeight:700,maxWidth:190}}
+                      >
+                        <option value="__auto__">{`Auto · ${inferredAutoCategory}`}</option>
+                        {WINE_CATEGORY_OPTIONS.map(cat=><option key={cat} value={cat}>{cat}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                )}
               </div>
               {!isWishlist&&(
                 <>
@@ -2156,14 +2181,21 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
                     <div style={{background:"linear-gradient(180deg,rgba(var(--accentRgb),0.08),var(--inputBg))",borderRadius:12,padding:"10px 12px",marginBottom:12,border:"1px solid rgba(var(--accentRgb),0.2)",boxShadow:"inset 0 1px 0 rgba(255,255,255,0.35)"}}>
                       <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Bottle Tracker</div>
                       <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:8}}>
-                        {[["Purchased",projectedPurchased],["Left",projectedLeft],["Consumed",projectedConsumed]].map(([label,val])=>(
+                        <div style={{background:"var(--card)",borderRadius:10,padding:"7px 8px",border:"1px solid var(--border)",boxShadow:"0 4px 10px rgba(0,0,0,0.05)"}}>
+                          <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:5,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Purchased</div>
+                          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:4}}>
+                            <button type="button" onClick={()=>adjustPurchasedTotal(-1)} disabled={projectedPurchased<=projectedLeft} style={{width:22,height:22,borderRadius:8,border:"1px solid var(--border)",background:"var(--inputBg)",color:"var(--text)",fontSize:14,lineHeight:1,cursor:projectedPurchased>projectedLeft?"pointer":"default",opacity:projectedPurchased>projectedLeft?1:0.45}}>−</button>
+                            <input value={projectedPurchased} onChange={e=>handlePurchasedTotalChange(e.target.value)} style={{width:46,textAlign:"center",padding:"5px 4px",fontSize:14,fontWeight:800,minHeight:30,borderRadius:8}} inputMode="numeric"/>
+                            <button type="button" onClick={()=>adjustPurchasedTotal(1)} style={{width:22,height:22,borderRadius:8,border:"1px solid var(--border)",background:"var(--inputBg)",color:"var(--text)",fontSize:14,lineHeight:1,cursor:"pointer"}}>+</button>
+                          </div>
+                        </div>
+                        {[["Left",projectedLeft],["Consumed",projectedConsumed]].map(([label,val])=>(
                           <div key={label} style={{background:"var(--card)",borderRadius:10,padding:"7px 8px",border:"1px solid var(--border)",boxShadow:"0 4px 10px rgba(0,0,0,0.05)"}}>
                             <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:1,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{label}</div>
                             <div style={{fontSize:15,color:"var(--text)",fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.2}}>{val}</div>
                           </div>
                         ))}
                       </div>
-                      <Field label="Purchased Total (editable)" value={f.purchasedTotal} onChange={handlePurchasedTotalChange} type="number" placeholder="1" optional/>
                       {initial&&<Field label="Add Newly Purchased Bottles" value={f.addPurchased} onChange={v=>set("addPurchased",v.replace(/[^0-9]/g,""))} type="number" placeholder="0" optional/>}
                     </div>
                     {savedLocations.length>0&&(
