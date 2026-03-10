@@ -132,7 +132,7 @@ const db = {
 };
 
 const META_PREFIX = "[[VINO_META]]";
-const APP_VERSION = "7.36";
+const APP_VERSION = "7.37";
 const EXCEL_IMPORT_FLAG = "vino_excel_seed_v1";
 const EXCEL_RESTORE_FLAG = "vino_excel_restore_v1";
 const EXCEL_JOURNAL_FIX_FLAG = "vino_excel_journal_fix_v4";
@@ -5733,9 +5733,21 @@ export default function App(){
     load();
   },[]);
 
-  // After 1.8s logo phase, move to greet
+  // Faster logo phase for returning users.
   useEffect(()=>{
-    const t=setTimeout(()=>setSplashPhase(p=>p==="logo"?"greet":p),1800);
+    const KEY="vinology:last_splash_seen_at";
+    const nowTs=Date.now();
+    let delay=1200;
+    try{
+      const last=parseInt(localStorage.getItem(KEY)||"0",10);
+      if(Number.isFinite(last)&&last>0){
+        const hours=(nowTs-last)/36e5;
+        if(hours<8) delay=420;
+        else if(hours<24) delay=760;
+      }
+      localStorage.setItem(KEY,String(nowTs));
+    }catch{}
+    const t=setTimeout(()=>setSplashPhase(p=>p==="logo"?"greet":p),delay);
     return()=>clearTimeout(t);
   },[]);
 
@@ -5887,6 +5899,20 @@ export default function App(){
     await db.saveProfile(p);
     setSplashPhase("done");
   };
+  const goToAppTab=nextTab=>{
+    if(nextTab) setTab(nextTab);
+    setSplashPhase("done");
+  };
+
+  const splashCollection=(wines||[]).filter(w=>!w?.wishlist);
+  const splashReadyCount=splashCollection.filter(w=>wineReadiness(w).key==="ready").length;
+  const splashPastPeakCount=splashCollection.filter(w=>wineReadiness(w).key==="late").length;
+  const splashBottlesLeft=splashCollection.reduce((sum,w)=>sum+Math.max(0,Math.round(safeNum(w?.bottles)||0)),0);
+  const splashAudits=readAudits();
+  const splashInProgressAudits=splashAudits.filter(a=>(a?.status||"")==="in_progress").length;
+  const splashPrimaryNudge=splashPastPeakCount>0
+    ? `${splashPastPeakCount} wine${splashPastPeakCount===1?"":"s"} past peak`
+    : `${splashReadyCount} ready to drink`;
 
   // ── SPLASH / ONBOARDING ──────────────────────────────────────
   const SPLASH_BG={background:"linear-gradient(160deg,#0C0202 0%,#1A0808 50%,#0C0202 100%)",minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",position:"relative",overflow:"hidden"};
@@ -5920,9 +5946,26 @@ export default function App(){
             <div style={{marginTop:32,fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:18,fontWeight:400,color:"rgba(237,230,224,0.55)",lineHeight:1.5}}>
               Good {new Date().getHours()<12?"morning":new Date().getHours()<18?"afternoon":"evening"}{profile.name?`, ${profile.name}`:""}
             </div>
-            <div style={{marginTop:36}}>
+            <div style={{marginTop:8,fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:13,fontWeight:700,color:"rgba(237,230,224,0.68)",letterSpacing:"0.2px"}}>
+              {isNewUser?"Let’s build your cellar setup.":`Today’s focus: ${splashPrimaryNudge}`}
+            </div>
+            {!isNewUser&&(
+              <div style={{marginTop:16,display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:8,maxWidth:520,marginInline:"auto"}}>
+                {[
+                  {label:"Ready Now",value:splashReadyCount},
+                  {label:"Past Peak",value:splashPastPeakCount},
+                  {label:"Bottles Left",value:splashBottlesLeft},
+                ].map(item=>(
+                  <div key={item.label} style={{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:14,padding:"9px 10px",textAlign:"left",backdropFilter:"blur(10px)",WebkitBackdropFilter:"blur(10px)"}}>
+                    <div style={{fontSize:10,color:"rgba(237,230,224,0.5)",fontWeight:700,letterSpacing:"0.9px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{item.label}</div>
+                    <div style={{fontSize:20,lineHeight:1.1,fontWeight:800,color:"#EDE6E0",marginTop:3,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{item.value}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{marginTop:30}}>
               <button
-                onClick={()=>{ if(isNewUser){setSplashPhase("onboard");}else{setSplashPhase("done");} }}
+                onClick={()=>{ if(isNewUser){setSplashPhase("onboard");}else{goToAppTab("collection");} }}
                 style={{background:"var(--accent)",color:"white",border:"none",borderRadius:20,padding:"16px 44px",fontSize:16,fontWeight:700,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',sans-serif",letterSpacing:"-0.3px",boxShadow:"0 8px 32px rgba(var(--accentRgb),0.5)",transition:"transform 0.15s,box-shadow 0.15s",display:"inline-flex",alignItems:"center",gap:10}}
                 onMouseEnter={e=>{e.currentTarget.style.transform="scale(1.04)";e.currentTarget.style.boxShadow="0 12px 40px rgba(var(--accentRgb),0.65)";}}
                 onMouseLeave={e=>{e.currentTarget.style.transform="scale(1)";e.currentTarget.style.boxShadow="0 8px 32px rgba(var(--accentRgb),0.5)";}}>
@@ -5930,6 +5973,22 @@ export default function App(){
                 {isNewUser?"Let's Get Started":"Enter My Winery"}
               </button>
             </div>
+            {!isNewUser&&(
+              <div style={{marginTop:10,display:"flex",justifyContent:"center",gap:8,flexWrap:"wrap"}}>
+                <button
+                  onClick={()=>goToAppTab("audit")}
+                  style={{padding:"9px 14px",borderRadius:12,border:"1px solid rgba(255,255,255,0.2)",background:"rgba(255,255,255,0.06)",color:"#EDE6E0",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:"pointer"}}
+                >
+                  {splashInProgressAudits>0?`Resume Audit (${splashInProgressAudits})`:"Open Audit"}
+                </button>
+                <button
+                  onClick={()=>goToAppTab("ai")}
+                  style={{padding:"9px 14px",borderRadius:12,border:"1px solid rgba(255,255,255,0.2)",background:"rgba(255,255,255,0.06)",color:"#EDE6E0",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:"pointer"}}
+                >
+                  Ask Sommelier
+                </button>
+              </div>
+            )}
             <div style={{marginTop:16,fontSize:12,color:"rgba(237,230,224,0.2)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
               {wines.length>0?`${wines.length} wines in your cellar`:"Building your cellar…"}
             </div>
