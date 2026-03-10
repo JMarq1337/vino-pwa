@@ -132,7 +132,7 @@ const db = {
 };
 
 const META_PREFIX = "[[VINO_META]]";
-const APP_VERSION = "7.41";
+const APP_VERSION = "7.42";
 const EXCEL_IMPORT_FLAG = "vino_excel_seed_v1";
 const EXCEL_RESTORE_FLAG = "vino_excel_restore_v1";
 const EXCEL_JOURNAL_FIX_FLAG = "vino_excel_journal_fix_v4";
@@ -1186,91 +1186,16 @@ const Icon=({n,size=20,color="currentColor",fill="none",sw=1.5})=>{
 };
 
 const BrandLogo=({size=42,variant="color"})=>{
-  const uid=useId().replace(/[:]/g,"");
-  const ids={
-    body:`logoBody-${uid}`,
-    glow:`logoGlow-${uid}`,
-    leaf:`logoLeaf-${uid}`,
-  };
-  const mono=variant==="mono";
-  const fillMain=mono?"rgba(255,255,255,0.2)":`url(#${ids.body})`;
-  const fillLeaf=mono?"rgba(255,255,255,0.16)":`url(#${ids.leaf})`;
-  const strokeMain=mono?"rgba(255,255,255,0.32)":"rgba(128,0,77,0.72)";
-  const highlight=mono?"rgba(255,255,255,0.08)":"rgba(255,209,235,0.14)";
-  const grapes=[
-    {cx:28.5,cy:37.5,r:7.4},
-    {cx:41.2,cy:37.8,r:7.8},
-    {cx:35.2,cy:51,r:8.7},
-    {cx:39,cy:66,r:7.2},
-    {cx:46.4,cy:80,r:5.8},
-  ];
-
   return(
-    <svg width={size} height={size} viewBox="0 0 96 96" aria-hidden="true">
-      <defs>
-        <linearGradient id={ids.body} x1="20" y1="14" x2="76" y2="84" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#B90D78"/>
-          <stop offset="55%" stopColor="#920C61"/>
-          <stop offset="100%" stopColor="#661043"/>
-        </linearGradient>
-        <linearGradient id={ids.leaf} x1="18" y1="17" x2="37" y2="29" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#C41B80"/>
-          <stop offset="100%" stopColor="#8B0C5D"/>
-        </linearGradient>
-        <filter id={ids.glow} x="-55%" y="-55%" width="210%" height="210%">
-          <feDropShadow dx="0" dy="0" stdDeviation="7" floodColor={mono?"rgba(255,255,255,0.2)":"#D32087"} floodOpacity={mono?0.22:0.46}/>
-        </filter>
-      </defs>
-
-      <g filter={mono?undefined:`url(#${ids.glow})`}>
-        <path
-          d="M44 48.6 58.8 83c.9 2 .1 4.3-1.8 5.4-1 .6-2.1.8-3.3.8H44.8c-2 0-3.8-1.2-4.6-3l-5.2-11.8c-.75-1.7.03-3.67 1.72-4.42.42-.18.86-.27 1.31-.27h1.92c2 0 3.86-1.15 4.68-2.98 1-2.22.45-4.83-1.37-6.45l-.67-.6c-1.9-1.68-2.66-4.3-1.95-6.72L44 48.6Z"
-          fill={fillMain}
-          stroke={strokeMain}
-          strokeWidth="1.15"
-          strokeLinejoin="round"
-        />
-        {grapes.map((grape,i)=>(
-          <circle key={i} {...grape} fill={fillMain} stroke={strokeMain} strokeWidth="1.1"/>
-        ))}
-        <path
-          d="M21.2 15.6c6.8-2 14.5.4 19 6.2-4.6.95-9.1.15-13.2-2.2l-3.3 2.7 4.6 1.8c-1.9 1.9-4.4 3.2-7 3.7-3.7.7-7.2-.5-9.9-3.4 2.3-3.8 5.8-6.8 9.8-8.8Z"
-          fill={fillLeaf}
-          stroke={strokeMain}
-          strokeWidth="1.05"
-          strokeLinejoin="round"
-        />
-        <path
-          d="M41.5 29.7c.1-5.1 2.3-9.8 6.3-13 .9-.7 2.26-.54 2.96.35.53.67.56 1.6.08 2.3-2.3 3.4-3.62 7.3-3.82 11.4 1.42-2 3.45-3.5 5.83-4.18 2.26-.65 4.68-.44 6.71.57.4 2.56-.4 4.75-2.28 6.2-1.98 1.52-4.52 2.07-7.02 1.5l-3.13-.7-.03-.1a15.1 15.1 0 0 0 .47 2.7"
-          fill="none"
-          stroke={strokeMain}
-          strokeWidth="1.35"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        <path
-          d="M58.4 43.3h3a1.7 1.7 0 0 1 1.7 1.7v1.8c0 .66-.38 1.25-.98 1.53v5.7c0 1.95 1.02 3.44 2.4 5.06 1.67 1.97 2.7 4.58 2.7 7.46v12.62c0 1.47-.99 2.74-2.42 3.08a19.9 19.9 0 0 1-10.12 0 3.17 3.17 0 0 1-2.43-3.08V66.53c0-2.88 1.04-5.49 2.71-7.46 1.37-1.62 2.39-3.11 2.39-5.06v-5.7a1.67 1.67 0 0 1-.95-1.53V45a1.7 1.7 0 0 1 1.69-1.7Z"
-          fill={fillMain}
-          stroke={strokeMain}
-          strokeWidth="1.1"
-        />
-        <path
-          d="M68 19h3.7a1.85 1.85 0 0 1 1.85 1.85v2.16c0 .74-.45 1.4-1.12 1.68v8.17c0 2.8 1.42 4.91 3.35 7.18 2.3 2.72 3.73 6.31 3.73 10.28v11.2l-4.12 8.32V51.8c0-2.23-.44-4.27-1.47-6.24-.58-1.12-1.36-2.12-2.2-3.13-1.82-2.2-3.25-4.23-3.25-7.13v-10.6a1.83 1.83 0 0 1-1.12-1.68v-2.17A1.85 1.85 0 0 1 68 19Z"
-          fill={fillMain}
-          stroke={strokeMain}
-          strokeWidth="1.1"
-          strokeLinejoin="round"
-        />
-        <path
-          d="M57.1 57.5c-1.3 2.1-2.08 4.66-2.08 7.44v11.05c1.3-1.07 2.34-2.42 3.06-4.01.94-2.08 1.08-4.16 1.08-7.15v-8.32c0-1-.37-1.96-1.18-2.78-.32 1.28-.62 2.48-.88 3.72Z"
-          fill={highlight}
-        />
-        <path
-          d="M69.2 32.6c-1.08 1.86-1.7 4.08-1.7 6.52v9.97c1.25-.88 2.14-2.07 2.79-3.53.82-1.87.93-3.73.93-6.36v-7.74c0-.75-.15-1.41-.52-2.2-.56 1.11-1.05 2.22-1.5 3.34Z"
-          fill={highlight}
-        />
-      </g>
-    </svg>
+    <img
+      src={variant==="mono"?"/icons/logo-mark-mono.svg":"/icons/logo-mark.svg"}
+      alt=""
+      aria-hidden="true"
+      width={size}
+      height={size}
+      draggable="false"
+      style={{display:"block",width:size,height:size,objectFit:"contain",objectPosition:"center"}}
+    />
   );
 };
 
