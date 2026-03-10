@@ -132,7 +132,7 @@ const db = {
 };
 
 const META_PREFIX = "[[VINO_META]]";
-const APP_VERSION = "7.44";
+const APP_VERSION = "7.45";
 const EXCEL_IMPORT_FLAG = "vino_excel_seed_v1";
 const EXCEL_RESTORE_FLAG = "vino_excel_restore_v1";
 const EXCEL_JOURNAL_FIX_FLAG = "vino_excel_journal_fix_v4";
@@ -1186,9 +1186,10 @@ const Icon=({n,size=20,color="currentColor",fill="none",sw=1.5})=>{
 };
 
 const BrandLogo=({size=42,variant="color"})=>{
+  const src=variant==="mono"?"/icons/logo-mark-mono.svg":"/icons/logo-user-512.png";
   return(
     <img
-      src={variant==="mono"?"/icons/logo-mark-mono.svg":"/icons/logo-mark-white.svg"}
+      src={src}
       alt=""
       aria-hidden="true"
       width={size}
