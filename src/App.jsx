@@ -132,7 +132,7 @@ const db = {
 };
 
 const META_PREFIX = "[[VINO_META]]";
-const APP_VERSION = "7.46";
+const APP_VERSION = "7.47";
 const EXCEL_IMPORT_FLAG = "vino_excel_seed_v1";
 const EXCEL_RESTORE_FLAG = "vino_excel_restore_v1";
 const EXCEL_JOURNAL_FIX_FLAG = "vino_excel_journal_fix_v4";
@@ -1861,7 +1861,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
     const purchased=getTotalPurchased(initial);
     return purchased>0?String(purchased):"1";
   })();
-  const blank={name:"",origin:"",grape:"",manualCategory:"",alcohol:"",vintage:"",bottles:"1",addPurchased:"",purchasedTotal:"1",rating:0,notes:"",review:"",reviewPrimaryReviewer:"",reviewPrimaryRating:"",otherReviews:[normalizeReviewEntry({})],tastingNotes:"",datePurchased:todayIsoLocal(),addedDate:todayIsoLocal(),wishlist:!!isWishlist,photo:null,location:defaultLocation,locationSlot:"",locationSection:"",drinkStart:"",drinkEnd:"",pricePerBottle:"",rrp:"",totalPaid:"",priceForBottles:"1",insuranceValue:"",supplier:""};
+  const blank={name:"",origin:"",grape:"",manualCategory:"",alcohol:"",vintage:"",bottles:"1",addPurchased:"",purchasedTotal:"1",rating:0,notes:"",review:"",reviewPrimaryReviewer:"",reviewPrimaryRating:"",otherReviews:[normalizeReviewEntry({})],tastingNotes:"",datePurchased:todayIsoLocal(),addedDate:todayIsoLocal(),wishlist:!!isWishlist,photo:null,location:defaultLocation,locationSlot:"",locationSection:"",splitEnabled:false,splitSecondBottles:"0",splitLocation:defaultLocation,splitLocationSlot:"",splitLocationSection:"Cube",splitLocationMode:"preset",splitCustomLocation:"",drinkStart:"",drinkEnd:"",pricePerBottle:"",rrp:"",totalPaid:"",priceForBottles:"1",insuranceValue:"",supplier:""};
   const [f,setF]=useState(initial?{
     ...blank,...initial,
     reviewPrimaryReviewer:(initial.reviewPrimaryReviewer||"").toString(),
@@ -1898,6 +1898,10 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
       priceForBottles:(!initial&&!priceBottlesManual)?clean:p.priceForBottles
     }));
   };
+  const handleSplitSecondBottlesChange=v=>{
+    const clean=v.replace(/[^0-9]/g,"");
+    set("splitSecondBottles",clean);
+  };
   const handlePriceForBottlesChange=v=>{
     setPriceBottlesManual(true);
     set("priceForBottles",v.replace(/[^0-9]/g,""));
@@ -1922,12 +1926,25 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
     ? CUSTOM_LOCATION_OPTION
     : (canonicalLocation(f.location,selectableLocations)||selectableLocations[0]||defaultLocation);
   const currentLocationRaw=locationMode==="custom"?customLocation:(selectedLocationValue===CUSTOM_LOCATION_OPTION?"":selectedLocationValue);
-  const isKennardsLocation=canonicalLocation(currentLocationRaw,selectableLocations)==="Kennards";
+  const primaryLocationPreview=canonicalLocation(currentLocationRaw,selectableLocations)||defaultLocation;
+  const isKennardsLocation=primaryLocationPreview==="Kennards";
+  const splitEnabled=!initial&&!isWishlist&&!!f.splitEnabled;
+  const splitSelectableLocations=dedupeLocations([...selectableLocations,f.splitLocation]);
+  const splitSelectedLocationValue=(f.splitLocationMode||"preset")==="custom"
+    ? CUSTOM_LOCATION_OPTION
+    : (canonicalLocation(f.splitLocation,splitSelectableLocations)||splitSelectableLocations[0]||defaultLocation);
+  const splitLocationRaw=(f.splitLocationMode||"preset")==="custom"
+    ? (f.splitCustomLocation||"")
+    : (splitSelectedLocationValue===CUSTOM_LOCATION_OPTION?"":splitSelectedLocationValue);
+  const splitLocationPreview=canonicalLocation(splitLocationRaw,splitSelectableLocations)||"";
+  const splitIsKennardsLocation=splitLocationPreview==="Kennards";
   const leftInput=Math.max(0,parseInt(f.bottles)||0);
+  const splitSecondInput=Math.max(0,parseInt(f.splitSecondBottles)||0);
+  const effectiveLeft=splitEnabled?(leftInput+splitSecondInput):leftInput;
   const addPurchased=Math.max(0,parseInt(f.addPurchased)||0);
   const enteredPurchased=Math.max(0,parseInt(f.purchasedTotal)||0);
-  const basePurchased=initial?getTotalPurchased(initial):leftInput;
-  const projectedLeft=leftInput+addPurchased;
+  const basePurchased=initial?getTotalPurchased(initial):effectiveLeft;
+  const projectedLeft=effectiveLeft+addPurchased;
   const autoPurchased=Math.max(basePurchased+addPurchased,projectedLeft);
   const projectedPurchased=purchasedManual?Math.max(enteredPurchased,projectedLeft):autoPurchased;
   const projectedConsumed=Math.max(0,projectedPurchased-projectedLeft);
@@ -1949,7 +1966,9 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
       ? existingTotalPaid
       : (finalPricePerBottle!=null&&paidForBottles>0?Number((finalPricePerBottle*paidForBottles).toFixed(2)):null));
   const invalidCustomLocation=!isWishlist&&locationMode==="custom"&&!normalizeLocation(customLocation);
-  const canSubmit=!!f.name&&!invalidCustomLocation;
+  const invalidSplitCustomLocation=splitEnabled&&(f.splitLocationMode||"preset")==="custom"&&!normalizeLocation(splitLocationRaw);
+  const invalidSplitConfig=splitEnabled&&(leftInput<=0||splitSecondInput<=0||!splitLocationPreview||invalidSplitCustomLocation);
+  const canSubmit=!!f.name&&!invalidCustomLocation&&!invalidSplitConfig;
   const showDetailsStep=!usesStepTabs||step==="details";
   const showJournalStep=usesStepTabs&&step==="journal";
   const grapeSuggestions=getVarietalSuggestions(f.grape,GRAPE_ALIAS_CACHE);
@@ -2024,6 +2043,11 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
     const nextValue=String(autoPurchased||0);
     setF(prev=>prev.purchasedTotal===nextValue?prev:{...prev,purchasedTotal:nextValue});
   },[purchasedManual,autoPurchased]);
+  useEffect(()=>{
+    if(initial||priceBottlesManual) return;
+    const nextValue=String(Math.max(0,effectiveLeft)||0);
+    setF(prev=>prev.priceForBottles===nextValue?prev:{...prev,priceForBottles:nextValue});
+  },[initial,priceBottlesManual,effectiveLeft]);
   const handleQ=v=>{setQ(v);set("name",v);setSugs(v.length>=2?fuzzySearch(v):[]);};
   const pickSug=w=>{setF(p=>({...p,name:w.name,origin:w.origin||"",grape:w.grape||"",alcohol:w.alcohol?.toString()||"",tastingNotes:w.tastingNotes||""}));setQ(w.name);setSugs([]);setShowFields(true);};
   const handleLocationSelect=value=>{
@@ -2071,19 +2095,83 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
     const journalUpdatedAt=journalChanged
       ? new Date().toISOString()
       : ((initial?.cellarMeta?.journalUpdatedAt)||((hasNextJournal&&finalAddedDate)?`${finalAddedDate}T00:00:00`:""));
-    const {addPurchased:_addIgnore,purchasedTotal:_purchasedIgnore,manualCategory:_catIgnore,locationSection:_locSectionIgnore,addedDate:_addedIgnore,priceForBottles:_priceCountIgnore,pricePerBottle:_pricePerBottleIgnore,...payload}=f;
+    const {addPurchased:_addIgnore,purchasedTotal:_purchasedIgnore,manualCategory:_catIgnore,locationSection:_locSectionIgnore,addedDate:_addedIgnore,priceForBottles:_priceCountIgnore,pricePerBottle:_pricePerBottleIgnore,splitEnabled:_splitEnabledIgnore,splitSecondBottles:_splitSecondBottlesIgnore,splitLocation:_splitLocationIgnore,splitLocationSlot:_splitLocationSlotIgnore,splitLocationSection:_splitLocationSectionIgnore,splitLocationMode:_splitLocationModeIgnore,splitCustomLocation:_splitCustomLocationIgnore,...payload}=f;
     if(!isWishlist&&locationMode==="custom"&&rememberLocation&&finalLocation){
       onSaveLocation?.(finalLocation);
     }
-    onSave({
-      ...payload,id:f.id||uid(),alcohol:parseFloat(f.alcohol)||0,vintage:parseInt(f.vintage)||null,bottles:projectedLeft,location:finalLocation,locationSlot:f.locationSlot||null,wineType:wt,color:tc.dot,
+    const sharedBase={
+      ...payload,
+      alcohol:parseFloat(f.alcohol)||0,
+      vintage:parseInt(f.vintage)||null,
+      wineType:wt,
+      color:tc.dot,
       rating:computedStars,
       reviewPrimaryReviewer:(f.reviewPrimaryReviewer||"").toString().trim(),
       reviewPrimaryRating:reviewPrimaryRating,
       otherReviews:normalizedOtherReviews,
       tastingNotes:serializeOtherRatings(normalizedOtherReviews),
-      cellarMeta:{...(initial?.cellarMeta||{}),manualWineCategory:selectedManualCategory||"",drinkStart:parseInt(f.drinkStart)||null,drinkEnd:parseInt(f.drinkEnd)||null,pricePerBottle:finalPricePerBottle,rrp:finalRrp,totalPaid:finalTotalPaid,insuranceValue:parseFloat(f.insuranceValue)||null,supplier:f.supplier||"",locationSection:finalSection,totalPurchased:projectedPurchased,addedDate:finalAddedDate,journalUpdatedAt}
-    });
+    };
+    const sharedMetaBase={
+      ...(initial?.cellarMeta||{}),
+      manualWineCategory:selectedManualCategory||"",
+      drinkStart:parseInt(f.drinkStart)||null,
+      drinkEnd:parseInt(f.drinkEnd)||null,
+      pricePerBottle:finalPricePerBottle,
+      rrp:finalRrp,
+      insuranceValue:parseFloat(f.insuranceValue)||null,
+      supplier:f.supplier||"",
+      addedDate:finalAddedDate,
+      journalUpdatedAt,
+    };
+    if(splitEnabled){
+      const secondLocation=canonicalLocation(splitLocationRaw,splitSelectableLocations)||"";
+      const secondSection=secondLocation==="Kennards"?(normalizeKennardsSection(f.splitLocationSection)||"Cube"):"";
+      const firstLeft=Math.max(0,leftInput);
+      const secondLeft=Math.max(0,splitSecondInput);
+      if(firstLeft<=0||secondLeft<=0||!secondLocation){
+        return;
+      }
+      const splitLeftTotal=firstLeft+secondLeft;
+      const splitConsumedTotal=Math.max(0,projectedPurchased-splitLeftTotal);
+      const firstConsumed=splitLeftTotal>0?Math.round(splitConsumedTotal*(firstLeft/splitLeftTotal)):0;
+      const secondConsumed=Math.max(0,splitConsumedTotal-firstConsumed);
+      const firstPurchased=Math.max(firstLeft,firstLeft+firstConsumed);
+      const secondPurchased=Math.max(secondLeft,secondLeft+secondConsumed);
+      let firstTotalPaid=finalTotalPaid;
+      let secondTotalPaid=finalTotalPaid;
+      if(finalTotalPaid!=null&&splitLeftTotal>0){
+        firstTotalPaid=Number((finalTotalPaid*(firstLeft/splitLeftTotal)).toFixed(2));
+        secondTotalPaid=Number((finalTotalPaid-firstTotalPaid).toFixed(2));
+      }
+      if(!isWishlist&&(f.splitLocationMode||"preset")==="custom"&&rememberLocation&&secondLocation){
+        onSaveLocation?.(secondLocation);
+      }
+      onSave({
+        ...sharedBase,
+        id:uid(),
+        bottles:firstLeft,
+        location:finalLocation,
+        locationSlot:f.locationSlot||null,
+        cellarMeta:{...sharedMetaBase,locationSection:finalSection,totalPurchased:firstPurchased,totalPaid:firstTotalPaid}
+      });
+      onSave({
+        ...sharedBase,
+        id:uid(),
+        bottles:secondLeft,
+        location:secondLocation,
+        locationSlot:f.splitLocationSlot||null,
+        cellarMeta:{...sharedMetaBase,locationSection:secondSection,totalPurchased:secondPurchased,totalPaid:secondTotalPaid}
+      });
+    }else{
+      onSave({
+        ...sharedBase,
+        id:f.id||uid(),
+        bottles:projectedLeft,
+        location:finalLocation,
+        locationSlot:f.locationSlot||null,
+        cellarMeta:{...sharedMetaBase,locationSection:finalSection,totalPurchased:projectedPurchased,totalPaid:finalTotalPaid}
+      });
+    }
     clearWineFormDraft(draftKey);
     onClose();
   };
@@ -2268,6 +2356,69 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
                             <span style={{position:"absolute",top:2,left:rememberLocation?20:2,width:16,height:16,borderRadius:"50%",background:"#fff",boxShadow:"0 1px 4px rgba(0,0,0,.28)",transition:"left .16s"}}/>
                           </span>
                         </button>
+                      </div>
+                    )}
+                    {!initial&&(
+                      <div style={{marginBottom:12,padding:"10px 11px",borderRadius:12,background:"linear-gradient(180deg,rgba(var(--accentRgb),0.08),var(--inputBg))",border:"1px solid rgba(var(--accentRgb),0.2)"}}>
+                        <button
+                          type="button"
+                          onClick={()=>{
+                            const next=!splitEnabled;
+                            set("splitEnabled",next);
+                            if(next){
+                              const suggested=Math.max(1,Math.floor(leftInput/2)||1);
+                              if((f.splitSecondBottles||"0")==="0") set("splitSecondBottles",String(suggested));
+                              if(!(f.splitLocation||"").trim()) set("splitLocation",selectableLocations.find(loc=>locationKey(loc)!==locationKey(primaryLocationPreview))||primaryLocationPreview||defaultLocation);
+                            }
+                          }}
+                          style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"2px 2px 6px",border:"none",background:"transparent",fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:13,color:"var(--text)",fontWeight:700,width:"100%",cursor:"pointer"}}
+                        >
+                          <span>Create a second cellar card from this wine</span>
+                          <span style={{width:42,height:23,borderRadius:999,background:splitEnabled?"var(--accent)":"var(--card)",border:splitEnabled?"1.5px solid rgba(var(--accentRgb),0.55)":"1.5px solid var(--border)",position:"relative",transition:"all .16s",display:"inline-flex"}}>
+                            <span style={{position:"absolute",top:2,left:splitEnabled?21:2,width:17,height:17,borderRadius:"50%",background:"#fff",boxShadow:"0 1px 4px rgba(0,0,0,.28)",transition:"left .16s"}}/>
+                          </span>
+                        </button>
+                        <div style={{fontSize:11.5,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.5}}>
+                          Useful when bottles are split across two storage locations and tracked independently.
+                        </div>
+                      </div>
+                    )}
+                    {splitEnabled&&(
+                      <div style={{marginBottom:12,padding:"10px 11px",borderRadius:12,background:"linear-gradient(180deg,rgba(var(--accentRgb),0.14),var(--inputBg))",border:"1px solid rgba(var(--accentRgb),0.3)",boxShadow:"inset 0 1px 0 rgba(255,255,255,0.35)"}}>
+                        <div style={{fontSize:10,color:"var(--accent)",fontWeight:800,textTransform:"uppercase",letterSpacing:"0.8px",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Second Card Setup</div>
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 2fr 1fr",gap:10}}>
+                          <Field label="Bottles (2nd)" value={f.splitSecondBottles} onChange={handleSplitSecondBottlesChange} type="number" placeholder="1" optional/>
+                          <SelField
+                            label="Second Location"
+                            value={splitSelectedLocationValue}
+                            onChange={value=>{
+                              if(value===CUSTOM_LOCATION_OPTION){
+                                set("splitLocationMode","custom");
+                                return;
+                              }
+                              set("splitLocationMode","preset");
+                              set("splitLocation",canonicalLocation(value,splitSelectableLocations));
+                            }}
+                            options={[...splitSelectableLocations.map(loc=>({value:loc,label:loc})),{value:CUSTOM_LOCATION_OPTION,label:"Custom location…"}]}
+                          />
+                          <Field label={splitIsKennardsLocation?"Box No.":"Slot"} value={f.splitLocationSlot} onChange={v=>set("splitLocationSlot",v)} placeholder={splitIsKennardsLocation?"e.g. 204":"A3"} optional/>
+                        </div>
+                        {splitIsKennardsLocation&&(
+                          <SelField
+                            label="Second Kennards Placement"
+                            value={normalizeKennardsSection(f.splitLocationSection)||"Cube"}
+                            onChange={v=>set("splitLocationSection",normalizeKennardsSection(v))}
+                            options={KENNARDS_SECTIONS}
+                          />
+                        )}
+                        {(f.splitLocationMode||"preset")==="custom"&&(
+                          <Field label="Custom Second Location" value={f.splitCustomLocation} onChange={v=>set("splitCustomLocation",v)} placeholder="e.g. Home Cellar Annex" optional/>
+                        )}
+                        <div style={{marginTop:6,fontSize:11.5,color:invalidSplitConfig?"#B42318":"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.5}}>
+                          {invalidSplitConfig
+                            ? "Split setup needs both card quantities above 0 and a valid second location."
+                            : `Will create two cards: ${leftInput} in ${primaryLocationPreview||"Location A"} and ${splitSecondInput} in ${splitLocationPreview||"Location B"}.`}
+                        </div>
                       </div>
                     )}
                     <div style={{background:"linear-gradient(180deg,rgba(var(--accentRgb),0.08),var(--inputBg))",borderRadius:12,padding:"10px 12px",marginBottom:12,border:"1px solid rgba(var(--accentRgb),0.2)",boxShadow:"inset 0 1px 0 rgba(255,255,255,0.35)"}}>
