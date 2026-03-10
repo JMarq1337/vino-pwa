@@ -132,7 +132,7 @@ const db = {
 };
 
 const META_PREFIX = "[[VINO_META]]";
-const APP_VERSION = "7.49";
+const APP_VERSION = "7.50";
 const EXCEL_IMPORT_FLAG = "vino_excel_seed_v1";
 const EXCEL_RESTORE_FLAG = "vino_excel_restore_v1";
 const EXCEL_JOURNAL_FIX_FLAG = "vino_excel_journal_fix_v4";
@@ -1017,6 +1017,49 @@ const deriveRegionCountry = (input="") => {
   }
   return { region, country, origin:[region,country].filter(Boolean).join(", ") };
 };
+const normalizeOriginLabel = (value="") => {
+  const raw=(value||"").toString().trim();
+  if(!raw) return "";
+  return deriveRegionCountry(raw).origin||raw;
+};
+const ORIGIN_SUGGESTION_BASE = (() => {
+  const seen = new Set();
+  const list = [];
+  const add = candidate => {
+    const normalized = normalizeOriginLabel(candidate);
+    const key = normalizeWineText(normalized);
+    if(!key || seen.has(key)) return;
+    seen.add(key);
+    list.push(normalized);
+  };
+  (WINE_DB||[]).forEach(w=>add(w?.origin||""));
+  Object.entries(REGION_COUNTRY_MAP).forEach(([region,country])=>add([region,country].filter(Boolean).join(", ")));
+  [...COUNTRY_SET].forEach(country=>add(country));
+  return list.sort((a,b)=>a.localeCompare(b));
+})();
+const getOriginSuggestions = (query="",dynamicOrigins=[]) => {
+  const q=normalizeWineText(query);
+  if(q.length<1) return [];
+  const out=[];
+  const seen=new Set();
+  const add=(label,priority=2)=>{
+    const normalized=normalizeOriginLabel(label);
+    const key=normalizeWineText(normalized);
+    if(!key||seen.has(key)) return;
+    seen.add(key);
+    out.push({label:normalized,priority});
+  };
+  [...(dynamicOrigins||[]),...ORIGIN_SUGGESTION_BASE].forEach(origin=>{
+    const normalized=normalizeOriginLabel(origin);
+    const key=normalizeWineText(normalized);
+    if(!key||key===q) return;
+    if(key.startsWith(q)) add(normalized,0);
+    else if(key.includes(q)) add(normalized,1);
+  });
+  return out
+    .sort((a,b)=>a.priority-b.priority||a.label.localeCompare(b.label))
+    .slice(0,8);
+};
 
 /* ── SEED DATA ────────────────────────────────────────────────── */
 const SOURCE_CELLAR_ROWS=(wineHoldings2021.cellar||[]).filter(r=>{
@@ -1839,7 +1882,7 @@ const WineDetail=({wine,onEdit,onDelete,onMove,onAdjustConsumption})=>{
 
 /* ── WINE FORM ────────────────────────────────────────────────── */
 const CUSTOM_LOCATION_OPTION = "__custom_location__";
-const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocations=[],onSaveLocation,onRemoveLocation,reviewerSuggestions=[]})=>{
+const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocations=[],originOptions=[],onSaveLocation,onRemoveLocation,reviewerSuggestions=[]})=>{
   const draftKeyRef=useRef(wineFormDraftStorageKey({initial,isWishlist}));
   const draftKey=draftKeyRef.current;
   const knownLocations=dedupeLocations([...LOCATIONS,...locationOptions,...savedLocations,initial?.location]);
@@ -1920,6 +1963,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
   const [sugs,setSugs]=useState([]);
   const [showFields,setShowFields]=useState(!!initial);
   const [draftRestored,setDraftRestored]=useState(false);
+  const [originSugOpen,setOriginSugOpen]=useState(false);
   const [grapeSugOpen,setGrapeSugOpen]=useState(false);
   const selectableLocations=dedupeLocations([...knownLocations,f.location]);
   const selectedLocationValue=locationMode==="custom"
@@ -1971,6 +2015,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
   const canSubmit=!!f.name&&!invalidCustomLocation&&!invalidSplitConfig;
   const showDetailsStep=!usesStepTabs||step==="details";
   const showJournalStep=usesStepTabs&&step==="journal";
+  const originSuggestions=getOriginSuggestions(f.origin,[...originOptions,initial?.origin,f.origin]);
   const grapeSuggestions=getVarietalSuggestions(f.grape,GRAPE_ALIAS_CACHE);
   const hasVarietalInput=!!normalizeWineText(f.grape||"");
   const inferredAutoCategory=(()=>{
@@ -2266,7 +2311,33 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
               <div style={sectionCardStyle}>
                 {sectionTitle("Wine Details")}
                 <Field label="Wine Name" value={f.name} onChange={v=>set("name",v)} placeholder="e.g. Penfolds Grange"/>
-                <Field label="Origin" value={f.origin} onChange={v=>set("origin",v)} placeholder="Region, Country" optional/>
+                <div style={{marginBottom:14,position:"relative"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                    <label style={{fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Origin</label>
+                    <span style={{fontSize:10,color:"var(--sub)",opacity:0.6,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>optional</span>
+                  </div>
+                  <input
+                    value={f.origin}
+                    onFocus={()=>setOriginSugOpen(true)}
+                    onBlur={()=>setTimeout(()=>setOriginSugOpen(false),140)}
+                    onChange={e=>{set("origin",e.target.value);setOriginSugOpen(true);}}
+                    placeholder="Region, Country"
+                  />
+                  {originSugOpen&&originSuggestions.length>0&&(
+                    <div style={{position:"absolute",top:"100%",left:0,right:0,marginTop:4,background:"var(--surface)",border:"1px solid var(--border)",borderRadius:12,boxShadow:"0 12px 32px rgba(0,0,0,0.2)",zIndex:70,maxHeight:220,overflowY:"auto"}}>
+                      {originSuggestions.map(s=>(
+                        <button
+                          key={s.label}
+                          type="button"
+                          onMouseDown={e=>{e.preventDefault();set("origin",s.label);setOriginSugOpen(false);}}
+                          style={{width:"100%",textAlign:"left",padding:"9px 11px",border:"none",borderBottom:"1px solid var(--border)",background:"transparent",cursor:"pointer",fontFamily:"'Plus Jakarta Sans',sans-serif"}}
+                        >
+                          <div style={{fontSize:13,color:"var(--text)",fontWeight:700}}>{s.label}</div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <div style={{display:"grid",gridTemplateColumns:"minmax(0,1.4fr) minmax(0,1fr) minmax(0,1fr)",gap:10}}>
                   <div style={{marginBottom:14,position:"relative"}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
@@ -2832,6 +2903,7 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAdjustConsumption,deskt
   const [filterOpen,setFilterOpen]=useState(false);
   const col=wines.filter(w=>!w.wishlist);
   const locationOptions=dedupeLocations(col.map(w=>w.location));
+  const originOptions=[...new Set(col.map(w=>normalizeOriginLabel(w.origin||"")).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
   const reviewerSuggestions=reviewerSuggestionsFromWines(col);
   const filt=applyFilters(wines,filters,search);
   const recentGrouped=filters.sort==="recent"
@@ -3024,6 +3096,7 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAdjustConsumption,deskt
           onClose={()=>setEditing(false)}
           locationOptions={locationOptions}
           savedLocations={savedLocations}
+          originOptions={originOptions}
           onSaveLocation={onSaveLocation}
           onRemoveLocation={onRemoveLocation}
           reviewerSuggestions={reviewerSuggestions}
@@ -3035,6 +3108,7 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAdjustConsumption,deskt
           onClose={()=>setAdding(false)}
           locationOptions={locationOptions}
           savedLocations={savedLocations}
+          originOptions={originOptions}
           onSaveLocation={onSaveLocation}
           onRemoveLocation={onRemoveLocation}
           reviewerSuggestions={reviewerSuggestions}
