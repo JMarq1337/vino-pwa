@@ -132,7 +132,7 @@ const db = {
 };
 
 const META_PREFIX = "[[VINO_META]]";
-const APP_VERSION = "7.38";
+const APP_VERSION = "7.39";
 const EXCEL_IMPORT_FLAG = "vino_excel_seed_v1";
 const EXCEL_RESTORE_FLAG = "vino_excel_restore_v1";
 const EXCEL_JOURNAL_FIX_FLAG = "vino_excel_journal_fix_v4";
@@ -5906,17 +5906,12 @@ export default function App(){
 
   const splashCollection=(wines||[]).filter(w=>!w?.wishlist);
   const splashReadyCount=splashCollection.filter(w=>wineReadiness(w).key==="ready").length;
-  const splashPastPeakCount=splashCollection.filter(w=>wineReadiness(w).key==="late").length;
   const splashBottlesLeft=splashCollection.reduce((sum,w)=>sum+Math.max(0,Math.round(safeNum(w?.bottles)||0)),0);
   const splashAudits=readAudits();
   const splashInProgressAudits=splashAudits.filter(a=>(a?.status||"")==="in_progress").length;
   const splashContextLine=isNewUser
-    ? "Build a cellar that feels precise, calm, and instantly readable."
-    : splashInProgressAudits>0
-      ? `${splashInProgressAudits} audit${splashInProgressAudits===1?"":"s"} waiting to be completed.`
-      : splashPastPeakCount>0
-        ? `${splashPastPeakCount} wine${splashPastPeakCount===1?"":"s"} may need attention soon.`
-        : `${splashReadyCount} wine${splashReadyCount===1?"":"s"} ready to open now.`;
+    ? "Set up your cellar and start adding wines."
+    : "Your cellar is ready.";
   const splashFooterLine=wines.length>0
     ? `${wines.length} wines · ${splashBottlesLeft} bottles left`
     : "Building your cellar…";
@@ -5932,38 +5927,26 @@ export default function App(){
       ))}
     </div>
   );
-  const WelcomeHeroGraphic=()=>(
-    <div style={{position:"relative",width:isDesktop?360:292,height:isDesktop?246:214,margin:"0 auto 18px",pointerEvents:"none",animation:"floatUp 0.9s ease both"}}>
-      <div style={{position:"absolute",inset:"12% 10% 8%",borderRadius:"50%",background:"radial-gradient(circle at 50% 45%,rgba(var(--accentRgb),0.26),rgba(255,255,255,0.03) 44%,transparent 72%)",filter:"blur(10px)"}}/>
-      <div style={{position:"absolute",inset:"8% 12%",borderRadius:"50%",border:"1px solid rgba(255,255,255,0.08)",transform:"rotate(-11deg)"}}/>
-      <div style={{position:"absolute",inset:"16% 18%",borderRadius:"50%",border:"1px solid rgba(var(--accentRgb),0.22)",transform:"rotate(8deg)"}}/>
-      <div style={{position:"absolute",left:"17%",right:"17%",top:"22%",bottom:"16%",borderRadius:34,background:"linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03))",border:"1px solid rgba(255,255,255,0.14)",boxShadow:"0 22px 60px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.1)",backdropFilter:"blur(16px)",WebkitBackdropFilter:"blur(16px)"}}/>
-      <div style={{position:"absolute",left:"50%",top:"50%",transform:"translate(-50%,-50%)",width:isDesktop?132:118,height:isDesktop?132:118,borderRadius:32,background:"linear-gradient(180deg,rgba(255,255,255,0.12),rgba(255,255,255,0.05))",border:"1px solid rgba(255,255,255,0.16)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 18px 44px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.14)"}}>
-        <BrandLogo size={isDesktop?78:68}/>
-      </div>
-      <div style={{position:"absolute",left:"11%",top:"50%",width:isDesktop?74:64,height:1,borderRadius:999,background:"linear-gradient(90deg,transparent,rgba(255,255,255,0.24))"}}/>
-      <div style={{position:"absolute",right:"11%",top:"50%",width:isDesktop?74:64,height:1,borderRadius:999,background:"linear-gradient(90deg,rgba(255,255,255,0.24),transparent)"}}/>
-      <div style={{position:"absolute",left:"50%",bottom:"6%",transform:"translateX(-50%)",padding:"6px 12px",borderRadius:999,border:"1px solid rgba(255,255,255,0.12)",background:"rgba(255,255,255,0.05)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:11,fontWeight:700,color:"rgba(237,230,224,0.64)",letterSpacing:"0.8px",textTransform:"uppercase"}}>
-        Personal Cellar
-      </div>
-    </div>
-  );
-
   if(splashPhase==="logo"||splashPhase==="greet") return(
     <div style={SPLASH_BG}>
       <style>{CSS}</style>
       <Bubbles/>
-      <div style={{textAlign:"center",position:"relative",zIndex:1,padding:"0 28px",width:"100%",maxWidth:720}}>
-        <WelcomeHeroGraphic/>
-        <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:isDesktop?62:52,fontWeight:800,color:"#EDE6E0",letterSpacing:"-2px",lineHeight:0.96,animation:"floatUp 1s 0.1s ease both"}}>Vinology</div>
+      <div style={{textAlign:"center",position:"relative",zIndex:1,padding:"0 40px",width:"100%",maxWidth:640}}>
+        <div style={{marginBottom:20,animation:"floatUp 1s ease both"}}>
+          <div style={{width:84,height:84,borderRadius:24,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.14)",display:"inline-flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)"}}>
+            <BrandLogo size={56}/>
+          </div>
+        </div>
+        <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:isDesktop?58:52,fontWeight:800,color:"#EDE6E0",letterSpacing:"-2px",lineHeight:1,animation:"floatUp 1s 0.1s ease both"}}>Vinology</div>
+        <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:12,color:"rgba(237,230,224,0.3)",marginTop:16,letterSpacing:"6px",textTransform:"uppercase",animation:"floatUp 1s 0.2s ease both"}}>Personal Cellar</div>
 
         {/* Greeting + button — shown after logo phase */}
         {splashPhase==="greet"&&ready&&(
           <div style={{animation:"floatUp 0.8s 0.1s ease both"}}>
-            <div style={{marginTop:18,fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:18,fontWeight:500,color:"rgba(237,230,224,0.6)",lineHeight:1.5}}>
+            <div style={{marginTop:30,fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:18,fontWeight:400,color:"rgba(237,230,224,0.55)",lineHeight:1.5}}>
               Good {new Date().getHours()<12?"morning":new Date().getHours()<18?"afternoon":"evening"}{profile.name?`, ${profile.name}`:""}
             </div>
-            <div style={{marginTop:8,fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:14,fontWeight:600,color:"rgba(237,230,224,0.52)",letterSpacing:"0.1px",lineHeight:1.45,maxWidth:440,marginInline:"auto"}}>
+            <div style={{marginTop:10,fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:14,fontWeight:600,color:"rgba(237,230,224,0.48)",letterSpacing:"0.1px",lineHeight:1.45,maxWidth:420,marginInline:"auto"}}>
               {splashContextLine}
             </div>
             {!isNewUser&&(
@@ -5989,10 +5972,10 @@ export default function App(){
             {!isNewUser&&(
               <div style={{marginTop:12}}>
                 <button
-                  onClick={()=>goToAppTab(splashInProgressAudits>0?"audit":"ai")}
-                  style={{padding:"6px 8px",border:"none",background:"transparent",color:"rgba(237,230,224,0.62)",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:"pointer",textDecoration:"underline",textUnderlineOffset:"4px"}}
+                  onClick={()=>goToAppTab(splashInProgressAudits>0?"audit":"collection")}
+                  style={{padding:"10px 16px",borderRadius:12,border:"1px solid rgba(255,255,255,0.16)",background:"rgba(255,255,255,0.05)",color:"#EDE6E0",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:"pointer"}}
                 >
-                  {splashInProgressAudits>0?`Resume audit (${splashInProgressAudits})`:"Ask Sommelier"}
+                  {splashInProgressAudits>0?`Open Audit (${splashInProgressAudits})`:"Add Wine"}
                 </button>
               </div>
             )}
