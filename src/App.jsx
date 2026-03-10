@@ -132,7 +132,7 @@ const db = {
 };
 
 const META_PREFIX = "[[VINO_META]]";
-const APP_VERSION = "7.37";
+const APP_VERSION = "7.38";
 const EXCEL_IMPORT_FLAG = "vino_excel_seed_v1";
 const EXCEL_RESTORE_FLAG = "vino_excel_restore_v1";
 const EXCEL_JOURNAL_FIX_FLAG = "vino_excel_journal_fix_v4";
@@ -5910,9 +5910,16 @@ export default function App(){
   const splashBottlesLeft=splashCollection.reduce((sum,w)=>sum+Math.max(0,Math.round(safeNum(w?.bottles)||0)),0);
   const splashAudits=readAudits();
   const splashInProgressAudits=splashAudits.filter(a=>(a?.status||"")==="in_progress").length;
-  const splashPrimaryNudge=splashPastPeakCount>0
-    ? `${splashPastPeakCount} wine${splashPastPeakCount===1?"":"s"} past peak`
-    : `${splashReadyCount} ready to drink`;
+  const splashContextLine=isNewUser
+    ? "Build a cellar that feels precise, calm, and instantly readable."
+    : splashInProgressAudits>0
+      ? `${splashInProgressAudits} audit${splashInProgressAudits===1?"":"s"} waiting to be completed.`
+      : splashPastPeakCount>0
+        ? `${splashPastPeakCount} wine${splashPastPeakCount===1?"":"s"} may need attention soon.`
+        : `${splashReadyCount} wine${splashReadyCount===1?"":"s"} ready to open now.`;
+  const splashFooterLine=wines.length>0
+    ? `${wines.length} wines · ${splashBottlesLeft} bottles left`
+    : "Building your cellar…";
 
   // ── SPLASH / ONBOARDING ──────────────────────────────────────
   const SPLASH_BG={background:"linear-gradient(160deg,#0C0202 0%,#1A0808 50%,#0C0202 100%)",minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",position:"relative",overflow:"hidden"};
@@ -5925,48 +5932,54 @@ export default function App(){
       ))}
     </div>
   );
+  const WelcomeHeroGraphic=()=>(
+    <div style={{position:"relative",width:isDesktop?360:292,height:isDesktop?246:214,margin:"0 auto 18px",pointerEvents:"none",animation:"floatUp 0.9s ease both"}}>
+      <div style={{position:"absolute",inset:"12% 10% 8%",borderRadius:"50%",background:"radial-gradient(circle at 50% 45%,rgba(var(--accentRgb),0.26),rgba(255,255,255,0.03) 44%,transparent 72%)",filter:"blur(10px)"}}/>
+      <div style={{position:"absolute",inset:"8% 12%",borderRadius:"50%",border:"1px solid rgba(255,255,255,0.08)",transform:"rotate(-11deg)"}}/>
+      <div style={{position:"absolute",inset:"16% 18%",borderRadius:"50%",border:"1px solid rgba(var(--accentRgb),0.22)",transform:"rotate(8deg)"}}/>
+      <div style={{position:"absolute",left:"17%",right:"17%",top:"22%",bottom:"16%",borderRadius:34,background:"linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03))",border:"1px solid rgba(255,255,255,0.14)",boxShadow:"0 22px 60px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.1)",backdropFilter:"blur(16px)",WebkitBackdropFilter:"blur(16px)"}}/>
+      <div style={{position:"absolute",left:"50%",top:"50%",transform:"translate(-50%,-50%)",width:isDesktop?132:118,height:isDesktop?132:118,borderRadius:32,background:"linear-gradient(180deg,rgba(255,255,255,0.12),rgba(255,255,255,0.05))",border:"1px solid rgba(255,255,255,0.16)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 18px 44px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.14)"}}>
+        <BrandLogo size={isDesktop?78:68}/>
+      </div>
+      <div style={{position:"absolute",left:"11%",top:"50%",width:isDesktop?74:64,height:1,borderRadius:999,background:"linear-gradient(90deg,transparent,rgba(255,255,255,0.24))"}}/>
+      <div style={{position:"absolute",right:"11%",top:"50%",width:isDesktop?74:64,height:1,borderRadius:999,background:"linear-gradient(90deg,rgba(255,255,255,0.24),transparent)"}}/>
+      <div style={{position:"absolute",left:"50%",bottom:"6%",transform:"translateX(-50%)",padding:"6px 12px",borderRadius:999,border:"1px solid rgba(255,255,255,0.12)",background:"rgba(255,255,255,0.05)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:11,fontWeight:700,color:"rgba(237,230,224,0.64)",letterSpacing:"0.8px",textTransform:"uppercase"}}>
+        Personal Cellar
+      </div>
+    </div>
+  );
 
   if(splashPhase==="logo"||splashPhase==="greet") return(
     <div style={SPLASH_BG}>
       <style>{CSS}</style>
       <Bubbles/>
-      <div style={{textAlign:"center",position:"relative",zIndex:1,padding:"0 40px"}}>
-        {/* Logo */}
-        <div style={{marginBottom:20,animation:"floatUp 1s ease both"}}>
-          <div style={{width:84,height:84,borderRadius:24,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.14)",display:"inline-flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)"}}>
-            <BrandLogo size={56}/>
-          </div>
-        </div>
-        <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:58,fontWeight:800,color:"#EDE6E0",letterSpacing:"-2px",lineHeight:1,animation:"floatUp 1s 0.1s ease both"}}>Vinology</div>
-        <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:12,color:"rgba(237,230,224,0.3)",marginTop:16,letterSpacing:"6px",textTransform:"uppercase",animation:"floatUp 1s 0.2s ease both"}}>Personal Cellar</div>
+      <div style={{textAlign:"center",position:"relative",zIndex:1,padding:"0 28px",width:"100%",maxWidth:720}}>
+        <WelcomeHeroGraphic/>
+        <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:isDesktop?62:52,fontWeight:800,color:"#EDE6E0",letterSpacing:"-2px",lineHeight:0.96,animation:"floatUp 1s 0.1s ease both"}}>Vinology</div>
 
         {/* Greeting + button — shown after logo phase */}
         {splashPhase==="greet"&&ready&&(
           <div style={{animation:"floatUp 0.8s 0.1s ease both"}}>
-            <div style={{marginTop:32,fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:18,fontWeight:400,color:"rgba(237,230,224,0.55)",lineHeight:1.5}}>
+            <div style={{marginTop:18,fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:18,fontWeight:500,color:"rgba(237,230,224,0.6)",lineHeight:1.5}}>
               Good {new Date().getHours()<12?"morning":new Date().getHours()<18?"afternoon":"evening"}{profile.name?`, ${profile.name}`:""}
             </div>
-            <div style={{marginTop:8,fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:13,fontWeight:700,color:"rgba(237,230,224,0.68)",letterSpacing:"0.2px"}}>
-              {isNewUser?"Let’s build your cellar setup.":`Today’s focus: ${splashPrimaryNudge}`}
+            <div style={{marginTop:8,fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:14,fontWeight:600,color:"rgba(237,230,224,0.52)",letterSpacing:"0.1px",lineHeight:1.45,maxWidth:440,marginInline:"auto"}}>
+              {splashContextLine}
             </div>
             {!isNewUser&&(
-              <div style={{marginTop:16,display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:8,maxWidth:520,marginInline:"auto"}}>
-                {[
-                  {label:"Ready Now",value:splashReadyCount},
-                  {label:"Past Peak",value:splashPastPeakCount},
-                  {label:"Bottles Left",value:splashBottlesLeft},
-                ].map(item=>(
-                  <div key={item.label} style={{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:14,padding:"9px 10px",textAlign:"left",backdropFilter:"blur(10px)",WebkitBackdropFilter:"blur(10px)"}}>
-                    <div style={{fontSize:10,color:"rgba(237,230,224,0.5)",fontWeight:700,letterSpacing:"0.9px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{item.label}</div>
-                    <div style={{fontSize:20,lineHeight:1.1,fontWeight:800,color:"#EDE6E0",marginTop:3,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{item.value}</div>
-                  </div>
-                ))}
+              <div style={{marginTop:14,display:"flex",justifyContent:"center",gap:8,flexWrap:"wrap"}}>
+                <div style={{padding:"6px 11px",borderRadius:999,border:"1px solid rgba(255,255,255,0.12)",background:"rgba(255,255,255,0.05)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:11,fontWeight:700,color:"rgba(237,230,224,0.7)"}}>
+                  {splashReadyCount} ready now
+                </div>
+                <div style={{padding:"6px 11px",borderRadius:999,border:"1px solid rgba(255,255,255,0.12)",background:"rgba(255,255,255,0.05)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:11,fontWeight:700,color:"rgba(237,230,224,0.7)"}}>
+                  {splashBottlesLeft} bottles left
+                </div>
               </div>
             )}
-            <div style={{marginTop:30}}>
+            <div style={{marginTop:26}}>
               <button
                 onClick={()=>{ if(isNewUser){setSplashPhase("onboard");}else{goToAppTab("collection");} }}
-                style={{background:"var(--accent)",color:"white",border:"none",borderRadius:20,padding:"16px 44px",fontSize:16,fontWeight:700,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',sans-serif",letterSpacing:"-0.3px",boxShadow:"0 8px 32px rgba(var(--accentRgb),0.5)",transition:"transform 0.15s,box-shadow 0.15s",display:"inline-flex",alignItems:"center",gap:10}}
+                style={{background:"var(--accent)",color:"white",border:"none",borderRadius:20,padding:isDesktop?"17px 46px":"16px 40px",fontSize:16,fontWeight:800,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',sans-serif",letterSpacing:"-0.3px",boxShadow:"0 10px 36px rgba(var(--accentRgb),0.52)",transition:"transform 0.15s,box-shadow 0.15s",display:"inline-flex",alignItems:"center",gap:10}}
                 onMouseEnter={e=>{e.currentTarget.style.transform="scale(1.04)";e.currentTarget.style.boxShadow="0 12px 40px rgba(var(--accentRgb),0.65)";}}
                 onMouseLeave={e=>{e.currentTarget.style.transform="scale(1)";e.currentTarget.style.boxShadow="0 8px 32px rgba(var(--accentRgb),0.5)";}}>
                 <Icon n="chevR" size={18} color="white"/>
@@ -5974,23 +5987,17 @@ export default function App(){
               </button>
             </div>
             {!isNewUser&&(
-              <div style={{marginTop:10,display:"flex",justifyContent:"center",gap:8,flexWrap:"wrap"}}>
+              <div style={{marginTop:12}}>
                 <button
-                  onClick={()=>goToAppTab("audit")}
-                  style={{padding:"9px 14px",borderRadius:12,border:"1px solid rgba(255,255,255,0.2)",background:"rgba(255,255,255,0.06)",color:"#EDE6E0",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:"pointer"}}
+                  onClick={()=>goToAppTab(splashInProgressAudits>0?"audit":"ai")}
+                  style={{padding:"6px 8px",border:"none",background:"transparent",color:"rgba(237,230,224,0.62)",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:"pointer",textDecoration:"underline",textUnderlineOffset:"4px"}}
                 >
-                  {splashInProgressAudits>0?`Resume Audit (${splashInProgressAudits})`:"Open Audit"}
-                </button>
-                <button
-                  onClick={()=>goToAppTab("ai")}
-                  style={{padding:"9px 14px",borderRadius:12,border:"1px solid rgba(255,255,255,0.2)",background:"rgba(255,255,255,0.06)",color:"#EDE6E0",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:"pointer"}}
-                >
-                  Ask Sommelier
+                  {splashInProgressAudits>0?`Resume audit (${splashInProgressAudits})`:"Ask Sommelier"}
                 </button>
               </div>
             )}
-            <div style={{marginTop:16,fontSize:12,color:"rgba(237,230,224,0.2)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
-              {wines.length>0?`${wines.length} wines in your cellar`:"Building your cellar…"}
+            <div style={{marginTop:14,fontSize:12,color:"rgba(237,230,224,0.24)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+              {splashFooterLine}
             </div>
           </div>
         )}
