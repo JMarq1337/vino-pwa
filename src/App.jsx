@@ -132,7 +132,7 @@ const db = {
 };
 
 const META_PREFIX = "[[VINO_META]]";
-const APP_VERSION = "7.48";
+const APP_VERSION = "7.49";
 const EXCEL_IMPORT_FLAG = "vino_excel_seed_v1";
 const EXCEL_RESTORE_FLAG = "vino_excel_restore_v1";
 const EXCEL_JOURNAL_FIX_FLAG = "vino_excel_journal_fix_v4";
@@ -2481,7 +2481,6 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
                       <Field label="Drink From" value={f.drinkStart} onChange={v=>set("drinkStart",v)} type="number" placeholder="2026" optional/>
                       <Field label="Drink By" value={f.drinkEnd} onChange={v=>set("drinkEnd",v)} type="number" placeholder="2034" optional/>
                     </div>
-                    <Field label="Supplier" value={f.supplier} onChange={v=>set("supplier",v)} placeholder="WS / Local shop" optional/>
                   </div>
                   <div style={sectionCardStyle}>
                     {sectionTitle("Pricing")}
@@ -2490,6 +2489,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
                       <Field label="Amount Paid" value={f.totalPaid} onChange={v=>set("totalPaid",v)} type="number" placeholder="179.5" optional/>
                       <Field label="Bottles Paid For" value={f.priceForBottles} onChange={handlePriceForBottlesChange} type="number" placeholder="6" optional/>
                     </div>
+                    <Field label="Supplier" value={f.supplier} onChange={v=>set("supplier",v)} placeholder="WS / Local shop" optional/>
                     <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:2,marginBottom:10}}>
                       <span style={{padding:"4px 9px",borderRadius:16,background:"var(--inputBg)",border:"1px solid var(--border)",fontSize:12,color:"var(--text)",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
                         Calculated paid/bottle: {(calculatedPricePerBottle??existingPaidPerBottle)!=null?`$${Number(calculatedPricePerBottle??existingPaidPerBottle).toFixed(2)}`:"—"}
