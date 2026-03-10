@@ -132,7 +132,7 @@ const db = {
 };
 
 const META_PREFIX = "[[VINO_META]]";
-const APP_VERSION = "7.39";
+const APP_VERSION = "7.40";
 const EXCEL_IMPORT_FLAG = "vino_excel_seed_v1";
 const EXCEL_RESTORE_FLAG = "vino_excel_restore_v1";
 const EXCEL_JOURNAL_FIX_FLAG = "vino_excel_journal_fix_v4";
@@ -1188,67 +1188,83 @@ const Icon=({n,size=20,color="currentColor",fill="none",sw=1.5})=>{
 const BrandLogo=({size=42,variant="color"})=>{
   const uid=useId().replace(/[:]/g,"");
   const ids={
-    berry:`gBerry-${uid}`,
-    stem:`gStem-${uid}`,
-    leaf:`gLeaf-${uid}`,
-    drop:`gDrop-${uid}`,
+    bottle:`logoBottle-${uid}`,
+    bottleGlow:`logoBottleGlow-${uid}`,
+    rackGlow:`logoRackGlow-${uid}`,
+    grapePink:`logoGrapePink-${uid}`,
+    grapeGreen:`logoGrapeGreen-${uid}`,
   };
   const mono=variant==="mono";
-  const stemStroke=mono?"rgba(255,255,255,0.8)":`url(#${ids.stem})`;
-  const stemHighlight=mono?"rgba(255,255,255,0.3)":"rgba(255,239,214,0.26)";
-  const vineStroke=mono?"rgba(255,255,255,0.7)":"#775236";
-  const leafFill=mono?"rgba(255,255,255,0.16)":`url(#${ids.leaf})`;
-  const leafStroke=mono?"rgba(255,255,255,0.72)":"#426634";
-  const leafVein=mono?"rgba(255,255,255,0.44)":"rgba(62,95,49,0.7)";
-  const berryFill=mono?"rgba(255,255,255,0.16)":`url(#${ids.berry})`;
-  const berryStroke=mono?"rgba(255,255,255,0.64)":"#2C1020";
-  const berryHighlight=mono?"rgba(255,255,255,0.2)":"rgba(255,255,255,0.16)";
-  const berries=[
-    [24,30],[32,30],[40,30],[48,30],
-    [28,37],[36,37],[44,37],
-    [24,44],[32,44],[40,44],[48,44],
-    [28,51],[36,51],[44,51],
-    [32,58],[40,58],
-    [36,65],
+  const rackFill=mono?"rgba(255,255,255,0.14)":"#505978";
+  const rackStroke=mono?"rgba(255,255,255,0.34)":"#2F3650";
+  const grapeStroke=mono?"rgba(255,255,255,0.42)":"#5C113F";
+  const bottleStroke=mono?"rgba(255,255,255,0.42)":"#5F0B43";
+  const accentPink=mono?"rgba(255,255,255,0.2)":`url(#${ids.grapePink})`;
+  const accentGreen=mono?"rgba(255,255,255,0.16)":`url(#${ids.grapeGreen})`;
+  const bottleFill=mono?"rgba(255,255,255,0.18)":`url(#${ids.bottle})`;
+  const circles=[
+    {cx:22,cy:39,fill:accentPink},
+    {cx:33,cy:39,fill:accentGreen},
+    {cx:22,cy:51,fill:accentPink},
+    {cx:33,cy:51,fill:accentPink},
+    {cx:63,cy:39,fill:accentPink},
+    {cx:74,cy:39,fill:accentPink},
+    {cx:63,cy:51,fill:accentGreen},
+    {cx:74,cy:51,fill:accentPink},
   ];
 
   return(
-    <svg width={size} height={size} viewBox="0 0 72 72" aria-hidden="true">
+    <svg width={size} height={size} viewBox="0 0 96 96" aria-hidden="true">
       <defs>
-        <radialGradient id={ids.berry} cx="33%" cy="24%" r="78%">
-          <stop offset="0%" stopColor="#9D2C55"/>
-          <stop offset="58%" stopColor="#641C3A"/>
-          <stop offset="100%" stopColor="#3A1226"/>
+        <linearGradient id={ids.bottle} x1="48" y1="10" x2="48" y2="82" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#A40B72"/>
+          <stop offset="52%" stopColor="#7B084F"/>
+          <stop offset="100%" stopColor="#4F062E"/>
+        </linearGradient>
+        <radialGradient id={ids.grapePink} cx="35%" cy="32%" r="80%">
+          <stop offset="0%" stopColor="#B51B82"/>
+          <stop offset="65%" stopColor="#8B0E61"/>
+          <stop offset="100%" stopColor="#5E0A40"/>
         </radialGradient>
-        <linearGradient id={ids.stem} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#8F6A49"/>
-          <stop offset="100%" stopColor="#5A412A"/>
-        </linearGradient>
-        <linearGradient id={ids.leaf} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#6C8B4A"/>
-          <stop offset="100%" stopColor="#3E6132"/>
-        </linearGradient>
-        <filter id={ids.drop} x="-25%" y="-25%" width="150%" height="150%">
-          <feDropShadow dx="0" dy="1.2" stdDeviation="1.05" floodColor="#240B1C" floodOpacity="0.24"/>
+        <radialGradient id={ids.grapeGreen} cx="35%" cy="32%" r="80%">
+          <stop offset="0%" stopColor="#A5C86F"/>
+          <stop offset="72%" stopColor="#8EAF58"/>
+          <stop offset="100%" stopColor="#6D8B40"/>
+        </radialGradient>
+        <filter id={ids.bottleGlow} x="-45%" y="-40%" width="190%" height="200%">
+          <feDropShadow dx="0" dy="5" stdDeviation="6" floodColor={mono?"rgba(255,255,255,0.18)":"#96196B"} floodOpacity={mono?0.22:0.42}/>
+        </filter>
+        <filter id={ids.rackGlow} x="-20%" y="-20%" width="140%" height="150%">
+          <feDropShadow dx="0" dy="2" stdDeviation="2.2" floodColor={mono?"rgba(255,255,255,0.12)":"#5D6587"} floodOpacity={mono?0.12:0.22}/>
         </filter>
       </defs>
 
-      <g filter={mono?undefined:`url(#${ids.drop})`}>
-        <path d="M36 8c1.8 4.8 1.8 9.2 0 14" fill="none" stroke={stemStroke} strokeWidth="2.9" strokeLinecap="round"/>
-        <path d="M36.6 9.6c.7 3.1.7 6.3-.2 9.3" fill="none" stroke={stemHighlight} strokeWidth="0.9" strokeLinecap="round"/>
-        <path d="M36 17.1C30.4 12.8 22.6 11.6 16.8 14.5c-3.2 1.7-3.6 5.7-.5 7.7 2.8 1.7 6.5 1.6 9.3-.3" fill="none" stroke={vineStroke} strokeWidth="1.6" strokeLinecap="round"/>
-        <path d="M36 17.1C41.7 12.3 50.2 11.3 56.7 14.8c3 1.7 3.4 5.5.5 7.3-2.7 1.7-6.4 1.6-9.1-.2" fill="none" stroke={vineStroke} strokeWidth="1.6" strokeLinecap="round"/>
-        <path d="M16.9 14.6c-1.3.8-1.4 2.1-.7 3.1.7 1.1 2 1.5 3.2 1.1" fill="none" stroke={vineStroke} strokeWidth="1.45" strokeLinecap="round"/>
-        <path d="M56.6 14.9c1.2.8 1.4 2.1.7 3.1-.7 1.1-2 1.5-3.2 1.1" fill="none" stroke={vineStroke} strokeWidth="1.45" strokeLinecap="round"/>
-        <path d="M18.5 11.7C23.5 8.7 30.3 9.5 35 14.5c-1.8 4.4-5.2 7.2-9.8 8.1-3.9.7-8-1.2-9.5-4.4-1.4-3 .2-5.3 2.8-6.5z" fill={leafFill} stroke={leafStroke} strokeWidth="1.12" strokeLinejoin="round"/>
-        <path d="M24.2 14.3c.2 3.2-.2 6.2-1.3 8.8M24 15.7c-2.2-.8-4.4-1.8-6.3-3M24.2 18c-2.8 1-5.5 1.6-8.4 1.8M25.2 20.4c-1.7 1.9-3.7 3.5-5.8 4.8" fill="none" stroke={leafVein} strokeWidth="0.86" strokeLinecap="round"/>
+      <g filter={mono?undefined:`url(#${ids.rackGlow})`} fill={rackFill} stroke={rackStroke} strokeWidth="1.25">
+        <rect x="10" y="30" width="26" height="3.5" rx="0.8"/>
+        <rect x="10" y="42" width="26" height="3.5" rx="0.8"/>
+        <rect x="10" y="54" width="26" height="3.5" rx="0.8"/>
+        <rect x="60" y="30" width="26" height="3.5" rx="0.8"/>
+        <rect x="60" y="42" width="26" height="3.5" rx="0.8"/>
+        <rect x="60" y="54" width="26" height="3.5" rx="0.8"/>
       </g>
 
-      <g fill={berryFill} stroke={berryStroke} strokeWidth="1.12">
-        {berries.map(([cx,cy],i)=><circle key={i} cx={cx} cy={cy} r="4.68"/>)}
+      <g filter={mono?undefined:`url(#${ids.bottleGlow})`}>
+        <path
+          d="M44.8 12h6.4a1.9 1.9 0 0 1 1.9 1.9v4.3c0 .8-.48 1.5-1.18 1.77V31c0 3.5 1.82 6.18 4.28 9.08 2.98 3.52 4.82 8.16 4.82 13.3v22.5c0 2.6-1.76 4.84-4.28 5.45-5.88 1.42-11.98 1.42-17.86 0-2.52-.61-4.28-2.85-4.28-5.45v-22.5c0-5.14 1.84-9.78 4.82-13.3 2.46-2.9 4.28-5.58 4.28-9.08V19.99a1.92 1.92 0 0 1-1.18-1.77v-4.3A1.9 1.9 0 0 1 44.8 12Z"
+          fill={bottleFill}
+          stroke={bottleStroke}
+          strokeWidth="1.45"
+        />
+        <path
+          d="M46.2 29.8c-3.45 2.54-5.7 7.2-5.7 13.1v14.7c2.86-.82 5.56-2.76 6.97-5.64.9-1.86 1.03-3.74 1.03-6.45V34.1c0-1.56-.53-3.03-2.3-4.3Z"
+          fill={mono?"rgba(255,255,255,0.08)":"rgba(255,214,248,0.22)"}
+        />
       </g>
-      <g fill={berryHighlight}>
-        {berries.map(([cx,cy],i)=><circle key={`h-${i}`} cx={cx-1.52} cy={cy-1.68} r="1.14"/>)}
+
+      <g stroke={grapeStroke} strokeWidth="1.05">
+        {circles.map(({cx,cy,fill},i)=>(
+          <circle key={i} cx={cx} cy={cy} r="5.05" fill={fill}/>
+        ))}
       </g>
     </svg>
   );
