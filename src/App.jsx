@@ -132,7 +132,7 @@ const db = {
 };
 
 const META_PREFIX = "[[VINO_META]]";
-const APP_VERSION = "7.47";
+const APP_VERSION = "7.48";
 const EXCEL_IMPORT_FLAG = "vino_excel_seed_v1";
 const EXCEL_RESTORE_FLAG = "vino_excel_restore_v1";
 const EXCEL_JOURNAL_FIX_FLAG = "vino_excel_journal_fix_v4";
@@ -2124,6 +2124,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
       journalUpdatedAt,
     };
     if(splitEnabled){
+      const splitGroupId=uid();
       const secondLocation=canonicalLocation(splitLocationRaw,splitSelectableLocations)||"";
       const secondSection=secondLocation==="Kennards"?(normalizeKennardsSection(f.splitLocationSection)||"Cube"):"";
       const firstLeft=Math.max(0,leftInput);
@@ -2152,7 +2153,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
         bottles:firstLeft,
         location:finalLocation,
         locationSlot:f.locationSlot||null,
-        cellarMeta:{...sharedMetaBase,locationSection:finalSection,totalPurchased:firstPurchased,totalPaid:firstTotalPaid}
+        cellarMeta:{...sharedMetaBase,splitGroupId,locationSection:finalSection,totalPurchased:firstPurchased,totalPaid:firstTotalPaid}
       });
       onSave({
         ...sharedBase,
@@ -2160,7 +2161,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
         bottles:secondLeft,
         location:secondLocation,
         locationSlot:f.splitLocationSlot||null,
-        cellarMeta:{...sharedMetaBase,locationSection:secondSection,totalPurchased:secondPurchased,totalPaid:secondTotalPaid}
+        cellarMeta:{...sharedMetaBase,splitGroupId,locationSection:secondSection,totalPurchased:secondPurchased,totalPaid:secondTotalPaid}
       });
     }else{
       onSave({
@@ -2379,7 +2380,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
                           </span>
                         </button>
                         <div style={{fontSize:11.5,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.5}}>
-                          Useful when bottles are split across two storage locations and tracked independently.
+                          Split bottles across two locations.
                         </div>
                       </div>
                     )}
@@ -2387,7 +2388,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
                       <div style={{marginBottom:12,padding:"10px 11px",borderRadius:12,background:"linear-gradient(180deg,rgba(var(--accentRgb),0.14),var(--inputBg))",border:"1px solid rgba(var(--accentRgb),0.3)",boxShadow:"inset 0 1px 0 rgba(255,255,255,0.35)"}}>
                         <div style={{fontSize:10,color:"var(--accent)",fontWeight:800,textTransform:"uppercase",letterSpacing:"0.8px",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Second Card Setup</div>
                         <div style={{display:"grid",gridTemplateColumns:"1fr 2fr 1fr",gap:10}}>
-                          <Field label="Bottles (2nd)" value={f.splitSecondBottles} onChange={handleSplitSecondBottlesChange} type="number" placeholder="1" optional/>
+                          <Field label="2nd Qty" value={f.splitSecondBottles} onChange={handleSplitSecondBottlesChange} type="number" placeholder="1"/>
                           <SelField
                             label="Second Location"
                             value={splitSelectedLocationValue}
@@ -2401,7 +2402,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
                             }}
                             options={[...splitSelectableLocations.map(loc=>({value:loc,label:loc})),{value:CUSTOM_LOCATION_OPTION,label:"Custom location…"}]}
                           />
-                          <Field label={splitIsKennardsLocation?"Box No.":"Slot"} value={f.splitLocationSlot} onChange={v=>set("splitLocationSlot",v)} placeholder={splitIsKennardsLocation?"e.g. 204":"A3"} optional/>
+                          <Field label={splitIsKennardsLocation?"Box No.":"Slot"} value={f.splitLocationSlot} onChange={v=>set("splitLocationSlot",v)} placeholder={splitIsKennardsLocation?"e.g. 204":"A3"}/>
                         </div>
                         {splitIsKennardsLocation&&(
                           <SelField
@@ -4007,6 +4008,39 @@ const formatJournalUpdated = wine => {
   const d=new Date(ts);
   return d.toLocaleString("en-AU",{day:"numeric",month:"short",year:"numeric"});
 };
+const journalGroupKey = wine => ((wine?.cellarMeta?.splitGroupId||"").toString().trim()||`wine:${wine?.id||""}`);
+const dedupeJournalWines = wines => {
+  const out=new Map();
+  (wines||[]).forEach(w=>{
+    const key=journalGroupKey(w);
+    const prev=out.get(key);
+    if(!prev){
+      out.set(key,w);
+      return;
+    }
+    const prevTs=journalUpdatedTimestamp(prev);
+    const nextTs=journalUpdatedTimestamp(w);
+    if(nextTs>prevTs){
+      out.set(key,w);
+      return;
+    }
+    if(nextTs===prevTs&&(safeNum(w?.bottles)||0)>(safeNum(prev?.bottles)||0)){
+      out.set(key,w);
+    }
+  });
+  return [...out.values()];
+};
+const applyJournalFieldsToWine = (target,source) => ({
+  ...target,
+  review:source.review,
+  reviewPrimaryReviewer:source.reviewPrimaryReviewer,
+  reviewPrimaryRating:source.reviewPrimaryRating,
+  otherReviews:normalizeOtherReviews(source.otherReviews||[]),
+  notes:source.notes||"",
+  tastingNotes:serializeOtherRatings(normalizeOtherReviews(source.otherReviews||[])),
+  rating:source.rating||0,
+  cellarMeta:{...(target.cellarMeta||{}),journalUpdatedAt:source.cellarMeta?.journalUpdatedAt||new Date().toISOString()},
+});
 
 const JournalWineCard=({wine,onClick,active=false})=>{
   const type=resolveWineType(wine);
@@ -4190,8 +4224,22 @@ const JournalScreen=({wines,onUpdate,desktop})=>{
   const [editing,setEditing]=useState(false);
   const [notesOnly,setNotesOnly]=useState(false);
   const [sortBy,setSortBy]=useState("updated");
-  const col=wines.filter(w=>!w.wishlist);
-  const reviewerSuggestions=reviewerSuggestionsFromWines(col);
+  const allJournalWines=wines.filter(w=>!w.wishlist);
+  const col=dedupeJournalWines(allJournalWines);
+  const reviewerSuggestions=reviewerSuggestionsFromWines(allJournalWines);
+  const syncJournalSave=updatedWine=>{
+    const key=journalGroupKey(updatedWine);
+    const targets=allJournalWines.filter(w=>journalGroupKey(w)===key);
+    if(targets.length<=1){
+      onUpdate(updatedWine);
+      setSelectedId(updatedWine.id);
+      setEditing(false);
+      return;
+    }
+    targets.forEach(target=>onUpdate(applyJournalFieldsToWine(target,updatedWine)));
+    setSelectedId(targets[0]?.id||updatedWine.id);
+    setEditing(false);
+  };
   const filtered=col
     .filter(w=>{
       if(!search.trim()) return true;
@@ -4303,7 +4351,7 @@ const JournalScreen=({wines,onUpdate,desktop})=>{
                         reviewerSuggestions={reviewerSuggestions}
                         inline
                         onClose={()=>setEditing(false)}
-                        onSave={w=>{onUpdate(w);setSelectedId(w.id);setEditing(false);}}
+                        onSave={syncJournalSave}
                       />
                     : <JournalWineDetail wine={selectedWine} onEdit={()=>setEditing(true)}/>
                 }
@@ -4341,7 +4389,7 @@ const JournalScreen=({wines,onUpdate,desktop})=>{
         )}
       </Modal>
       <Modal show={!desktop&&!!selectedWine&&editing} onClose={()=>setEditing(false)} wide>
-        {selectedWine&&<JournalNoteForm wine={selectedWine} reviewerSuggestions={reviewerSuggestions} onClose={()=>setEditing(false)} onSave={w=>{onUpdate(w);setSelectedId(w.id);setEditing(false);}}/>}
+        {selectedWine&&<JournalNoteForm wine={selectedWine} reviewerSuggestions={reviewerSuggestions} onClose={()=>setEditing(false)} onSave={syncJournalSave}/>}
       </Modal>
     </div>
   );
