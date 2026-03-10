@@ -132,7 +132,7 @@ const db = {
 };
 
 const META_PREFIX = "[[VINO_META]]";
-const APP_VERSION = "7.45";
+const APP_VERSION = "7.46";
 const EXCEL_IMPORT_FLAG = "vino_excel_seed_v1";
 const EXCEL_RESTORE_FLAG = "vino_excel_restore_v1";
 const EXCEL_JOURNAL_FIX_FLAG = "vino_excel_journal_fix_v4";
@@ -1186,17 +1186,47 @@ const Icon=({n,size=20,color="currentColor",fill="none",sw=1.5})=>{
 };
 
 const BrandLogo=({size=42,variant="color"})=>{
-  const src=variant==="mono"?"/icons/logo-mark-mono.svg":"/icons/logo-user-512.png";
+  const isMono=variant==="mono";
+  const src=isMono?"/icons/logo-mark-mono.svg":"/icons/logo-user-tight-512.png";
+  if(isMono){
+    return(
+      <img
+        src={src}
+        alt=""
+        aria-hidden="true"
+        width={size}
+        height={size}
+        draggable="false"
+        style={{display:"block",width:size,height:size,objectFit:"contain",objectPosition:"center"}}
+      />
+    );
+  }
+  const radius=Math.max(10,Math.round(size*0.26));
   return(
-    <img
-      src={src}
-      alt=""
+    <div
       aria-hidden="true"
-      width={size}
-      height={size}
-      draggable="false"
-      style={{display:"block",width:size,height:size,objectFit:"contain",objectPosition:"center"}}
-    />
+      style={{
+        width:size,
+        height:size,
+        borderRadius:radius,
+        background:"#fff",
+        border:"1px solid rgba(0,0,0,0.06)",
+        boxShadow:"0 8px 18px rgba(0,0,0,0.14)",
+        display:"flex",
+        alignItems:"center",
+        justifyContent:"center",
+        overflow:"hidden",
+      }}
+    >
+      <img
+        src={src}
+        alt=""
+        width={size}
+        height={size}
+        draggable="false"
+        style={{display:"block",width:size,height:size,objectFit:"contain",objectPosition:"center"}}
+      />
+    </div>
   );
 };
 
