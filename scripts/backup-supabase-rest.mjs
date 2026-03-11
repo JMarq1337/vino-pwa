@@ -21,7 +21,7 @@ const SUPABASE_KEY =
   trim(process.env.SUPABASE_KEY);
 const BACKUP_OUT_DIR = trim(process.env.BACKUP_OUT_DIR) || "backups";
 const PAGE_SIZE = Math.max(100, Math.min(5000, Number(process.env.BACKUP_PAGE_SIZE) || 1000));
-const BACKUP_TABLES = (trim(process.env.BACKUP_TABLES) || "wines,profile,audits,tasting_notes,grape_aliases")
+const BACKUP_TABLES = (trim(process.env.BACKUP_TABLES) || "wines,profile,audits,tasting_notes,grape_aliases,cellar_events,cellar_snapshots")
   .split(",")
   .map(s => s.trim())
   .filter(Boolean);

@@ -11,7 +11,9 @@ const CHANGE_LOG_KEY = "vino_change_log_v1";
 const OUTBOX_KEY = "vino_sync_outbox_v2";
 const OUTBOX_MAX = 3000;
 const IDB_SNAPSHOT_DB = "vinology-backups";
+const IDB_DB_VERSION = 2;
 const IDB_SNAPSHOT_STORE = "snapshots";
+const IDB_OUTBOX_STORE = "outbox_ops";
 const IDB_SNAPSHOT_MAX = 120;
 const makeLocalId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2,10)}`;
 const readLSJson = (key,fallback) => {
@@ -77,11 +79,15 @@ const openSnapshotDb = () => {
   snapshotDbPromise = new Promise(resolve=>{
     try{
       if(typeof indexedDB==="undefined") return resolve(null);
-      const req=indexedDB.open(IDB_SNAPSHOT_DB,1);
+      const req=indexedDB.open(IDB_SNAPSHOT_DB,IDB_DB_VERSION);
       req.onupgradeneeded=()=>{
         const db=req.result;
         if(!db.objectStoreNames.contains(IDB_SNAPSHOT_STORE)){
           const store=db.createObjectStore(IDB_SNAPSHOT_STORE,{keyPath:"id"});
+          store.createIndex("created_at","created_at",{unique:false});
+        }
+        if(!db.objectStoreNames.contains(IDB_OUTBOX_STORE)){
+          const store=db.createObjectStore(IDB_OUTBOX_STORE,{keyPath:"id"});
           store.createIndex("created_at","created_at",{unique:false});
         }
       };
@@ -131,6 +137,57 @@ const saveIndexedSnapshot = async (reason,state) => {
       tx.onabort=()=>resolve();
     });
   }catch{}
+};
+const idbOutboxReplace = async list => {
+  try{
+    const dbConn=await openSnapshotDb();
+    if(!dbConn) return false;
+    await new Promise(resolve=>{
+      const tx=dbConn.transaction(IDB_OUTBOX_STORE,"readwrite");
+      const store=tx.objectStore(IDB_OUTBOX_STORE);
+      const clearReq=store.clear();
+      clearReq.onsuccess=()=>{
+        (Array.isArray(list)?list:[]).forEach(item=>store.put(item));
+      };
+      tx.oncomplete=()=>resolve();
+      tx.onerror=()=>resolve();
+      tx.onabort=()=>resolve();
+    });
+    return true;
+  }catch{
+    return false;
+  }
+};
+const idbOutboxRead = async () => {
+  try{
+    const dbConn=await openSnapshotDb();
+    if(!dbConn) return [];
+    return await new Promise(resolve=>{
+      const tx=dbConn.transaction(IDB_OUTBOX_STORE,"readonly");
+      const req=tx.objectStore(IDB_OUTBOX_STORE).getAll();
+      req.onsuccess=()=>resolve(Array.isArray(req.result)?req.result:[]);
+      req.onerror=()=>resolve([]);
+      tx.onabort=()=>resolve([]);
+    });
+  }catch{
+    return [];
+  }
+};
+const idbOutboxAppend = async op => {
+  try{
+    const dbConn=await openSnapshotDb();
+    if(!dbConn) return false;
+    await new Promise(resolve=>{
+      const tx=dbConn.transaction(IDB_OUTBOX_STORE,"readwrite");
+      tx.objectStore(IDB_OUTBOX_STORE).put(op);
+      tx.oncomplete=()=>resolve();
+      tx.onerror=()=>resolve();
+      tx.onabort=()=>resolve();
+    });
+    return true;
+  }catch{
+    return false;
+  }
 };
 const normalizeAiMemoryList = value => {
   const src = Array.isArray(value)
@@ -195,7 +252,9 @@ const db = {
     },delay);
   },
   queue(op){
-    enqueueOutbox(op);
+    const normalized={...op,id:op?.id||makeLocalId(),created_at:op?.created_at||new Date().toISOString(),attempts:Math.max(0,Math.round(Number(op?.attempts)||0))};
+    enqueueOutbox(normalized);
+    void idbOutboxAppend(normalized);
     this.scheduleFlush();
   },
   async _execOutboxOp(op){
@@ -231,7 +290,14 @@ const db = {
     if(this._flushing) return {ok:true,pending:readOutbox().length};
     this._flushing=true;
     try{
-      const queue=readOutbox();
+      const lsQueue=readOutbox();
+      const idbQueue=await idbOutboxRead();
+      const queueMap=new Map();
+      [...lsQueue,...idbQueue].forEach(op=>{
+        if(!op||!op.id) return;
+        queueMap.set(op.id,op);
+      });
+      const queue=[...queueMap.values()].sort((a,b)=>(a.created_at||"").localeCompare(b.created_at||""));
       if(!queue.length) return {ok:true,pending:0};
       const next=[];
       for(const op of queue){
@@ -243,22 +309,23 @@ const db = {
         next.push({...op,attempts,last_error:res.error||"",updated_at:new Date().toISOString()});
       }
       writeOutbox(next);
+      await idbOutboxReplace(next);
       return {ok:true,pending:next.length};
     }finally{
       this._flushing=false;
     }
   },
   async logEvent(entity,action,entityId,payload) {
-    const safePayload=sanitizeLogPayload(payload||{});
+    const rawPayload=payload||{};
     const event={
       id:makeLocalId(),
       entity:entity||"",
       action:action||"",
       entity_id:entityId||"",
-      payload:safePayload,
+      payload:rawPayload,
       created_at:new Date().toISOString(),
     };
-    appendLocalChangeLog(event);
+    appendLocalChangeLog({...event,payload:sanitizeLogPayload(rawPayload)});
     this.queue({kind:"event",event});
   },
   async get(t) {
@@ -408,7 +475,7 @@ const db = {
 };
 
 const META_PREFIX = "[[VINO_META]]";
-const APP_VERSION = "7.52";
+const APP_VERSION = "7.53";
 const EXCEL_IMPORT_FLAG = "vino_excel_seed_v1";
 const EXCEL_RESTORE_FLAG = "vino_excel_restore_v1";
 const EXCEL_JOURNAL_FIX_FLAG = "vino_excel_journal_fix_v4";

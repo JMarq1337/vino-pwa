@@ -12,7 +12,7 @@ const chunk = (arr, size) => {
   return out;
 };
 const parseArgs = argv => {
-  const args = { file: "", chunkSize: 500 };
+  const args = { file: "", chunkSize: 500, tables: [] };
   for (let i = 2; i < argv.length; i += 1) {
     const v = argv[i];
     if (v === "--file") {
@@ -22,6 +22,15 @@ const parseArgs = argv => {
     }
     if (v === "--chunk-size") {
       args.chunkSize = Math.max(50, Math.min(2000, Number(argv[i + 1]) || 500));
+      i += 1;
+      continue;
+    }
+    if (v === "--tables") {
+      const raw = trim(argv[i + 1]);
+      args.tables = raw
+        .split(",")
+        .map(x => trim(x))
+        .filter(Boolean);
       i += 1;
       continue;
     }
@@ -45,7 +54,7 @@ if (!SUPABASE_KEY) {
   process.exit(1);
 }
 if (!args.file) {
-  console.error("Usage: node scripts/restore-supabase-rest.mjs --file backups/vinology-.../backup.json.gz");
+  console.error("Usage: node scripts/restore-supabase-rest.mjs --file backups/vinology-.../backup.json.gz [--tables wines,profile]");
   process.exit(1);
 }
 
@@ -61,7 +70,7 @@ try {
 }
 
 const tableMap = parsed?.tables && typeof parsed.tables === "object" ? parsed.tables : {};
-const tableOrder = ["profile", "wines", "audits", "tasting_notes", "grape_aliases"];
+const tableOrder = ["profile", "wines", "audits", "tasting_notes", "grape_aliases", "cellar_events", "cellar_snapshots"];
 const orderedTables = [
   ...tableOrder.filter(t => Object.prototype.hasOwnProperty.call(tableMap, t)),
   ...Object.keys(tableMap).filter(t => !tableOrder.includes(t)),
@@ -77,6 +86,8 @@ const conflictKeyByTable = {
   audits: "id",
   tasting_notes: "id",
   grape_aliases: "alias",
+  cellar_events: "id",
+  cellar_snapshots: "id",
 };
 
 const headers = {
@@ -112,7 +123,14 @@ const upsertRows = async (table, rows, conflictKey) => {
 
 console.log(`Restoring from: ${filePath}`);
 let totalRows = 0;
-for (const table of orderedTables) {
+const selectedTables = args.tables.length
+  ? orderedTables.filter(t => args.tables.includes(t))
+  : orderedTables;
+if (args.tables.length && !selectedTables.length) {
+  console.error(`No matching tables found for --tables ${args.tables.join(",")}. Available: ${orderedTables.join(", ")}`);
+  process.exit(1);
+}
+for (const table of selectedTables) {
   const entry = tableMap[table];
   const rows = Array.isArray(entry)
     ? entry
