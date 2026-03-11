@@ -7,7 +7,10 @@
     "build": "vite build",
     "preview": "vite preview",
     "backup:supabase": "node scripts/backup-supabase-rest.mjs",
-    "restore:supabase": "node scripts/restore-supabase-rest.mjs"
+    "restore:supabase": "node scripts/restore-supabase-rest.mjs",
+    "repair:consumption": "node scripts/repair-consumption-regression.mjs",
+    "restore:export-consumption": "node scripts/restore-from-export-consumption.mjs",
+    "restore:photos": "node scripts/restore-photos-from-backup.mjs"
   },
   "dependencies": {
     "react": "^18.2.0",

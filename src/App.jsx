@@ -9,6 +9,7 @@ const BH = { "Content-Type":"application/json","apikey":SUPA_KEY,"Authorization"
 const UH = { ...BH, "Prefer":"resolution=merge-duplicates,return=minimal" };
 const CHANGE_LOG_KEY = "vino_change_log_v1";
 const OUTBOX_KEY = "vino_sync_outbox_v2";
+const SYNC_HEALTH_KEY = "vino_sync_health_v1";
 const OUTBOX_MAX = 3000;
 const IDB_SNAPSHOT_DB = "vinology-backups";
 const IDB_DB_VERSION = 2;
@@ -33,6 +34,42 @@ const writeLSJson = (key,value) => {
   }catch{
     return false;
   }
+};
+const defaultSyncHealth = () => ({
+  status:"idle",
+  pending:0,
+  lastAttempt:"",
+  lastSuccess:"",
+  lastError:"",
+  updatedAt:"",
+});
+const readSyncHealth = () => {
+  const base = defaultSyncHealth();
+  const parsed = readLSJson(SYNC_HEALTH_KEY,base);
+  if(!parsed || typeof parsed!=="object") return base;
+  return {
+    status:(parsed.status||base.status).toString(),
+    pending:Math.max(0,Math.round(Number(parsed.pending)||0)),
+    lastAttempt:(parsed.lastAttempt||"").toString(),
+    lastSuccess:(parsed.lastSuccess||"").toString(),
+    lastError:(parsed.lastError||"").toString(),
+    updatedAt:(parsed.updatedAt||"").toString(),
+  };
+};
+const emitSyncHealth = health => {
+  const normalized = {
+    ...defaultSyncHealth(),
+    ...(health||{}),
+    pending:Math.max(0,Math.round(Number((health||{}).pending)||0)),
+    updatedAt:new Date().toISOString(),
+  };
+  writeLSJson(SYNC_HEALTH_KEY,normalized);
+  try{
+    if(typeof window!=="undefined" && typeof window.dispatchEvent==="function"){
+      window.dispatchEvent(new CustomEvent("vino-sync-health",{detail:normalized}));
+    }
+  }catch{}
+  return normalized;
 };
 const sanitizeLogPayload = (value,key="",depth=0) => {
   if(depth>3) return "[truncated-depth]";
@@ -244,6 +281,15 @@ const performProfileWrite = async p => {
 const db = {
   _flushing:false,
   _flushTimer:null,
+  _health:readSyncHealth(),
+  setHealth(patch){
+    this._health = emitSyncHealth({...this._health,...(patch||{})});
+    return this._health;
+  },
+  getHealth(){
+    this._health = readSyncHealth();
+    return this._health;
+  },
   scheduleFlush(delay=900){
     if(this._flushTimer) return;
     this._flushTimer=setTimeout(()=>{
@@ -255,6 +301,11 @@ const db = {
     const normalized={...op,id:op?.id||makeLocalId(),created_at:op?.created_at||new Date().toISOString(),attempts:Math.max(0,Math.round(Number(op?.attempts)||0))};
     enqueueOutbox(normalized);
     void idbOutboxAppend(normalized);
+    this.setHealth({
+      status:"queued",
+      pending:Math.max(1,readOutbox().length),
+      lastError:"",
+    });
     this.scheduleFlush();
   },
   async _execOutboxOp(op){
@@ -289,6 +340,8 @@ const db = {
   async flushOutbox(){
     if(this._flushing) return {ok:true,pending:readOutbox().length};
     this._flushing=true;
+    const attemptAt = new Date().toISOString();
+    this.setHealth({status:"syncing",lastAttempt:attemptAt});
     try{
       const lsQueue=readOutbox();
       const idbQueue=await idbOutboxRead();
@@ -298,11 +351,16 @@ const db = {
         queueMap.set(op.id,op);
       });
       const queue=[...queueMap.values()].sort((a,b)=>(a.created_at||"").localeCompare(b.created_at||""));
-      if(!queue.length) return {ok:true,pending:0};
+      if(!queue.length){
+        this.setHealth({status:"healthy",pending:0,lastSuccess:attemptAt,lastError:""});
+        return {ok:true,pending:0};
+      }
       const next=[];
+      let firstErr="";
       for(const op of queue){
         const res=await this._execOutboxOp(op);
         if(res.ok) continue;
+        if(!firstErr) firstErr = res.error||"sync failed";
         const attempts=Math.max(0,Math.round(Number(op?.attempts)||0))+1;
         const isPermanent=!!res.permanent;
         if(isPermanent || attempts>=50) continue;
@@ -310,6 +368,11 @@ const db = {
       }
       writeOutbox(next);
       await idbOutboxReplace(next);
+      if(next.length===0){
+        this.setHealth({status:"healthy",pending:0,lastSuccess:new Date().toISOString(),lastError:""});
+      }else{
+        this.setHealth({status:"retrying",pending:next.length,lastError:firstErr||next[0]?.last_error||"pending retry"});
+      }
       return {ok:true,pending:next.length};
     }finally{
       this._flushing=false;
@@ -475,7 +538,7 @@ const db = {
 };
 
 const META_PREFIX = "[[VINO_META]]";
-const APP_VERSION = "7.53";
+const APP_VERSION = "7.54";
 const EXCEL_IMPORT_FLAG = "vino_excel_seed_v1";
 const EXCEL_RESTORE_FLAG = "vino_excel_restore_v1";
 const EXCEL_JOURNAL_FIX_FLAG = "vino_excel_journal_fix_v4";
@@ -1558,6 +1621,7 @@ const IC={
   globe:"M12 22a10 10 0 110-20 10 10 0 010 20zM2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z",
   palette:"M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10c.55 0 1-.45 1-1 0-.27-.1-.51-.25-.7a1 1 0 01.25-.7c0-.55.45-1 1-1h1.17C16.73 18.83 18 17.56 18 16c0-3.87-2.69-7.01-6-7z",
   winery:"M9 3h6l1 9a5 5 0 01-8 0L9 3zM6 21h12M12 12v9",
+  sync:"M20 4v6h-6M4 20v-6h6M7 9a7 7 0 0111-2l2 3M17 15a7 7 0 01-11 2l-2-3",
 };
 
 const Icon=({n,size=20,color="currentColor",fill="none",sw=1.5})=>{
@@ -5579,7 +5643,7 @@ const SettingsPanel=({onBack,profile,setProfile,theme,setTheme})=>{
 };
 
 /* ── PROFILE ──────────────────────────────────────────────────── */
-const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile,onNavigateTab})=>{
+const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile,onNavigateTab,syncHealth,onRetrySync})=>{
   const [view,setView]=useState("main"); // main | settings | explore
   const [exportOpen,setExportOpen]=useState(false);
   const [kpiListOpen,setKpiListOpen]=useState(null);
@@ -5682,6 +5746,18 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile,onNavigateTa
   const lastSyncLabel=lastSyncTs
     ? new Date(lastSyncTs).toLocaleString("en-AU",{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})
     : "No sync yet";
+  const fmtSyncTs=raw=>{
+    const ts=(raw||"").toString().trim();
+    if(!ts) return "—";
+    const d=new Date(ts);
+    if(Number.isNaN(d.getTime())) return "—";
+    return d.toLocaleString("en-AU",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});
+  };
+  const safeSync=syncHealth&&typeof syncHealth==="object"?syncHealth:defaultSyncHealth();
+  const pendingSync=Math.max(0,Math.round(Number(safeSync.pending)||0));
+  const syncStatusLabel=pendingSync>0?"Pending retries":"All changes synced";
+  const syncStatusTone=pendingSync>0?"#D68A16":"#2F855A";
+  const syncErrorText=(safeSync.lastError||"").toString().trim();
 
   const healthTotal=Math.max(1,readyCount+notReadyCount+pastPeakCount+noWindowCount);
   const readyPct=(readyCount/healthTotal)*100;
@@ -5778,6 +5854,44 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile,onNavigateTa
             </div>
           </button>
         ))}
+      </div>
+
+      <div style={{...panel,padding:"12px 13px",marginBottom:12,background:pendingSync>0?"rgba(214,138,22,0.08)":"rgba(47,133,90,0.08)",border:pendingSync>0?"1px solid rgba(214,138,22,0.26)":"1px solid rgba(47,133,90,0.26)"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
+            <span style={{width:10,height:10,borderRadius:"50%",background:syncStatusTone,boxShadow:`0 0 0 4px ${pendingSync>0?"rgba(214,138,22,0.16)":"rgba(47,133,90,0.16)"}`}}/>
+            <div>
+              <div style={{...tinyLabel,color:"var(--text)"}}>Sync Health</div>
+              <div style={{fontSize:13,fontWeight:800,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{syncStatusLabel}</div>
+            </div>
+          </div>
+          <button onClick={async()=>{await onRetrySync?.();}} style={{padding:"8px 10px",borderRadius:10,border:"1px solid rgba(var(--accentRgb),0.28)",background:"rgba(var(--accentRgb),0.1)",color:"var(--accent)",fontSize:11.5,fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6}}>
+            <Icon n="sync" size={13} color="var(--accent)"/> Retry Sync
+          </button>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:compact?"1fr":"repeat(4,minmax(0,1fr))",gap:8,marginTop:10}}>
+          <div style={{background:"var(--inputBg)",border:"1px solid var(--border)",borderRadius:10,padding:"8px 9px"}}>
+            <div style={tinyLabel}>Pending</div>
+            <div style={{fontSize:14,fontWeight:800,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{pendingSync}</div>
+          </div>
+          <div style={{background:"var(--inputBg)",border:"1px solid var(--border)",borderRadius:10,padding:"8px 9px"}}>
+            <div style={tinyLabel}>Last Success</div>
+            <div style={{fontSize:12,fontWeight:700,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{fmtSyncTs(safeSync.lastSuccess)}</div>
+          </div>
+          <div style={{background:"var(--inputBg)",border:"1px solid var(--border)",borderRadius:10,padding:"8px 9px"}}>
+            <div style={tinyLabel}>Last Attempt</div>
+            <div style={{fontSize:12,fontWeight:700,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{fmtSyncTs(safeSync.lastAttempt)}</div>
+          </div>
+          <div style={{background:"var(--inputBg)",border:"1px solid var(--border)",borderRadius:10,padding:"8px 9px"}}>
+            <div style={tinyLabel}>Status</div>
+            <div style={{fontSize:12,fontWeight:700,color:syncStatusTone,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{(safeSync.status||"idle").replace(/_/g," ")}</div>
+          </div>
+        </div>
+        {syncErrorText&&(
+          <div style={{marginTop:8,padding:"8px 10px",borderRadius:10,border:"1px solid rgba(184,50,50,0.22)",background:"rgba(184,50,50,0.08)",fontSize:11,color:"#7B1C1C",fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+            Last error: {syncErrorText}
+          </div>
+        )}
       </div>
 
       <div style={{display:"grid",gridTemplateColumns:compact?"1fr":"1.05fr 1fr",gap:10,marginBottom:12}}>
@@ -5994,6 +6108,7 @@ export default function App(){
   const [profile,setProfileState]=useState(DEFAULT_PROFILE);
   const [savedLocations,setSavedLocations]=useState(()=>readSavedLocations());
   const [ready,setReady]=useState(false);
+  const [syncHealth,setSyncHealth]=useState(()=>readSyncHealth());
   const [splashPhase,setSplashPhase]=useState("logo"); // logo | greet | onboard | done
   const [isDesktop,setIsDesktop]=useState(()=>window.innerWidth>=768);
   const [isNewUser,setIsNewUser]=useState(false);
@@ -6026,12 +6141,17 @@ export default function App(){
     const interval=setInterval(flush,12000);
     const onOnline=()=>flush();
     const onVisible=()=>{if(document.visibilityState==="visible") flush();};
+    const onSyncEvent=e=>setSyncHealth(e?.detail||readSyncHealth());
+    const healthPoll=setInterval(()=>setSyncHealth(readSyncHealth()),3000);
     window.addEventListener("online",onOnline);
     document.addEventListener("visibilitychange",onVisible);
+    window.addEventListener("vino-sync-health",onSyncEvent);
     return()=>{
       clearInterval(interval);
+      clearInterval(healthPoll);
       window.removeEventListener("online",onOnline);
       document.removeEventListener("visibilitychange",onVisible);
+      window.removeEventListener("vino-sync-health",onSyncEvent);
     };
   },[]);
   useEffect(()=>{
@@ -6623,7 +6743,7 @@ export default function App(){
       {tab==="audit"&&<AuditScreen wines={wines} desktop={isDesktop} onSetWineBottles={setWineBottleCount} onRemoveWine={delWine} onRevokeAudit={revokeAuditSnapshot}/>}
       {tab==="ai"&&<AIScreen wines={wines} profile={profile} setProfile={setProfile}/>}
       {tab==="notes"&&<JournalScreen wines={wines} onUpdate={updWine} desktop={isDesktop}/>}
-      {tab==="profile"&&<ProfileScreen wines={wines} notes={notes} theme={themeMode} setTheme={setThemeMode} profile={profile} setProfile={setProfile} onNavigateTab={setTab}/>}
+      {tab==="profile"&&<ProfileScreen wines={wines} notes={notes} theme={themeMode} setTheme={setThemeMode} profile={profile} setProfile={setProfile} onNavigateTab={setTab} syncHealth={syncHealth} onRetrySync={async()=>{await db.flushOutbox();setSyncHealth(readSyncHealth());}}/>}
     </>
   );
 
