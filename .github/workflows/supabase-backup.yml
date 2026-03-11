@@ -26,7 +26,7 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          BACKUP_TABLES: wines,profile,audits,tasting_notes,grape_aliases
+          BACKUP_TABLES: wines,profile,audits,tasting_notes,grape_aliases,cellar_events,cellar_snapshots
         run: |
           set -euo pipefail
           node scripts/backup-supabase-rest.mjs

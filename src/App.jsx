@@ -7,6 +7,131 @@ const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsI
 const supa = t => `${SUPA_URL}/rest/v1/${t}`;
 const BH = { "Content-Type":"application/json","apikey":SUPA_KEY,"Authorization":`Bearer ${SUPA_KEY}` };
 const UH = { ...BH, "Prefer":"resolution=merge-duplicates,return=minimal" };
+const CHANGE_LOG_KEY = "vino_change_log_v1";
+const OUTBOX_KEY = "vino_sync_outbox_v2";
+const OUTBOX_MAX = 3000;
+const IDB_SNAPSHOT_DB = "vinology-backups";
+const IDB_SNAPSHOT_STORE = "snapshots";
+const IDB_SNAPSHOT_MAX = 120;
+const makeLocalId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2,10)}`;
+const readLSJson = (key,fallback) => {
+  try{
+    const raw=localStorage.getItem(key);
+    if(!raw) return fallback;
+    const parsed=JSON.parse(raw);
+    return parsed??fallback;
+  }catch{
+    return fallback;
+  }
+};
+const writeLSJson = (key,value) => {
+  try{
+    localStorage.setItem(key,JSON.stringify(value));
+    return true;
+  }catch{
+    return false;
+  }
+};
+const sanitizeLogPayload = (value,key="",depth=0) => {
+  if(depth>3) return "[truncated-depth]";
+  if(value===null||value===undefined) return value;
+  if(typeof value==="string"){
+    if(key.toLowerCase().includes("photo") || value.startsWith("data:image/")){
+      return `[image-data:${value.length}chars]`;
+    }
+    return value.length>420 ? `${value.slice(0,420)}…` : value;
+  }
+  if(typeof value==="number"||typeof value==="boolean") return value;
+  if(Array.isArray(value)) return value.slice(0,60).map(v=>sanitizeLogPayload(v,key,depth+1));
+  if(typeof value==="object"){
+    const out={};
+    Object.entries(value).slice(0,80).forEach(([k,v])=>{
+      out[k]=sanitizeLogPayload(v,k,depth+1);
+    });
+    return out;
+  }
+  return String(value);
+};
+const appendLocalChangeLog = event => {
+  try{
+    const raw=localStorage.getItem(CHANGE_LOG_KEY);
+    const prev=raw?JSON.parse(raw):[];
+    const next=[...(Array.isArray(prev)?prev:[]),event].slice(-3000);
+    localStorage.setItem(CHANGE_LOG_KEY,JSON.stringify(next));
+  }catch{}
+};
+const readOutbox = () => {
+  const list=readLSJson(OUTBOX_KEY,[]);
+  return Array.isArray(list)?list:[];
+};
+const writeOutbox = list => writeLSJson(OUTBOX_KEY,(Array.isArray(list)?list:[]).slice(-OUTBOX_MAX));
+const enqueueOutbox = op => {
+  if(!op||typeof op!=="object") return;
+  const queue=readOutbox();
+  queue.push({...op,id:op.id||makeLocalId(),created_at:op.created_at||new Date().toISOString(),attempts:Math.max(0,Math.round(Number(op.attempts)||0))});
+  writeOutbox(queue);
+};
+let snapshotDbPromise = null;
+const openSnapshotDb = () => {
+  if(snapshotDbPromise) return snapshotDbPromise;
+  snapshotDbPromise = new Promise(resolve=>{
+    try{
+      if(typeof indexedDB==="undefined") return resolve(null);
+      const req=indexedDB.open(IDB_SNAPSHOT_DB,1);
+      req.onupgradeneeded=()=>{
+        const db=req.result;
+        if(!db.objectStoreNames.contains(IDB_SNAPSHOT_STORE)){
+          const store=db.createObjectStore(IDB_SNAPSHOT_STORE,{keyPath:"id"});
+          store.createIndex("created_at","created_at",{unique:false});
+        }
+      };
+      req.onsuccess=()=>resolve(req.result);
+      req.onerror=()=>resolve(null);
+    }catch{
+      resolve(null);
+    }
+  });
+  return snapshotDbPromise;
+};
+const saveIndexedSnapshot = async (reason,state) => {
+  try{
+    const dbConn=await openSnapshotDb();
+    if(!dbConn) return;
+    const entry={
+      id:makeLocalId(),
+      created_at:new Date().toISOString(),
+      reason:reason||"state",
+      snapshot:{
+        wines:Array.isArray(state?.wines)?state.wines:[],
+        notes:Array.isArray(state?.notes)?state.notes:[],
+        profile:state?.profile||null,
+      }
+    };
+    await new Promise(resolve=>{
+      const tx=dbConn.transaction(IDB_SNAPSHOT_STORE,"readwrite");
+      tx.objectStore(IDB_SNAPSHOT_STORE).put(entry);
+      tx.oncomplete=()=>resolve();
+      tx.onerror=()=>resolve();
+      tx.onabort=()=>resolve();
+    });
+    await new Promise(resolve=>{
+      const tx=dbConn.transaction(IDB_SNAPSHOT_STORE,"readwrite");
+      const store=tx.objectStore(IDB_SNAPSHOT_STORE);
+      const getAllReq=store.getAll();
+      getAllReq.onsuccess=()=>{
+        const rows=Array.isArray(getAllReq.result)?getAllReq.result:[];
+        const sorted=rows.sort((a,b)=>(a.created_at||"").localeCompare(b.created_at||""));
+        const overflow=Math.max(0,sorted.length-IDB_SNAPSHOT_MAX);
+        for(let i=0;i<overflow;i+=1){
+          if(sorted[i]?.id) store.delete(sorted[i].id);
+        }
+      };
+      tx.oncomplete=()=>resolve();
+      tx.onerror=()=>resolve();
+      tx.onabort=()=>resolve();
+    });
+  }catch{}
+};
 const normalizeAiMemoryList = value => {
   const src = Array.isArray(value)
     ? value
@@ -24,46 +149,171 @@ const normalizeAiMemoryList = value => {
   });
   return out.slice(0,80);
 };
+const profileFullPayload = p => ({
+  name:p?.name||"",
+  description:p?.description||"",
+  avatar:p?.avatar||null,
+  surname:p?.surname||"",
+  cellar_name:p?.cellarName||"",
+  bio:p?.bio||"",
+  country:p?.country||"",
+  profile_bg:p?.profileBg||"",
+});
+const profileBasePayload = p => ({
+  name:p?.name||"",
+  description:p?.description||"",
+  avatar:p?.avatar||null,
+});
+const performProfileWrite = async p => {
+  const tryWrite = async payload => {
+    const patchHeaders={...BH,"Prefer":"return=representation"};
+    const rPatch=await fetch(`${supa("profile")}?id=eq.1`,{method:"PATCH",headers:patchHeaders,body:JSON.stringify(payload)});
+    if(rPatch.ok){
+      const rows=await rPatch.json().catch(()=>[]);
+      if(Array.isArray(rows)&&rows.length>0) return {ok:true};
+    }
+    const patchErr=await rPatch.text().catch(()=>`HTTP ${rPatch.status}`);
+    const rPost=await fetch(`${supa("profile")}?on_conflict=id`,{method:"POST",headers:patchHeaders,body:JSON.stringify({id:1,...payload})});
+    if(rPost.ok) return {ok:true};
+    const postErr=await rPost.text().catch(()=>`HTTP ${rPost.status}`);
+    return {ok:false,error:`patch:${patchErr} | post:${postErr}`};
+  };
+  const full=await tryWrite(profileFullPayload(p));
+  if(full.ok) return full;
+  const base=await tryWrite(profileBasePayload(p));
+  return base.ok ? base : {ok:false,error:full.error||base.error||"profile write failed"};
+};
 
 const db = {
+  _flushing:false,
+  _flushTimer:null,
+  scheduleFlush(delay=900){
+    if(this._flushTimer) return;
+    this._flushTimer=setTimeout(()=>{
+      this._flushTimer=null;
+      this.flushOutbox();
+    },delay);
+  },
+  queue(op){
+    enqueueOutbox(op);
+    this.scheduleFlush();
+  },
+  async _execOutboxOp(op){
+    try{
+      if(op?.kind==="upsert"){
+        const r=await fetch(supa(op.table),{method:"POST",headers:UH,body:JSON.stringify(op.row||{})});
+        if(!r.ok) return {ok:false,error:await r.text().catch(()=>`HTTP ${r.status}`),permanent:r.status===404&&op.optional===true};
+        return {ok:true};
+      }
+      if(op?.kind==="delete"){
+        const r=await fetch(`${supa(op.table)}?id=eq.${encodeURIComponent(op.id||"")}`,{method:"DELETE",headers:BH});
+        if(!r.ok) return {ok:false,error:await r.text().catch(()=>`HTTP ${r.status}`),permanent:r.status===404&&op.optional===true};
+        return {ok:true};
+      }
+      if(op?.kind==="save_profile"){
+        const res=await performProfileWrite(op.profile||{});
+        return res.ok ? {ok:true} : {ok:false,error:res.error||"profile write failed"};
+      }
+      if(op?.kind==="event"){
+        const r=await fetch(supa("cellar_events"),{method:"POST",headers:UH,body:JSON.stringify(op.event||{})});
+        if(!r.ok){
+          const err=await r.text().catch(()=>`HTTP ${r.status}`);
+          return {ok:false,error:err,permanent:r.status===404};
+        }
+        return {ok:true};
+      }
+      return {ok:true};
+    }catch(e){
+      return {ok:false,error:String(e)};
+    }
+  },
+  async flushOutbox(){
+    if(this._flushing) return {ok:true,pending:readOutbox().length};
+    this._flushing=true;
+    try{
+      const queue=readOutbox();
+      if(!queue.length) return {ok:true,pending:0};
+      const next=[];
+      for(const op of queue){
+        const res=await this._execOutboxOp(op);
+        if(res.ok) continue;
+        const attempts=Math.max(0,Math.round(Number(op?.attempts)||0))+1;
+        const isPermanent=!!res.permanent;
+        if(isPermanent || attempts>=50) continue;
+        next.push({...op,attempts,last_error:res.error||"",updated_at:new Date().toISOString()});
+      }
+      writeOutbox(next);
+      return {ok:true,pending:next.length};
+    }finally{
+      this._flushing=false;
+    }
+  },
+  async logEvent(entity,action,entityId,payload) {
+    const safePayload=sanitizeLogPayload(payload||{});
+    const event={
+      id:makeLocalId(),
+      entity:entity||"",
+      action:action||"",
+      entity_id:entityId||"",
+      payload:safePayload,
+      created_at:new Date().toISOString(),
+    };
+    appendLocalChangeLog(event);
+    this.queue({kind:"event",event});
+  },
   async get(t) {
     try {
       let r = await fetch(`${supa(t)}?order=created_at`,{headers:BH});
       if(!r.ok) r = await fetch(supa(t),{headers:BH});
-      return r.ok?await r.json():[];
+      return {ok:r.ok,rows:r.ok?await r.json():[],error:r.ok?"":await r.text()};
     }
-    catch { return []; }
+    catch(e){ return {ok:false,rows:[],error:String(e)}; }
   },
   async upsert(t,row) {
-    try { const r=await fetch(supa(t),{method:"POST",headers:UH,body:JSON.stringify(row)}); if(!r.ok)console.error("upsert fail",await r.text()); }
-    catch(e){console.error(e);}
+    try {
+      const r=await fetch(supa(t),{method:"POST",headers:UH,body:JSON.stringify(row)});
+      if(!r.ok){
+        const err=await r.text();
+        console.error("upsert fail",err);
+        this.queue({kind:"upsert",table:t,row});
+        return false;
+      }
+      const entityId=row?.id||row?.alias||"";
+      await this.logEvent(t,"upsert",entityId,row);
+      return true;
+    }
+    catch(e){
+      console.error(e);
+      this.queue({kind:"upsert",table:t,row});
+    }
+    return false;
   },
   async del(t,id) {
-    try { const r=await fetch(`${supa(t)}?id=eq.${encodeURIComponent(id)}`,{method:"DELETE",headers:BH}); if(!r.ok)console.error("del fail",await r.text()); }
-    catch(e){console.error(e);}
+    try {
+      const r=await fetch(`${supa(t)}?id=eq.${encodeURIComponent(id)}`,{method:"DELETE",headers:BH});
+      if(!r.ok){
+        const err=await r.text();
+        console.error("del fail",err);
+        this.queue({kind:"delete",table:t,id});
+        return false;
+      }
+      await this.logEvent(t,"delete",id,{id});
+      return true;
+    }
+    catch(e){
+      console.error(e);
+      this.queue({kind:"delete",table:t,id});
+    }
+    return false;
   },
   async saveProfile(p) {
     try {
-      // Try full payload first (for extended schema), then fall back to base schema.
-      const fullPayload={name:p.name,description:p.description,avatar:p.avatar,surname:p.surname||"",cellar_name:p.cellarName||"",bio:p.bio||"",country:p.country||"",profile_bg:p.profileBg||""};
-      const basePayload={name:p.name,description:p.description,avatar:p.avatar};
-      const tryWrite = async payload => {
-        const patchHeaders={...BH,"Prefer":"return=representation"};
-        const rPatch=await fetch(`${supa("profile")}?id=eq.1`,{method:"PATCH",headers:patchHeaders,body:JSON.stringify(payload)});
-        if(rPatch.ok){
-          const rows=await rPatch.json().catch(()=>[]);
-          if(Array.isArray(rows)&&rows.length>0) return true;
-        }
-        const patchErr=await rPatch.text();
-        const rPost=await fetch(`${supa("profile")}?on_conflict=id`,{method:"POST",headers:patchHeaders,body:JSON.stringify({id:1,...payload})});
-        if(rPost.ok) return true;
-        const postErr=await rPost.text();
-        console.error("saveProfile failed", { patchErr, postErr });
+      const writeRes = await performProfileWrite(p);
+      if(!writeRes.ok){
+        console.error("saveProfile failed", writeRes.error||"");
+        this.queue({kind:"save_profile",profile:p});
         return false;
-      };
-
-      const ok = await tryWrite(fullPayload) || await tryWrite(basePayload);
-      if(!ok) return false;
+      }
       // Optional memory sync (safe: ignored when column doesn't exist).
       try{
         const aiMemory=normalizeAiMemoryList(p.aiMemory);
@@ -73,8 +323,16 @@ const db = {
           body:JSON.stringify({ai_memory:aiMemory})
         });
       }catch{}
+      await this.logEvent("profile","upsert","1",{
+        name:p.name,description:p.description,avatar:p.avatar,surname:p.surname||"",
+        cellar_name:p.cellarName||"",bio:p.bio||"",country:p.country||"",profile_bg:p.profileBg||""
+      });
       return true;
-    }catch(e){console.error("saveProfile err",e);return false;}
+    }catch(e){
+      console.error("saveProfile err",e);
+      this.queue({kind:"save_profile",profile:p});
+      return false;
+    }
   },
   async getProfile() {
     try {
@@ -96,18 +354,30 @@ const db = {
   async upsertAudit(row){
     try{
       const r=await fetch(supa("audits"),{method:"POST",headers:UH,body:JSON.stringify(row)});
-      if(!r.ok) return {ok:false,error:await r.text()};
+      if(!r.ok){
+        const err=await r.text();
+        this.queue({kind:"upsert",table:"audits",row});
+        return {ok:false,error:err};
+      }
+      await this.logEvent("audits","upsert",row?.id||"",row);
       return {ok:true};
     }catch(e){
+      this.queue({kind:"upsert",table:"audits",row});
       return {ok:false,error:String(e)};
     }
   },
   async delAudit(id){
     try{
       const r=await fetch(`${supa("audits")}?id=eq.${encodeURIComponent(id)}`,{method:"DELETE",headers:BH});
-      if(!r.ok) return {ok:false,error:await r.text()};
+      if(!r.ok){
+        const err=await r.text();
+        this.queue({kind:"delete",table:"audits",id});
+        return {ok:false,error:err};
+      }
+      await this.logEvent("audits","delete",id,{id});
       return {ok:true};
     }catch(e){
+      this.queue({kind:"delete",table:"audits",id});
       return {ok:false,error:String(e)};
     }
   },
@@ -123,19 +393,26 @@ const db = {
   async upsertGrapeAlias(row){
     try{
       const r=await fetch(supa("grape_aliases"),{method:"POST",headers:UH,body:JSON.stringify(row)});
-      if(!r.ok) return {ok:false,error:await r.text()};
+      if(!r.ok){
+        const err=await r.text();
+        this.queue({kind:"upsert",table:"grape_aliases",row});
+        return {ok:false,error:err};
+      }
+      await this.logEvent("grape_aliases","upsert",row?.alias||"",row);
       return {ok:true};
     }catch(e){
+      this.queue({kind:"upsert",table:"grape_aliases",row});
       return {ok:false,error:String(e)};
     }
   }
 };
 
 const META_PREFIX = "[[VINO_META]]";
-const APP_VERSION = "7.50";
+const APP_VERSION = "7.52";
 const EXCEL_IMPORT_FLAG = "vino_excel_seed_v1";
 const EXCEL_RESTORE_FLAG = "vino_excel_restore_v1";
 const EXCEL_JOURNAL_FIX_FLAG = "vino_excel_journal_fix_v4";
+const ENABLE_RUNTIME_DATA_REPAIRS = false;
 const CACHE_KEY = "vino_local_cache_v2";
 const SAVED_LOCATIONS_KEY = "vino_saved_locations_v1";
 const DELETED_WINES_KEY = "vino_deleted_wines_v1";
@@ -5656,6 +5933,7 @@ export default function App(){
   // Onboarding form
   const [oName,setOName]=useState("");
   const [oCellar,setOCellar]=useState("");
+  const snapshotTimerRef=useRef(null);
 
   useEffect(()=>{try{localStorage.setItem("vino_theme",themeMode)}catch{}},[themeMode]);
   useEffect(()=>{try{localStorage.setItem(SAVED_LOCATIONS_KEY,JSON.stringify(savedLocations))}catch{}},[savedLocations]);
@@ -5676,6 +5954,20 @@ export default function App(){
     return()=>window.removeEventListener("resize",h);
   },[]);
   useEffect(()=>{
+    const flush=()=>{db.flushOutbox();};
+    flush();
+    const interval=setInterval(flush,12000);
+    const onOnline=()=>flush();
+    const onVisible=()=>{if(document.visibilityState==="visible") flush();};
+    window.addEventListener("online",onOnline);
+    document.addEventListener("visibilitychange",onVisible);
+    return()=>{
+      clearInterval(interval);
+      window.removeEventListener("online",onOnline);
+      document.removeEventListener("visibilitychange",onVisible);
+    };
+  },[]);
+  useEffect(()=>{
     async function load(){
       const cache=readCache();
       const normalizeLegacyWineRows=rows=>(rows||[]).map(w=>{
@@ -5684,7 +5976,12 @@ export default function App(){
         return {...w,wishlist:false,bottles:legacyBottles};
       });
       try{
-        const [wineRows,noteRows,prof,aliasRes]=await Promise.all([db.get("wines"),db.get("tasting_notes"),db.getProfile(),db.listGrapeAliases()]);
+        const [wineRes,noteRes,prof,aliasRes]=await Promise.all([db.get("wines"),db.get("tasting_notes"),db.getProfile(),db.listGrapeAliases()]);
+        const wineRows=wineRes.ok?(wineRes.rows||[]):[];
+        const noteRows=noteRes.ok?(noteRes.rows||[]):[];
+        if(!wineRes.ok || !noteRes.ok){
+          console.warn("Remote load unavailable; using local fallback only.", { wineErr:wineRes.error, noteErr:noteRes.error });
+        }
         const builtInAliasMap=deriveAliasMapFromWines(SEED_WINES);
         const learnedAliasMap=deriveAliasMapFromWines(normalizeLegacyWineRows(wineRows.map(fromDb.wine)));
         const remoteAliasMap=aliasRes.ok?buildAliasMapFromRows(aliasRes.rows||[]):{};
@@ -5693,7 +5990,7 @@ export default function App(){
         grapeAliasMapRef.current=mergedAliasMap;
         setGrapeAliasCache(mergedAliasMap);
         aliasSyncEnabledRef.current=!!aliasRes.ok;
-        if(aliasRes.ok && !Object.keys(remoteAliasMap).length && Object.keys(builtInAliasMap).length){
+        if(ENABLE_RUNTIME_DATA_REPAIRS && aliasRes.ok && !Object.keys(remoteAliasMap).length && Object.keys(builtInAliasMap).length){
           await Promise.all(Object.entries(builtInAliasMap).map(([alias,wine_type])=>db.upsertGrapeAlias({alias,wine_type,source:"bootstrap"})));
         }
         console.log("DB: wines",wineRows.length,"notes",noteRows.length);
@@ -5705,32 +6002,15 @@ export default function App(){
             setNotes(cachedNotes);
             if(cache.profile)setProfileState(cache.profile);
             setIsNewUser(!(cache.profile?.name));
-            // Supabase can be accidentally reset. If we still have local cache, restore it remotely.
-            await Promise.all(cachedWines.map(w=>db.upsert("wines",toDb.wine({...w,wishlist:false}))));
-            if(cachedNotes.length){
-              await Promise.all(cachedNotes.map(n=>db.upsert("tasting_notes",toDb.note(n))));
-            }
-            if(cache.profile){
-              await db.saveProfile({
-                ...DEFAULT_PROFILE,
-                ...cache.profile,
-                accent:detectAccentFromProfileBg(cache.profile.profileBg||"")||cache.profile.accent||DEFAULT_PROFILE.accent,
-              });
-            }
-            try{
-              localStorage.setItem(EXCEL_IMPORT_FLAG,"1");
-              localStorage.setItem(EXCEL_RESTORE_FLAG,"1");
-            }catch{}
+            // Safety: never auto-write remote from local cache.
+            // Restores to Supabase must be explicit/manual to prevent stale-device overwrites.
           }else{
-            await Promise.all(SEED_WINES.map(w=>db.upsert("wines",toDb.wine(w))));
-            await Promise.all(SEED_NOTES.map(n=>db.upsert("tasting_notes",toDb.note(n))));
             setWines(SEED_WINES);setNotes(SEED_NOTES);
-            try{localStorage.setItem(EXCEL_IMPORT_FLAG,"1");}catch{}
             setIsNewUser(true);
           }
         }else{
           let all=normalizeLegacyWineRows(wineRows.map(fromDb.wine));
-          {
+          if(ENABLE_RUNTIME_DATA_REPAIRS){
             // Always run non-destructive reconciliation so missing seed wines are restored.
             const ids=new Set(all.map(w=>w.id));
             const signatures=new Set(all.filter(w=>!w.wishlist).map(wineIdentitySignature));
@@ -5741,215 +6021,184 @@ export default function App(){
             }
             try{localStorage.setItem(EXCEL_IMPORT_FLAG,"1");}catch{}
           }
-          // Repair older imports:
-          // 1) Remove empty placeholder rows from the old spreadsheet conversion.
-          // 2) Reclassify wines that were previously persisted as "Other".
-          const toReclassify=all.filter(w=>{
-            if(normalizeWineCategory(w?.cellarMeta?.manualWineCategory||"")) return false;
-            const inferred=guessWineType(w?.grape||"",w?.name||"",grapeAliasMapRef.current);
-            if(!inferred||inferred==="Other") return false;
-            return (w.wineType||"Other")!==inferred;
-          });
-          if(toReclassify.length){
-            const repaired=toReclassify.map(w=>{
+          if(ENABLE_RUNTIME_DATA_REPAIRS){
+            // Repair older imports:
+            // 1) Remove empty placeholder rows from the old spreadsheet conversion.
+            // 2) Reclassify wines that were previously persisted as "Other".
+            const toReclassify=all.filter(w=>{
+              if(normalizeWineCategory(w?.cellarMeta?.manualWineCategory||"")) return false;
               const inferred=guessWineType(w?.grape||"",w?.name||"",grapeAliasMapRef.current);
-              const tc=WINE_TYPE_COLORS[inferred]||WINE_TYPE_COLORS.Other;
-              return {...w,wineType:inferred,color:tc.dot};
+              if(!inferred||inferred==="Other") return false;
+              return (w.wineType||"Other")!==inferred;
             });
-            await Promise.all(repaired.map(w=>db.upsert("wines",toDb.wine(w))));
-            const repairedById=Object.fromEntries(repaired.map(w=>[w.id,{wineType:w.wineType,color:w.color}]));
-            all=all.map(w=>repairedById[w.id]?{...w,wineType:repairedById[w.id].wineType,color:repairedById[w.id].color}:w);
-          }
-          const toNormalizeLocation=all.filter(w=>normalizeLocation(w.location)!==(w.location||""));
-          if(toNormalizeLocation.length){
-            const repairedLoc=toNormalizeLocation.map(w=>({...w,location:normalizeLocation(w.location)}));
-            await Promise.all(repairedLoc.map(w=>db.upsert("wines",toDb.wine(w))));
-            const locById=Object.fromEntries(repairedLoc.map(w=>[w.id,w.location]));
-            all=all.map(w=>locById[w.id]?{...w,location:locById[w.id]}:w);
-          }
-          const toRepairOriginCountry=all.filter(w=>{
-            const raw=(w.origin||"").toString().trim();
-            if(!raw) return false;
-            const normalized=deriveRegionCountry(raw).origin||raw;
-            return normalized!==raw;
-          });
-          if(toRepairOriginCountry.length){
-            const repairedOrigins=toRepairOriginCountry.map(w=>{
+            if(toReclassify.length){
+              const repaired=toReclassify.map(w=>{
+                const inferred=guessWineType(w?.grape||"",w?.name||"",grapeAliasMapRef.current);
+                const tc=WINE_TYPE_COLORS[inferred]||WINE_TYPE_COLORS.Other;
+                return {...w,wineType:inferred,color:tc.dot};
+              });
+              await Promise.all(repaired.map(w=>db.upsert("wines",toDb.wine(w))));
+              const repairedById=Object.fromEntries(repaired.map(w=>[w.id,{wineType:w.wineType,color:w.color}]));
+              all=all.map(w=>repairedById[w.id]?{...w,wineType:repairedById[w.id].wineType,color:repairedById[w.id].color}:w);
+            }
+            const toNormalizeLocation=all.filter(w=>normalizeLocation(w.location)!==(w.location||""));
+            if(toNormalizeLocation.length){
+              const repairedLoc=toNormalizeLocation.map(w=>({...w,location:normalizeLocation(w.location)}));
+              await Promise.all(repairedLoc.map(w=>db.upsert("wines",toDb.wine(w))));
+              const locById=Object.fromEntries(repairedLoc.map(w=>[w.id,w.location]));
+              all=all.map(w=>locById[w.id]?{...w,location:locById[w.id]}:w);
+            }
+            const toRepairOriginCountry=all.filter(w=>{
               const raw=(w.origin||"").toString().trim();
-              return {...w,origin:deriveRegionCountry(raw).origin||raw};
+              if(!raw) return false;
+              const normalized=deriveRegionCountry(raw).origin||raw;
+              return normalized!==raw;
             });
-            await Promise.all(repairedOrigins.map(w=>db.upsert("wines",toDb.wine(w))));
-            const byId=Object.fromEntries(repairedOrigins.map(w=>[w.id,w.origin]));
-            all=all.map(w=>byId[w.id]?{...w,origin:byId[w.id]}:w);
-          }
-          const toRepairBottleTotals=all.filter(w=>{
-            const left=Math.max(0,safeNum(w.bottles)||0);
-            const storedTotal=safeNum(w.cellarMeta?.totalPurchased);
-            return storedTotal==null || storedTotal<left;
-          });
-          if(toRepairBottleTotals.length){
-            const repairedTotals=toRepairBottleTotals.map(w=>({
-              ...w,
-              cellarMeta:{...(w.cellarMeta||{}),totalPurchased:Math.max(0,safeNum(w.bottles)||0,safeNum(w.cellarMeta?.totalPurchased)||0,SEED_TOTAL_BY_ID[w.id]||0)}
-            }));
-            await Promise.all(repairedTotals.map(w=>db.upsert("wines",toDb.wine(w))));
-            const byId=Object.fromEntries(repairedTotals.map(w=>[w.id,w.cellarMeta]));
-            all=all.map(w=>byId[w.id]?{...w,cellarMeta:byId[w.id]}:w);
-          }
-          const toRepairPricing=all.filter(w=>{
-            const seed=SEED_PRICING_BY_ID[w.id];
-            if(!seed) return false;
-            const paid=safeNum(w.cellarMeta?.pricePerBottle);
-            const rrp=safeNum(w.cellarMeta?.rrp);
-            const totalPaid=safeNum(w.cellarMeta?.totalPaid);
-            const needsPaid=(paid==null||paid<=0) && (seed.paidPerBottle||0)>0;
-            const needsRrp=(rrp==null||rrp<=0) && (seed.rrpPerBottle||0)>0;
-            const needsTotal=(totalPaid==null||totalPaid<=0) && (seed.totalPaid||0)>0;
-            return needsPaid||needsRrp||needsTotal;
-          });
-          if(toRepairPricing.length){
-            const repairedPricing=toRepairPricing.map(w=>{
-              const seed=SEED_PRICING_BY_ID[w.id]||{};
-              const m=w.cellarMeta||{};
-              const paid=safeNum(m.pricePerBottle);
-              const rrp=safeNum(m.rrp);
-              const totalPaid=safeNum(m.totalPaid);
-              return{
+            if(toRepairOriginCountry.length){
+              const repairedOrigins=toRepairOriginCountry.map(w=>{
+                const raw=(w.origin||"").toString().trim();
+                return {...w,origin:deriveRegionCountry(raw).origin||raw};
+              });
+              await Promise.all(repairedOrigins.map(w=>db.upsert("wines",toDb.wine(w))));
+              const byId=Object.fromEntries(repairedOrigins.map(w=>[w.id,w.origin]));
+              all=all.map(w=>byId[w.id]?{...w,origin:byId[w.id]}:w);
+            }
+            const toRepairBottleTotals=all.filter(w=>{
+              const left=Math.max(0,safeNum(w.bottles)||0);
+              const storedTotal=safeNum(w.cellarMeta?.totalPurchased);
+              return storedTotal==null || storedTotal<left;
+            });
+            if(toRepairBottleTotals.length){
+              const repairedTotals=toRepairBottleTotals.map(w=>({
                 ...w,
-                cellarMeta:{
-                  ...m,
-                  pricePerBottle:(paid==null||paid<=0)?(seed.paidPerBottle??m.pricePerBottle):m.pricePerBottle,
-                  rrp:(rrp==null||rrp<=0)?(seed.rrpPerBottle??m.rrp):m.rrp,
-                  totalPaid:(totalPaid==null||totalPaid<=0)?(seed.totalPaid??m.totalPaid):m.totalPaid,
-                }
-              };
-            });
-            await Promise.all(repairedPricing.map(w=>db.upsert("wines",toDb.wine(w))));
-            const byId=Object.fromEntries(repairedPricing.map(w=>[w.id,w.cellarMeta]));
-            all=all.map(w=>byId[w.id]?{...w,cellarMeta:byId[w.id]}:w);
-          }
-          const toAlignImportedAddedDate=all.filter(w=>{
-            if(!String(w.id||"").startsWith("xl-")) return false;
-            const purchased=(w.datePurchased||"").toString().slice(0,10);
-            if(!purchased) return false;
-            const added=((w.cellarMeta||{}).addedDate||"").toString().slice(0,10);
-            return added!==purchased;
-          });
-          if(toAlignImportedAddedDate.length){
-            const repairedImported=toAlignImportedAddedDate.map(w=>({
-              ...w,
-              cellarMeta:{...(w.cellarMeta||{}),addedDate:(w.datePurchased||"").toString().slice(0,10)}
-            }));
-            await Promise.all(repairedImported.map(w=>db.upsert("wines",toDb.wine(w))));
-            const byId=Object.fromEntries(repairedImported.map(w=>[w.id,w.cellarMeta]));
-            all=all.map(w=>byId[w.id]?{...w,cellarMeta:byId[w.id]}:w);
-          }
-          const toRepairAddedDate=all.filter(w=>!(w.cellarMeta||{}).addedDate);
-          if(toRepairAddedDate.length){
-            const repairedAdded=toRepairAddedDate.map(w=>({
-              ...w,
-              cellarMeta:{...(w.cellarMeta||{}),addedDate:w.datePurchased||todayIsoLocal()}
-            }));
-            await Promise.all(repairedAdded.map(w=>db.upsert("wines",toDb.wine(w))));
-            const byId=Object.fromEntries(repairedAdded.map(w=>[w.id,w.cellarMeta]));
-            all=all.map(w=>byId[w.id]?{...w,cellarMeta:byId[w.id]}:w);
-          }
-          const journalFixDone=(()=>{try{return localStorage.getItem(EXCEL_JOURNAL_FIX_FLAG)==="1";}catch{return false;}})();
-          if(!journalFixDone){
-            const toRepairSeedJournal=all.filter(w=>{
-              if(!String(w.id||"").startsWith("xl-")) return false;
-              const seed=SEED_JOURNAL_BY_ID[w.id];
+                cellarMeta:{...(w.cellarMeta||{}),totalPurchased:Math.max(0,safeNum(w.bottles)||0,safeNum(w.cellarMeta?.totalPurchased)||0,SEED_TOTAL_BY_ID[w.id]||0)}
+              }));
+              await Promise.all(repairedTotals.map(w=>db.upsert("wines",toDb.wine(w))));
+              const byId=Object.fromEntries(repairedTotals.map(w=>[w.id,w.cellarMeta]));
+              all=all.map(w=>byId[w.id]?{...w,cellarMeta:byId[w.id]}:w);
+            }
+            const toRepairPricing=all.filter(w=>{
+              const seed=SEED_PRICING_BY_ID[w.id];
               if(!seed) return false;
-              const currentOther=normalizeOtherReviews(w.otherReviews||[]);
-              const seedOther=normalizeOtherReviews(seed.otherReviews||[]);
-              const existingNotes=(w.notes||"").toString().trim();
-              const desiredNotes=(seed.notes||"").trim();
-              return (
-                (w.review||"").toString().trim()!==(seed.review||"").toString().trim() ||
-                canonicalReviewerName((w.reviewPrimaryReviewer||"").toString().trim())!==(seed.reviewPrimaryReviewer||"").toString().trim() ||
-                cleanRatingToken((w.reviewPrimaryRating||"").toString().trim())!==(seed.reviewPrimaryRating||"").toString().trim() ||
-                JSON.stringify(currentOther)!==JSON.stringify(seedOther) ||
-                existingNotes!==desiredNotes ||
-                !(w.cellarMeta||{}).journalUpdatedAt
-              );
+              const paid=safeNum(w.cellarMeta?.pricePerBottle);
+              const rrp=safeNum(w.cellarMeta?.rrp);
+              const totalPaid=safeNum(w.cellarMeta?.totalPaid);
+              const needsPaid=(paid==null||paid<=0) && (seed.paidPerBottle||0)>0;
+              const needsRrp=(rrp==null||rrp<=0) && (seed.rrpPerBottle||0)>0;
+              const needsTotal=(totalPaid==null||totalPaid<=0) && (seed.totalPaid||0)>0;
+              return needsPaid||needsRrp||needsTotal;
             });
-            if(toRepairSeedJournal.length){
-              const repairedJournal=toRepairSeedJournal.map(w=>{
-                const seed=SEED_JOURNAL_BY_ID[w.id]||{};
-                const seedOther=normalizeOtherReviews(seed.otherReviews||[]);
+            if(toRepairPricing.length){
+              const repairedPricing=toRepairPricing.map(w=>{
+                const seed=SEED_PRICING_BY_ID[w.id]||{};
                 const m=w.cellarMeta||{};
-                const journalUpdatedAt=m.journalUpdatedAt||(m.addedDate?`${m.addedDate}T00:00:00`:((w.datePurchased||"").toString().slice(0,10)?`${(w.datePurchased||"").toString().slice(0,10)}T00:00:00`:""));
+                const paid=safeNum(m.pricePerBottle);
+                const rrp=safeNum(m.rrp);
+                const totalPaid=safeNum(m.totalPaid);
                 return{
                   ...w,
-                  review:seed.review||"",
-                  reviewPrimaryReviewer:seed.reviewPrimaryReviewer||"",
-                  reviewPrimaryRating:seed.reviewPrimaryRating||"",
-                  otherReviews:seedOther,
-                  tastingNotes:serializeOtherRatings(seedOther),
-                  notes:(seed.notes||"").toString().trim(),
-                  rating:seed.rating||0,
-                  cellarMeta:{...m,journalUpdatedAt},
+                  cellarMeta:{
+                    ...m,
+                    pricePerBottle:(paid==null||paid<=0)?(seed.paidPerBottle??m.pricePerBottle):m.pricePerBottle,
+                    rrp:(rrp==null||rrp<=0)?(seed.rrpPerBottle??m.rrp):m.rrp,
+                    totalPaid:(totalPaid==null||totalPaid<=0)?(seed.totalPaid??m.totalPaid):m.totalPaid,
+                  }
                 };
               });
-              await Promise.all(repairedJournal.map(w=>db.upsert("wines",toDb.wine(w))));
-              const byId=Object.fromEntries(repairedJournal.map(w=>[w.id,w]));
-              all=all.map(w=>byId[w.id]||w);
+              await Promise.all(repairedPricing.map(w=>db.upsert("wines",toDb.wine(w))));
+              const byId=Object.fromEntries(repairedPricing.map(w=>[w.id,w.cellarMeta]));
+              all=all.map(w=>byId[w.id]?{...w,cellarMeta:byId[w.id]}:w);
             }
-            try{localStorage.setItem(EXCEL_JOURNAL_FIX_FLAG,"1");}catch{}
-          }
-          const restoredFromExcel=(()=>{try{return localStorage.getItem(EXCEL_RESTORE_FLAG)==="1";}catch{return false;}})();
-          if(!restoredFromExcel){
-            const byId=new Map(all.map(w=>[w.id,w]));
-            const signatures=new Set(all.filter(w=>!w.wishlist).map(wineIdentitySignature));
-            const repaired=[];
-            for(const seed of SEED_WINES){
-              const existing=byId.get(seed.id);
-              if(!existing){
-                const seedSig=wineIdentitySignature(seed);
-                if(signatures.has(seedSig)) continue;
-                repaired.push(seed);
-                all.push(seed);
-                byId.set(seed.id,seed);
-                signatures.add(seedSig);
-                continue;
+            const toAlignImportedAddedDate=all.filter(w=>{
+              if(!String(w.id||"").startsWith("xl-")) return false;
+              const purchased=(w.datePurchased||"").toString().slice(0,10);
+              if(!purchased) return false;
+              const added=((w.cellarMeta||{}).addedDate||"").toString().slice(0,10);
+              return added!==purchased;
+            });
+            if(toAlignImportedAddedDate.length){
+              const repairedImported=toAlignImportedAddedDate.map(w=>({
+                ...w,
+                cellarMeta:{...(w.cellarMeta||{}),addedDate:(w.datePurchased||"").toString().slice(0,10)}
+              }));
+              await Promise.all(repairedImported.map(w=>db.upsert("wines",toDb.wine(w))));
+              const byId=Object.fromEntries(repairedImported.map(w=>[w.id,w.cellarMeta]));
+              all=all.map(w=>byId[w.id]?{...w,cellarMeta:byId[w.id]}:w);
+            }
+            const toRepairAddedDate=all.filter(w=>!(w.cellarMeta||{}).addedDate);
+            if(toRepairAddedDate.length){
+              const repairedAdded=toRepairAddedDate.map(w=>({
+                ...w,
+                cellarMeta:{...(w.cellarMeta||{}),addedDate:w.datePurchased||todayIsoLocal()}
+              }));
+              await Promise.all(repairedAdded.map(w=>db.upsert("wines",toDb.wine(w))));
+              const byId=Object.fromEntries(repairedAdded.map(w=>[w.id,w.cellarMeta]));
+              all=all.map(w=>byId[w.id]?{...w,cellarMeta:byId[w.id]}:w);
+            }
+            const journalFixDone=(()=>{try{return localStorage.getItem(EXCEL_JOURNAL_FIX_FLAG)==="1";}catch{return false;}})();
+            if(!journalFixDone){
+              const toRepairSeedJournal=all.filter(w=>{
+                if(!String(w.id||"").startsWith("xl-")) return false;
+                const seed=SEED_JOURNAL_BY_ID[w.id];
+                if(!seed) return false;
+                const currentOther=normalizeOtherReviews(w.otherReviews||[]);
+                const seedOther=normalizeOtherReviews(seed.otherReviews||[]);
+                const existingNotes=(w.notes||"").toString().trim();
+                const desiredNotes=(seed.notes||"").trim();
+                return (
+                  (w.review||"").toString().trim()!==(seed.review||"").toString().trim() ||
+                  canonicalReviewerName((w.reviewPrimaryReviewer||"").toString().trim())!==(seed.reviewPrimaryReviewer||"").toString().trim() ||
+                  cleanRatingToken((w.reviewPrimaryRating||"").toString().trim())!==(seed.reviewPrimaryRating||"").toString().trim() ||
+                  JSON.stringify(currentOther)!==JSON.stringify(seedOther) ||
+                  existingNotes!==desiredNotes ||
+                  !(w.cellarMeta||{}).journalUpdatedAt
+                );
+              });
+              if(toRepairSeedJournal.length){
+                const repairedJournal=toRepairSeedJournal.map(w=>{
+                  const seed=SEED_JOURNAL_BY_ID[w.id]||{};
+                  const seedOther=normalizeOtherReviews(seed.otherReviews||[]);
+                  const m=w.cellarMeta||{};
+                  const journalUpdatedAt=m.journalUpdatedAt||(m.addedDate?`${m.addedDate}T00:00:00`:((w.datePurchased||"").toString().slice(0,10)?`${(w.datePurchased||"").toString().slice(0,10)}T00:00:00`:""));
+                  return{
+                    ...w,
+                    review:seed.review||"",
+                    reviewPrimaryReviewer:seed.reviewPrimaryReviewer||"",
+                    reviewPrimaryRating:seed.reviewPrimaryRating||"",
+                    otherReviews:seedOther,
+                    tastingNotes:serializeOtherRatings(seedOther),
+                    notes:(seed.notes||"").toString().trim(),
+                    rating:seed.rating||0,
+                    cellarMeta:{...m,journalUpdatedAt},
+                  };
+                });
+                await Promise.all(repairedJournal.map(w=>db.upsert("wines",toDb.wine(w))));
+                const byId=Object.fromEntries(repairedJournal.map(w=>[w.id,w]));
+                all=all.map(w=>byId[w.id]||w);
               }
-              const needsBottleRestore=(safeNum(existing.bottles)||0)<(safeNum(seed.bottles)||0);
-              const existingTotal=safeNum(existing.cellarMeta?.totalPurchased);
-              const seedTotal=safeNum(seed.cellarMeta?.totalPurchased);
-              const fallbackTotal=(existingTotal??seedTotal??safeNum(existing.bottles)??0);
-              const mergedTotal=Math.max(safeNum(existing.bottles)||0,fallbackTotal||0);
-              const merged={
-                ...existing,
-                origin:existing.origin||seed.origin,
-                grape:existing.grape||seed.grape,
-                vintage:existing.vintage||seed.vintage,
-                location:normalizeLocation(existing.location||seed.location),
-                locationSlot:existing.locationSlot||seed.locationSlot||null,
-                wineType:resolveWineType(existing),
-                bottles:needsBottleRestore?(safeNum(seed.bottles)||0):(safeNum(existing.bottles)||0),
-                cellarMeta:{...(existing.cellarMeta||{}),totalPurchased:mergedTotal},
-                wishlist:false,
-              };
-              const changed=
-                merged.bottles!==existing.bottles||
-                merged.origin!==existing.origin||
-                merged.grape!==existing.grape||
-                merged.vintage!==existing.vintage||
-                merged.location!==existing.location||
-                merged.locationSlot!==existing.locationSlot||
-                merged.wineType!==existing.wineType||
-                safeNum(existing.cellarMeta?.totalPurchased)!==mergedTotal||
-                existing.wishlist===true;
-              if(changed){
-                repaired.push(merged);
-                const idx=all.findIndex(w=>w.id===merged.id);
-                if(idx>=0)all[idx]=merged;
+              try{localStorage.setItem(EXCEL_JOURNAL_FIX_FLAG,"1");}catch{}
+            }
+            const restoredFromExcel=(()=>{try{return localStorage.getItem(EXCEL_RESTORE_FLAG)==="1";}catch{return false;}})();
+            if(!restoredFromExcel){
+              const byId=new Map(all.map(w=>[w.id,w]));
+              const signatures=new Set(all.filter(w=>!w.wishlist).map(wineIdentitySignature));
+              const repaired=[];
+              for(const seed of SEED_WINES){
+                const existing=byId.get(seed.id);
+                if(!existing){
+                  const seedSig=wineIdentitySignature(seed);
+                  if(signatures.has(seedSig)) continue;
+                  repaired.push(seed);
+                  all.push(seed);
+                  byId.set(seed.id,seed);
+                  signatures.add(seedSig);
+                }
               }
+              if(repaired.length){
+                await Promise.all(repaired.map(w=>db.upsert("wines",toDb.wine(w))));
+              }
+              try{localStorage.setItem(EXCEL_RESTORE_FLAG,"1");}catch{}
             }
-            if(repaired.length){
-              await Promise.all(repaired.map(w=>db.upsert("wines",toDb.wine(w))));
-            }
-            try{localStorage.setItem(EXCEL_RESTORE_FLAG,"1");}catch{}
           }
           setWines(all.filter(w=>!w.wishlist));
           setNotes(noteRows.length?noteRows.map(fromDb.note):(cache?.notes||[]));
@@ -6010,9 +6259,21 @@ export default function App(){
     Object.entries(cssVars).forEach(([k,v])=>document.documentElement.style.setProperty(k,v));
   });
   useEffect(()=>{
+    const state={wines,notes,profile};
     try{
-      localStorage.setItem(CACHE_KEY,JSON.stringify({wines,notes,profile}));
+      localStorage.setItem(CACHE_KEY,JSON.stringify(state));
     }catch{}
+    if(snapshotTimerRef.current) clearTimeout(snapshotTimerRef.current);
+    snapshotTimerRef.current=setTimeout(()=>{
+      saveIndexedSnapshot("state-change",state);
+      snapshotTimerRef.current=null;
+    },1200);
+    return ()=>{
+      if(snapshotTimerRef.current){
+        clearTimeout(snapshotTimerRef.current);
+        snapshotTimerRef.current=null;
+      }
+    };
   },[wines,notes,profile]);
 
   const applyWineTypeAndLearnAliases = useCallback(async wineInput=>{
