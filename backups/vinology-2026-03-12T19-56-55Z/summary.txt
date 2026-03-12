@@ -1,0 +1,15 @@
+generated_at=2026-03-12T19:57:05.897Z
+project_url=https://dfnvmwoacprkhxfbpybv.supabase.co
+tables=wines,profile,audits,tasting_notes,grape_aliases,cellar_events,cellar_snapshots
+wines=265
+profile=1
+audits=1
+tasting_notes=0
+grape_aliases=39
+cellar_events=0
+cellar_snapshots=0
+backup_json_sha256=e130d15f8c467d2c58bc7424c51bbae7a54a171ee2a5b14a6818ce2a721ff9b6
+backup_json_gz_sha256=0fe33a7af0a96b602165d3683ad36367c0ec7200705877710aeefb975e5e798d
+warnings:
+- Table 'cellar_events' not found (404)
+- Table 'cellar_snapshots' not found (404)
