@@ -5,7 +5,7 @@ import { wineHoldings2021 } from "./data/wineHoldings2021";
 const SUPA_URL = "https://dfnvmwoacprkhxfbpybv.supabase.co";
 const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRmbnZtd29hY3Bya2h4ZmJweWJ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE4MTkwNTksImV4cCI6MjA4NzM5NTA1OX0.40VqzdfZ9zoJitgCTShNiMTOYheDRYgn84mZXX5ZECs";
 const supa = t => `${SUPA_URL}/rest/v1/${t}`;
-const APP_VERSION = "7.57";
+const APP_VERSION = "7.58";
 const BH = { "Content-Type":"application/json","apikey":SUPA_KEY,"Authorization":`Bearer ${SUPA_KEY}`,"x-app-version":APP_VERSION };
 const UH = { ...BH, "Prefer":"resolution=merge-duplicates,return=minimal" };
 const CHANGE_LOG_KEY = "vino_change_log_v1";
@@ -925,8 +925,10 @@ const readDeletedWines=()=>{
       .map(item=>({wine:item.wine,deletedAt:item.deletedAt||""}));
   }catch{return[];}
 };
-const wineFormDraftStorageKey = ({initial,isWishlist}) =>
-  `${WINE_FORM_DRAFT_PREFIX}${initial?.id?`edit:${initial.id}`:(isWishlist?"new:wishlist":"new:cellar")}`;
+const wineFormDraftStorageKey = ({initial,isWishlist,mode}) => {
+  if(mode==="duplicate"&&initial?.id) return `${WINE_FORM_DRAFT_PREFIX}duplicate:${initial.id}`;
+  return `${WINE_FORM_DRAFT_PREFIX}${initial?.id?`edit:${initial.id}`:(isWishlist?"new:wishlist":"new:cellar")}`;
+};
 const readWineFormDraft = key => {
   try{
     const raw=localStorage.getItem(key);
@@ -1617,6 +1619,7 @@ const IC={
   moon:"M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z",
   monitor:"M2 3h20a2 2 0 012 2v12a2 2 0 01-2 2H2a2 2 0 01-2-2V5a2 2 0 012-2zM8 21h8M12 17v4",
   export:"M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12",
+  duplicate:"M9 9h10a2 2 0 012 2v8a2 2 0 01-2 2H9a2 2 0 01-2-2v-8a2 2 0 012-2zM5 15H4a2 2 0 01-2-2V5a2 2 0 012-2h8a2 2 0 012 2v1",
   camera:"M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2zM12 17a4 4 0 100-8 4 4 0 000 8z",
   location:"M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0118 0zM12 13a3 3 0 100-6 3 3 0 000 6z",
   settings:"M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z",
@@ -2175,7 +2178,7 @@ const WineCard=({wine,onClick})=>{
 };
 
 /* ── WINE DETAIL ──────────────────────────────────────────────── */
-const WineDetail=({wine,onEdit,onDelete,onMove,onAdjustConsumption})=>{
+const WineDetail=({wine,onEdit,onDelete,onMove,onAdjustConsumption,onDuplicate})=>{
   const type=resolveWineType(wine);
   const category=resolveWineCategory(wine);
   const varietal=resolveVarietal(wine);
@@ -2284,8 +2287,9 @@ const WineDetail=({wine,onEdit,onDelete,onMove,onAdjustConsumption})=>{
           ))}
         </div>
         {wine.wishlist&&onMove&&<div style={{marginBottom:8}}><Btn full onClick={onMove}>Move to Collection</Btn></div>}
-        <div style={{display:"flex",gap:8,marginTop:12}}>
+        <div style={{display:"grid",gridTemplateColumns:onDuplicate?"repeat(3,minmax(0,1fr))":"repeat(2,minmax(0,1fr))",gap:8,marginTop:12}}>
           <Btn variant="secondary" onClick={onEdit} full icon="edit">Edit</Btn>
+          {onDuplicate&&<Btn variant="secondary" onClick={onDuplicate} full icon="duplicate">Duplicate</Btn>}
           <Btn variant="danger" onClick={onDelete} full icon="trash">Delete</Btn>
         </div>
       </div>
@@ -2295,8 +2299,10 @@ const WineDetail=({wine,onEdit,onDelete,onMove,onAdjustConsumption})=>{
 
 /* ── WINE FORM ────────────────────────────────────────────────── */
 const CUSTOM_LOCATION_OPTION = "__custom_location__";
-const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocations=[],originOptions=[],onSaveLocation,onRemoveLocation,reviewerSuggestions=[]})=>{
-  const draftKeyRef=useRef(wineFormDraftStorageKey({initial,isWishlist}));
+const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocations=[],originOptions=[],onSaveLocation,onRemoveLocation,reviewerSuggestions=[],mode})=>{
+  const formMode=mode||(initial?"edit":"create");
+  const isDuplicateMode=formMode==="duplicate";
+  const draftKeyRef=useRef(wineFormDraftStorageKey({initial,isWishlist,mode:formMode}));
   const draftKey=draftKeyRef.current;
   const knownLocations=dedupeLocations([...LOCATIONS,...locationOptions,...savedLocations,initial?.location]);
   const defaultLocation=knownLocations[0]||LOCATIONS[0]||"Kennards";
@@ -2332,8 +2338,8 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
   const [rememberLocation,setRememberLocation]=useState(false);
   const [priceBottlesManual,setPriceBottlesManual]=useState(false);
   const [purchasedManual,setPurchasedManual]=useState(false);
-  const isTwoStepNewCellar=!initial&&!isWishlist;
-  const usesStepTabs=!isWishlist&&(isTwoStepNewCellar||!!initial);
+  const isTwoStepNewCellar=!initial&&!isWishlist&&!isDuplicateMode;
+  const usesStepTabs=!isWishlist&&!isDuplicateMode&&(isTwoStepNewCellar||!!initial);
   const [step,setStep]=useState("details");
   const set=(k,v)=>setF(p=>({...p,[k]:v}));
   const setOtherReview=(idx,key,value)=>setF(p=>({
@@ -2374,7 +2380,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
   };
   const [q,setQ]=useState(initial?.name||"");
   const [sugs,setSugs]=useState([]);
-  const [showFields,setShowFields]=useState(!!initial);
+  const [showFields,setShowFields]=useState(!!initial||isDuplicateMode);
   const [draftRestored,setDraftRestored]=useState(false);
   const [originSugOpen,setOriginSugOpen]=useState(false);
   const [grapeSugOpen,setGrapeSugOpen]=useState(false);
@@ -2457,6 +2463,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
   const topMetaPillStyle={display:"inline-flex",alignItems:"center",gap:6,padding:"4px 9px",borderRadius:999,border:"1px solid rgba(var(--accentRgb),0.28)",background:"rgba(var(--accentRgb),0.1)",fontSize:10,fontWeight:800,color:"var(--accent)",letterSpacing:"0.8px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"};
   const detailsGridStyle={display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(250px,1fr))",gap:12};
   const actionRailStyle={position:"sticky",bottom:0,zIndex:3,marginTop:12,paddingTop:10,background:"linear-gradient(180deg,rgba(255,255,255,0),var(--surface) 22%)"};
+  const saveActionLabel=isDuplicateMode?"Save Duplicate":initial?"Save Changes":"Save Wine";
   const sectionTitle=(label)=>(
     <div style={sectionTitleStyle}>
       <span style={sectionTitleDotStyle}/>
@@ -2624,7 +2631,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
     }else{
       onSave({
         ...sharedBase,
-        id:f.id||uid(),
+        id:isDuplicateMode?uid():(f.id||uid()),
         bottles:projectedLeft,
         location:finalLocation,
         locationSlot:f.locationSlot||null,
@@ -2640,7 +2647,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
   };
   return(
     <div>
-      <ModalHeader title={initial?"Edit Wine":isWishlist?"Add to Wishlist":"Add Wine"} onClose={onClose}/>
+      <ModalHeader title={isDuplicateMode?"Duplicate Wine":initial?"Edit Wine":isWishlist?"Add to Wishlist":"Add Wine"} onClose={onClose}/>
       <div style={topShellStyle}>
         <div style={{display:"grid",gridTemplateColumns:"78px minmax(0,1fr)",gap:12,alignItems:"center"}}>
           <div style={{position:"relative",width:76,height:76}}>
@@ -2659,13 +2666,15 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
           </div>
           <div>
             <div style={{display:"flex",flexWrap:"wrap",gap:7,marginBottom:7}}>
-              <span style={topMetaPillStyle}>{initial?"Edit Mode":"New Entry"}</span>
+              <span style={topMetaPillStyle}>{isDuplicateMode?"Duplicate Card":initial?"Edit Mode":"New Entry"}</span>
               <span style={{...topMetaPillStyle,border:"1px solid var(--border)",background:"var(--surface)",color:"var(--sub)"}}>
                 Autosave on{draftRestored?" · restored draft":""}
               </span>
             </div>
             <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:13,color:"var(--sub)",lineHeight:1.45}}>
-              {isWishlist
+              {isDuplicateMode
+                ? "Create a second cellar card from this wine. Journal notes stay shared while location, quantities, dates and pricing can change here."
+                : isWishlist
                 ? "Capture key details quickly and keep notes clean."
                 : "Structured entry with synced inventory, pricing, dates and journal notes."
               }
@@ -2673,34 +2682,36 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
           </div>
         </div>
       </div>
-      <div style={{...sectionCardStyle,marginBottom:14,position:"relative"}}>
-        {sectionTitle("Search Wine Database")}
-        <div style={{position:"relative"}}>
-          <input value={q} onChange={e=>handleQ(e.target.value)} placeholder="Wine name, grape, or region…" style={{paddingLeft:38}} onBlur={()=>setTimeout(()=>setSugs([]),160)}/>
-          <div style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"var(--sub)",pointerEvents:"none"}}><Icon n="search" size={16}/></div>
-        </div>
-        {sugs.length>0&&(
-          <div style={{position:"absolute",top:"100%",left:14,right:14,background:"var(--surface)",borderRadius:14,border:"1px solid var(--border)",zIndex:99,maxHeight:300,overflowY:"auto",overscrollBehavior:"contain",boxShadow:"0 12px 40px rgba(0,0,0,0.2)",marginTop:6}}
-            onWheel={e=>e.stopPropagation()}>
-            {sugs.map((w,i)=>(
-              <div key={i} onMouseDown={()=>pickSug(w)} style={{padding:"10px 14px",cursor:"pointer",borderBottom:i<sugs.length-1?"1px solid var(--border)":"none"}}
-                onMouseEnter={e=>e.currentTarget.style.background="var(--inputBg)"}
-                onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:15,fontWeight:700,color:"var(--text)"}}>{w.name}</div>
-                <div style={{fontSize:12,color:"var(--sub)",marginTop:1}}>{w.grape} · {w.origin}</div>
-              </div>
-            ))}
-            <div onMouseDown={()=>{setSugs([]);setShowFields(true);}} style={{padding:"10px 14px",cursor:"pointer",color:"var(--accent)",fontSize:13,fontWeight:700,textAlign:"center",borderTop:"1px solid var(--border)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
-              Add "{q}" manually
-            </div>
+      {!isDuplicateMode&&(
+        <div style={{...sectionCardStyle,marginBottom:14,position:"relative"}}>
+          {sectionTitle("Search Wine Database")}
+          <div style={{position:"relative"}}>
+            <input value={q} onChange={e=>handleQ(e.target.value)} placeholder="Wine name, grape, or region…" style={{paddingLeft:38}} onBlur={()=>setTimeout(()=>setSugs([]),160)}/>
+            <div style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"var(--sub)",pointerEvents:"none"}}><Icon n="search" size={16}/></div>
           </div>
-        )}
-        {!showFields&&!sugs.length&&q.length>=1&&(
-          <button onMouseDown={()=>setShowFields(true)} style={{marginTop:9,width:"100%",padding:"10px",borderRadius:11,border:"1.5px dashed var(--border)",background:"linear-gradient(180deg,var(--inputBg),rgba(var(--accentRgb),0.05))",color:"var(--accent)",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
-            Enter details manually
-          </button>
-        )}
-      </div>
+          {sugs.length>0&&(
+            <div style={{position:"absolute",top:"100%",left:14,right:14,background:"var(--surface)",borderRadius:14,border:"1px solid var(--border)",zIndex:99,maxHeight:300,overflowY:"auto",overscrollBehavior:"contain",boxShadow:"0 12px 40px rgba(0,0,0,0.2)",marginTop:6}}
+              onWheel={e=>e.stopPropagation()}>
+              {sugs.map((w,i)=>(
+                <div key={i} onMouseDown={()=>pickSug(w)} style={{padding:"10px 14px",cursor:"pointer",borderBottom:i<sugs.length-1?"1px solid var(--border)":"none"}}
+                  onMouseEnter={e=>e.currentTarget.style.background="var(--inputBg)"}
+                  onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                  <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:15,fontWeight:700,color:"var(--text)"}}>{w.name}</div>
+                  <div style={{fontSize:12,color:"var(--sub)",marginTop:1}}>{w.grape} · {w.origin}</div>
+                </div>
+              ))}
+              <div onMouseDown={()=>{setSugs([]);setShowFields(true);}} style={{padding:"10px 14px",cursor:"pointer",color:"var(--accent)",fontSize:13,fontWeight:700,textAlign:"center",borderTop:"1px solid var(--border)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+                Add "{q}" manually
+              </div>
+            </div>
+          )}
+          {!showFields&&!sugs.length&&q.length>=1&&(
+            <button onMouseDown={()=>setShowFields(true)} style={{marginTop:9,width:"100%",padding:"10px",borderRadius:11,border:"1.5px dashed var(--border)",background:"linear-gradient(180deg,var(--inputBg),rgba(var(--accentRgb),0.05))",color:"var(--accent)",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+              Enter details manually
+            </button>
+          )}
+        </div>
+      )}
       {showFields&&(
         <div>
           {usesStepTabs&&(
@@ -3034,13 +3045,13 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
             {usesStepTabs&&step==="journal"&&(
               <div style={{display:"flex",gap:8,padding:"10px",borderRadius:14,border:"1px solid var(--border)",background:"var(--card)",boxShadow:"0 10px 22px rgba(0,0,0,0.12)"}}>
                 <Btn variant="secondary" onClick={()=>setStep("details")} full>Back</Btn>
-                <Btn onClick={save} full disabled={!canSubmit}>{initial?"Save Changes":"Save Wine"}</Btn>
+                <Btn onClick={save} full disabled={!canSubmit}>{saveActionLabel}</Btn>
               </div>
             )}
             {!usesStepTabs&&(
               <div style={{display:"flex",gap:8,padding:"10px",borderRadius:14,border:"1px solid var(--border)",background:"var(--card)",boxShadow:"0 10px 22px rgba(0,0,0,0.12)"}}>
                 <Btn variant="secondary" onClick={cancel} full>Cancel</Btn>
-                <Btn onClick={save} full disabled={!canSubmit}>{initial?"Save Changes":"Save Wine"}</Btn>
+                <Btn onClick={save} full disabled={!canSubmit}>{saveActionLabel}</Btn>
               </div>
             )}
           </div>
@@ -3305,10 +3316,11 @@ const Chip=({label,onX})=>(
 );
 
 /* ── COLLECTION ───────────────────────────────────────────────── */
-const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAdjustConsumption,desktop,savedLocations,onSaveLocation,onRemoveLocation,deletedWines=[],onRestoreDeleted,onDismissDeleted})=>{
+const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAdjustConsumption,onDuplicate,desktop,savedLocations,onSaveLocation,onRemoveLocation,deletedWines=[],onRestoreDeleted,onDismissDeleted})=>{
   const [sel,setSel]=useState(null);
   const [editing,setEditing]=useState(false);
   const [adding,setAdding]=useState(false);
+  const [duplicating,setDuplicating]=useState(false);
   const [rewindOpen,setRewindOpen]=useState(false);
   const [recentDelete,setRecentDelete]=useState(null);
   const [search,setSearch]=useState("");
@@ -3499,14 +3511,32 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAdjustConsumption,deskt
               {filt.map(w=><WineCard key={w.id} wine={w} onClick={()=>{setSel(w);setEditing(false);}}/>)}
             </div>
       }
-      <Modal show={!!sel&&!editing} onClose={()=>setSel(null)} wide>
-        {sel&&<WineDetail wine={sel} onEdit={()=>setEditing(true)} onDelete={async()=>{const deletedId=await onDelete(sel.id);setRecentDelete({id:deletedId||sel.id,name:sel.name||"Wine"});setSel(null);}} onAdjustConsumption={async delta=>{const updated=await onAdjustConsumption?.(sel.id,delta);if(updated)setSel(updated);}}/>}
+      <Modal show={!!sel&&!editing&&!duplicating} onClose={()=>setSel(null)} wide>
+        {sel&&<WineDetail wine={sel} onEdit={()=>setEditing(true)} onDuplicate={()=>setDuplicating(true)} onDelete={async()=>{const deletedId=await onDelete(sel.id);setRecentDelete({id:deletedId||sel.id,name:sel.name||"Wine"});setSel(null);}} onAdjustConsumption={async delta=>{const updated=await onAdjustConsumption?.(sel.id,delta);if(updated)setSel(updated);}}/>}
       </Modal>
       <Modal show={editing} onClose={()=>setEditing(false)} wide>
         <WineForm
           initial={sel}
           onSave={w=>{onUpdate(w);setSel(w);setEditing(false);}}
           onClose={()=>setEditing(false)}
+          locationOptions={locationOptions}
+          savedLocations={savedLocations}
+          originOptions={originOptions}
+          onSaveLocation={onSaveLocation}
+          onRemoveLocation={onRemoveLocation}
+          reviewerSuggestions={reviewerSuggestions}
+        />
+      </Modal>
+      <Modal show={duplicating} onClose={()=>setDuplicating(false)} wide>
+        <WineForm
+          initial={sel}
+          mode="duplicate"
+          onSave={async w=>{
+            const result=await onDuplicate?.(sel,w);
+            setSel(result?.duplicate||w);
+            setDuplicating(false);
+          }}
+          onClose={()=>setDuplicating(false)}
           locationOptions={locationOptions}
           savedLocations={savedLocations}
           originOptions={originOptions}
@@ -4496,6 +4526,7 @@ const formatJournalUpdated = wine => {
   return d.toLocaleString("en-AU",{day:"numeric",month:"short",year:"numeric"});
 };
 const journalGroupKey = wine => ((wine?.cellarMeta?.splitGroupId||"").toString().trim()||`wine:${wine?.id||""}`);
+const sharedJournalGroupId = wine => ((wine?.cellarMeta?.splitGroupId||"").toString().trim()||uid());
 const dedupeJournalWines = wines => {
   const out=new Map();
   (wines||[]).forEach(w=>{
@@ -6521,6 +6552,26 @@ export default function App(){
     setWines(p=>p.map(x=>x.id===next.id?next:x));
     await db.upsert("wines",toDb.wine(next));
   };
+  const duplicateWine=async(sourceWine,duplicateInput)=>{
+    const groupId=sharedJournalGroupId(sourceWine);
+    const sourcePatched=((sourceWine?.cellarMeta?.splitGroupId||"").toString().trim()===groupId)
+      ? sourceWine
+      : {...sourceWine,cellarMeta:{...(sourceWine.cellarMeta||{}),splitGroupId:groupId}};
+    const duplicateSeed={
+      ...duplicateInput,
+      cellarMeta:{...(duplicateInput.cellarMeta||{}),splitGroupId:groupId,journalUpdatedAt:sourcePatched.cellarMeta?.journalUpdatedAt||duplicateInput.cellarMeta?.journalUpdatedAt||new Date().toISOString()},
+    };
+    const duplicatePatched=await applyWineTypeAndLearnAliases(duplicateSeed);
+    setWines(prev=>{
+      const next=prev.map(w=>w.id===sourcePatched.id?sourcePatched:w);
+      return [...next,duplicatePatched];
+    });
+    await Promise.all([
+      db.upsert("wines",toDb.wine(sourcePatched)),
+      db.upsert("wines",toDb.wine(duplicatePatched)),
+    ]);
+    return {source:sourcePatched,duplicate:duplicatePatched};
+  };
   const delWine=async id=>{
     let removed=null;
     setWines(prev=>{
@@ -6759,7 +6810,7 @@ export default function App(){
 
   const screens=(
     <>
-      {tab==="collection"&&<CollectionScreen wines={wines} onAdd={addWine} onUpdate={updWine} onDelete={delWine} onAdjustConsumption={adjustWineConsumption} desktop={isDesktop} savedLocations={savedLocations} onSaveLocation={addSavedLocation} onRemoveLocation={removeSavedLocation} deletedWines={deletedWines} onRestoreDeleted={restoreDeletedWine} onDismissDeleted={dismissDeletedWine}/>}
+      {tab==="collection"&&<CollectionScreen wines={wines} onAdd={addWine} onUpdate={updWine} onDelete={delWine} onDuplicate={duplicateWine} onAdjustConsumption={adjustWineConsumption} desktop={isDesktop} savedLocations={savedLocations} onSaveLocation={addSavedLocation} onRemoveLocation={removeSavedLocation} deletedWines={deletedWines} onRestoreDeleted={restoreDeletedWine} onDismissDeleted={dismissDeletedWine}/>}
       {tab==="audit"&&<AuditScreen wines={wines} desktop={isDesktop} onSetWineBottles={setWineBottleCount} onRemoveWine={delWine} onRevokeAudit={revokeAuditSnapshot}/>}
       {tab==="ai"&&<AIScreen wines={wines} profile={profile} setProfile={setProfile}/>}
       {tab==="notes"&&<JournalScreen wines={wines} onUpdate={updWine} desktop={isDesktop}/>}
