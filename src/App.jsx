@@ -5,11 +5,13 @@ import { wineHoldings2021 } from "./data/wineHoldings2021";
 const SUPA_URL = "https://dfnvmwoacprkhxfbpybv.supabase.co";
 const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRmbnZtd29hY3Bya2h4ZmJweWJ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE4MTkwNTksImV4cCI6MjA4NzM5NTA1OX0.40VqzdfZ9zoJitgCTShNiMTOYheDRYgn84mZXX5ZECs";
 const supa = t => `${SUPA_URL}/rest/v1/${t}`;
-const BH = { "Content-Type":"application/json","apikey":SUPA_KEY,"Authorization":`Bearer ${SUPA_KEY}` };
+const APP_VERSION = "7.57";
+const BH = { "Content-Type":"application/json","apikey":SUPA_KEY,"Authorization":`Bearer ${SUPA_KEY}`,"x-app-version":APP_VERSION };
 const UH = { ...BH, "Prefer":"resolution=merge-duplicates,return=minimal" };
 const CHANGE_LOG_KEY = "vino_change_log_v1";
 const OUTBOX_KEY = "vino_sync_outbox_v2";
 const SYNC_HEALTH_KEY = "vino_sync_health_v1";
+const OUTBOX_HOTFIX_MARKER = "vino_outbox_hotfix_2026_03_12";
 const OUTBOX_MAX = 3000;
 const IDB_SNAPSHOT_DB = "vinology-backups";
 const IDB_DB_VERSION = 2;
@@ -194,6 +196,10 @@ const idbOutboxReplace = async list => {
   }catch{
     return false;
   }
+};
+const clearAllOutbox = async () => {
+  writeOutbox([]);
+  await idbOutboxReplace([]);
 };
 const idbOutboxRead = async () => {
   try{
@@ -538,7 +544,6 @@ const db = {
 };
 
 const META_PREFIX = "[[VINO_META]]";
-const APP_VERSION = "7.54";
 const EXCEL_IMPORT_FLAG = "vino_excel_seed_v1";
 const EXCEL_RESTORE_FLAG = "vino_excel_restore_v1";
 const EXCEL_JOURNAL_FIX_FLAG = "vino_excel_journal_fix_v4";
@@ -6116,6 +6121,21 @@ export default function App(){
   const [oName,setOName]=useState("");
   const [oCellar,setOCellar]=useState("");
   const snapshotTimerRef=useRef(null);
+
+  useEffect(()=>{
+    let cancelled=false;
+    (async()=>{
+      try{
+        const applied=localStorage.getItem(OUTBOX_HOTFIX_MARKER)==="1";
+        if(applied||cancelled) return;
+        await clearAllOutbox();
+        if(cancelled) return;
+        localStorage.setItem(OUTBOX_HOTFIX_MARKER,"1");
+        db.setHealth({status:"healthy",pending:0,lastError:""});
+      }catch{}
+    })();
+    return()=>{cancelled=true;};
+  },[]);
 
   useEffect(()=>{try{localStorage.setItem("vino_theme",themeMode)}catch{}},[themeMode]);
   useEffect(()=>{try{localStorage.setItem(SAVED_LOCATIONS_KEY,JSON.stringify(savedLocations))}catch{}},[savedLocations]);

@@ -44,6 +44,7 @@ const SUPABASE_KEY =
   trim(process.env.SUPABASE_SERVICE_ROLE_KEY) ||
   trim(process.env.SUPABASE_ANON_KEY) ||
   trim(process.env.SUPABASE_KEY);
+const APP_VERSION = trim(process.env.APP_VERSION) || "7.57";
 
 if (!SUPABASE_URL) {
   console.error("Missing SUPABASE_URL.");
@@ -70,7 +71,7 @@ try {
 }
 
 const tableMap = parsed?.tables && typeof parsed.tables === "object" ? parsed.tables : {};
-const tableOrder = ["profile", "wines", "audits", "tasting_notes", "grape_aliases", "cellar_events", "cellar_snapshots"];
+const tableOrder = ["profile", "wines", "audits", "tasting_notes", "grape_aliases", "cellar_events", "cellar_snapshots", "app_guard_config"];
 const orderedTables = [
   ...tableOrder.filter(t => Object.prototype.hasOwnProperty.call(tableMap, t)),
   ...Object.keys(tableMap).filter(t => !tableOrder.includes(t)),
@@ -88,12 +89,14 @@ const conflictKeyByTable = {
   grape_aliases: "alias",
   cellar_events: "id",
   cellar_snapshots: "id",
+  app_guard_config: "id",
 };
 
 const headers = {
   apikey: SUPABASE_KEY,
   Authorization: `Bearer ${SUPABASE_KEY}`,
   "Content-Type": "application/json",
+  "x-app-version": APP_VERSION,
   Prefer: "resolution=merge-duplicates,return=minimal",
 };
 
