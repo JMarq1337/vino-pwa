@@ -5,7 +5,7 @@ import { wineHoldings2021 } from "./data/wineHoldings2021";
 const SUPA_URL = "https://dfnvmwoacprkhxfbpybv.supabase.co";
 const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRmbnZtd29hY3Bya2h4ZmJweWJ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE4MTkwNTksImV4cCI6MjA4NzM5NTA1OX0.40VqzdfZ9zoJitgCTShNiMTOYheDRYgn84mZXX5ZECs";
 const supa = t => `${SUPA_URL}/rest/v1/${t}`;
-const APP_VERSION = "7.59";
+const APP_VERSION = "7.60";
 const BH = { "Content-Type":"application/json","apikey":SUPA_KEY,"Authorization":`Bearer ${SUPA_KEY}`,"x-app-version":APP_VERSION };
 const UH = { ...BH, "Prefer":"resolution=merge-duplicates,return=minimal" };
 const CHANGE_LOG_KEY = "vino_change_log_v1";
@@ -1866,6 +1866,39 @@ const ModalHeader=({title,onClose})=>(
   </div>
 );
 
+const DuplicateWorkspaceModal=({show,onClose,desktop,showSource,sourcePanel,editorPanel})=>{
+  if(!show)return null;
+  return(
+    <div style={{position:"fixed",inset:0,zIndex:9999,padding:desktop?24:16}} onClick={onClose}>
+      <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.65)",backdropFilter:"blur(10px)",WebkitBackdropFilter:"blur(10px)",animation:"fadeIn .2s"}}/>
+      <div
+        style={{
+          position:"relative",
+          width:"100%",
+          maxWidth:desktop?1260:640,
+          height:"100%",
+          margin:"0 auto",
+          display:"grid",
+          alignItems:desktop?"center":"start",
+          justifyItems:"center",
+          gridTemplateColumns:desktop&&showSource?"340px minmax(0,560px)":"minmax(0,560px)",
+          gap:16,
+          overflowY:"auto",
+        }}
+      >
+        {showSource&&sourcePanel&&(
+          <div onClick={e=>e.stopPropagation()} style={{width:"100%",animation:"modalIn .22s cubic-bezier(0.34,1.2,0.64,1)"}}>
+            {sourcePanel}
+          </div>
+        )}
+        <div onClick={e=>e.stopPropagation()} style={{width:"100%",animation:"modalIn .22s cubic-bezier(0.34,1.2,0.64,1)"}}>
+          {editorPanel}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const Field=({label,value,onChange,type="text",placeholder,rows,optional,clearable,onClear,clearLabel="Clear"})=>(
   <div style={{marginBottom:14}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
@@ -3575,55 +3608,45 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAdjustConsumption,onDup
           reviewerSuggestions={reviewerSuggestions}
         />
       </Modal>
-      <Modal show={duplicating} onClose={()=>{setDuplicating(false);setDuplicateShowSource(true);}} wide={desktop?(duplicateShowSource?1180:620):620}>
-        {sel&&(
-          <div style={
-            desktop&&duplicateShowSource
-              ? {display:"grid",gridTemplateColumns:"340px minmax(0,1fr)",gap:16,alignItems:"start"}
-              : duplicateShowSource
-                ? {display:"grid",gap:14}
-                : {display:"flex",justifyContent:"center"}
-          }>
-            {duplicateShowSource&&(
-              <div style={desktop?undefined:{marginBottom:14}}>
-                <DuplicateSourcePreview wine={sel} onHide={()=>setDuplicateShowSource(false)}/>
+      <DuplicateWorkspaceModal
+        show={duplicating}
+        onClose={()=>{setDuplicating(false);setDuplicateShowSource(true);}}
+        desktop={desktop}
+        showSource={duplicateShowSource}
+        sourcePanel={sel?<DuplicateSourcePreview wine={sel} onHide={()=>setDuplicateShowSource(false)}/>:null}
+        editorPanel={sel?(
+          <div style={{background:"linear-gradient(180deg,rgba(var(--accentRgb),0.14),var(--card) 32%)",border:"1px solid rgba(var(--accentRgb),0.28)",borderRadius:24,padding:desktop?10:6,boxShadow:"0 18px 38px rgba(var(--accentRgb),0.14), 0 12px 28px rgba(0,0,0,0.12)"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"8px 10px 2px"}}>
+              <div>
+                <div style={{fontSize:10,fontWeight:900,color:"var(--accent)",letterSpacing:"0.9px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Duplicate Card</div>
+                <div style={{fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginTop:3}}>This creates a second cellar card while keeping the journal shared.</div>
               </div>
-            )}
-            <div style={{minWidth:0,maxWidth:duplicateShowSource&&desktop?"none":560,width:"100%",margin:duplicateShowSource&&desktop?"0":"0 auto",transition:"max-width .2s ease, transform .2s ease"}}>
-              <div style={{background:"linear-gradient(180deg,rgba(var(--accentRgb),0.14),var(--card) 32%)",border:"1px solid rgba(var(--accentRgb),0.28)",borderRadius:24,padding:desktop?10:6,boxShadow:"0 18px 38px rgba(var(--accentRgb),0.14), 0 12px 28px rgba(0,0,0,0.12)"}}>
-                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"8px 10px 2px"}}>
-                  <div>
-                    <div style={{fontSize:10,fontWeight:900,color:"var(--accent)",letterSpacing:"0.9px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Duplicate Card</div>
-                    <div style={{fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginTop:3}}>This creates a second cellar card while keeping the journal shared.</div>
-                  </div>
-                  {!duplicateShowSource&&(
-                    <button onClick={()=>setDuplicateShowSource(true)} style={{padding:"7px 10px",borderRadius:10,border:"1px solid var(--border)",background:"var(--inputBg)",color:"var(--sub)",fontSize:11,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:"pointer"}}>
-                      Show original
-                    </button>
-                  )}
-                </div>
-                <WineForm
-                  initial={sel}
-                  mode="duplicate"
-                  onSave={async w=>{
-                    const result=await onDuplicate?.(sel,w);
-                    setSel(result?.source||sel);
-                    setDuplicating(false);
-                    setDuplicateShowSource(true);
-                  }}
-                  onClose={()=>{setDuplicating(false);setDuplicateShowSource(true);}}
-                  locationOptions={locationOptions}
-                  savedLocations={savedLocations}
-                  originOptions={originOptions}
-                  onSaveLocation={onSaveLocation}
-                  onRemoveLocation={onRemoveLocation}
-                  reviewerSuggestions={reviewerSuggestions}
-                />
-              </div>
+              {!duplicateShowSource&&(
+                <button onClick={()=>setDuplicateShowSource(true)} style={{padding:"7px 10px",borderRadius:10,border:"1px solid var(--border)",background:"var(--inputBg)",color:"var(--sub)",fontSize:11,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:"pointer"}}>
+                  Show original
+                </button>
+              )}
             </div>
+            <WineForm
+              initial={sel}
+              mode="duplicate"
+              onSave={async w=>{
+                const result=await onDuplicate?.(sel,w);
+                setSel(result?.source||sel);
+                setDuplicating(false);
+                setDuplicateShowSource(true);
+              }}
+              onClose={()=>{setDuplicating(false);setDuplicateShowSource(true);}}
+              locationOptions={locationOptions}
+              savedLocations={savedLocations}
+              originOptions={originOptions}
+              onSaveLocation={onSaveLocation}
+              onRemoveLocation={onRemoveLocation}
+              reviewerSuggestions={reviewerSuggestions}
+            />
           </div>
-        )}
-      </Modal>
+        ):null}
+      />
       <Modal show={adding} onClose={()=>setAdding(false)} wide>
         <WineForm
           onSave={w=>{onAdd(w);setAdding(false);}}
