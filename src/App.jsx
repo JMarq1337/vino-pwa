@@ -5,7 +5,7 @@ import { wineHoldings2021 } from "./data/wineHoldings2021";
 const SUPA_URL = "https://dfnvmwoacprkhxfbpybv.supabase.co";
 const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRmbnZtd29hY3Bya2h4ZmJweWJ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE4MTkwNTksImV4cCI6MjA4NzM5NTA1OX0.40VqzdfZ9zoJitgCTShNiMTOYheDRYgn84mZXX5ZECs";
 const supa = t => `${SUPA_URL}/rest/v1/${t}`;
-const APP_VERSION = "7.61";
+const APP_VERSION = "7.62";
 const BH = { "Content-Type":"application/json","apikey":SUPA_KEY,"Authorization":`Bearer ${SUPA_KEY}`,"x-app-version":APP_VERSION };
 const UH = { ...BH, "Prefer":"resolution=merge-duplicates,return=minimal" };
 const CHANGE_LOG_KEY = "vino_change_log_v1";
@@ -1875,19 +1875,21 @@ const DuplicateWorkspaceModal=({show,onClose,desktop,showSource,sourcePanel,edit
         style={{
           position:"relative",
           width:"100%",
-          maxWidth:desktop?1260:640,
+          maxWidth:desktop?1080:640,
           height:"100%",
           margin:"0 auto",
           display:"grid",
-          alignItems:desktop?"center":"start",
+          alignItems:"start",
           justifyItems:"center",
-          gridTemplateColumns:desktop&&showSource?"340px minmax(0,560px)":"minmax(0,560px)",
-          gap:16,
+          gridTemplateColumns:desktop&&showSource?"320px minmax(0,560px)":"minmax(0,560px)",
+          gap:18,
           overflowY:"auto",
+          paddingTop:desktop?20:0,
+          paddingBottom:desktop?20:0,
         }}
       >
         {showSource&&sourcePanel&&(
-          <div onClick={e=>e.stopPropagation()} style={{width:"100%",animation:"modalIn .22s cubic-bezier(0.34,1.2,0.64,1)"}}>
+          <div onClick={e=>e.stopPropagation()} style={{width:"100%",animation:"modalIn .22s cubic-bezier(0.34,1.2,0.64,1)",position:desktop?"sticky":"static",top:20,alignSelf:"start"}}>
             {sourcePanel}
           </div>
         )}
@@ -2336,42 +2338,67 @@ const DuplicateSourcePreview=({wine,onHide})=>{
   const varietal=resolveVarietal(wine);
   const geo=deriveRegionCountry(wine.origin||"");
   const ready=wineReadiness(wine);
+  const tc=WINE_TYPE_COLORS[type]||WINE_TYPE_COLORS.Other;
   const m=wine.cellarMeta||{};
   const purchasedTotal=getTotalPurchased(wine);
+  const paidPerBottle=safeNum(m.pricePerBottle);
   const rrpPerBottle=safeNum(m.rrp);
+  const addedOn=fmt(m.addedDate)||"—";
+  const locationText=formatWineLocation(wine)||"—";
+  const primaryGeo=[geo.region||geo.country,geo.country&&geo.region?geo.country:null].filter(Boolean).join(" · ");
+  const hasPhoto=!!wine.photo;
   return(
-    <div style={{background:"linear-gradient(180deg,rgba(var(--accentRgb),0.12),var(--card) 28%)",border:"1px solid rgba(var(--accentRgb),0.26)",borderRadius:22,padding:16,boxShadow:"0 16px 36px rgba(0,0,0,0.12)",animation:"modalIn .2s cubic-bezier(0.34,1.2,0.64,1)"}}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:12}}>
+    <div style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:28,padding:16,boxShadow:"0 24px 54px rgba(0,0,0,0.18)",animation:"modalIn .2s cubic-bezier(0.34,1.2,0.64,1)",display:"flex",flexDirection:"column",gap:14}}>
+      <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:10}}>
         <div>
           <div style={{fontSize:10,fontWeight:900,color:"var(--accent)",letterSpacing:"0.9px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Original Card</div>
-          <div style={{fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginTop:3}}>Reference stays visible while you prepare the duplicate.</div>
+          <div style={{fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginTop:4,lineHeight:1.45}}>This stays unchanged while you set up the second cellar card.</div>
         </div>
         <button onClick={onHide} style={{padding:"7px 10px",borderRadius:10,border:"1px solid var(--border)",background:"var(--inputBg)",color:"var(--sub)",fontSize:11,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:"pointer"}}>
           Hide
         </button>
       </div>
-      <div style={{borderRadius:16,background:`linear-gradient(140deg,${(WINE_TYPE_COLORS[type]||WINE_TYPE_COLORS.Other).dot} 0%,rgba(0,0,0,.24) 90%)`,padding:"18px",position:"relative",overflow:"hidden",boxShadow:"inset 0 1px 0 rgba(255,255,255,.2)"}}>
-        <div style={{position:"absolute",right:-18,bottom:-18,opacity:0.12,pointerEvents:"none"}}><BrandLogo size={108} variant="mono"/></div>
-        <div style={{position:"relative",zIndex:1}}>
-          <WineTypePill type={type} label={varietal}/>
-          <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:22,fontWeight:800,color:"#fff",marginTop:8,lineHeight:1.2,textShadow:"0 2px 10px rgba(0,0,0,.28)"}}>{wine.name}</div>
-          <div style={{fontSize:13,color:"rgba(255,255,255,.84)",marginTop:4,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{[wine.vintage,geo.region||geo.country,geo.country&&geo.region?geo.country:null].filter(Boolean).join(" · ")}</div>
-        </div>
+      <div style={{borderRadius:24,background:"linear-gradient(180deg,#fbf6ef 0%,#f3ece2 100%)",border:"1px solid rgba(80,54,40,0.08)",minHeight:hasPhoto?300:220,padding:hasPhoto?"18px 18px 10px":"22px 18px",display:"flex",alignItems:"flex-end",justifyContent:"center",boxShadow:"inset 0 1px 0 rgba(255,255,255,0.72)"}}>
+        {hasPhoto?(
+          <WinePhotoImage src={wine.photo} alt={wine.name} style={{width:"100%",height:"100%",maxHeight:276,objectFit:"contain",objectPosition:"center bottom",filter:"drop-shadow(0 18px 24px rgba(0,0,0,.28)) drop-shadow(0 4px 10px rgba(0,0,0,.18))"}}/>
+        ):(
+          <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:12}}>
+            <div style={{width:96,height:120,borderRadius:26,background:`linear-gradient(180deg,${tc.bg} 0%,rgba(255,255,255,0.7) 100%)`,display:"flex",alignItems:"center",justifyContent:"center",border:"1px solid rgba(18,18,22,0.08)"}}>
+              <BottleGlyph color={tc.dot}/>
+            </div>
+            <div style={{fontSize:12,color:"var(--sub)",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",letterSpacing:"0.45px"}}>No photo attached</div>
+          </div>
+        )}
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:8,marginTop:12}}>
+      <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:22,padding:16,boxShadow:"0 8px 18px rgba(0,0,0,0.06)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:10}}>
+          <WineTypePill type={type} label={varietal}/>
+          <span style={{display:"inline-flex",alignItems:"center",gap:6,padding:"5px 10px",borderRadius:999,background:"rgba(var(--accentRgb),0.08)",color:"var(--accent)",fontSize:11,fontWeight:800,letterSpacing:"0.5px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+            <span style={{width:6,height:6,borderRadius:"50%",background:"var(--accent)"}}/>
+            Source
+          </span>
+        </div>
+        <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:24,fontWeight:800,color:"var(--text)",lineHeight:1.16}}>{wine.name}</div>
+        {(wine.vintage||primaryGeo)&&<div style={{fontSize:13,color:"var(--sub)",marginTop:6,fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.45}}>{[wine.vintage,primaryGeo].filter(Boolean).join(" · ")}</div>}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:8}}>
         {[
           {label:"Purchased",value:purchasedTotal},
           {label:"Left",value:Math.max(0,Math.round(safeNum(wine.bottles)||0))},
-          {label:"Location",value:formatWineLocation(wine)||"—"},
+          {label:"Location",value:locationText},
           {label:"Readiness",value:ready.label},
-          {label:"Added",value:fmt(m.addedDate)||"—"},
+          {label:"Added",value:addedOn},
           {label:"RRP / Bottle",value:rrpPerBottle?`$${rrpPerBottle.toFixed(2)}`:"—"},
+          {label:"Paid / Bottle",value:paidPerBottle?`$${paidPerBottle.toFixed(2)}`:"—"},
         ].map(item=>(
-          <div key={item.label} style={{background:"var(--inputBg)",borderRadius:12,padding:"10px 11px",border:"1px solid var(--border)"}}>
+          <div key={item.label} style={{background:"var(--inputBg)",borderRadius:14,padding:"11px 12px",border:"1px solid var(--border)"}}>
             <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:3,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{item.label}</div>
             <div style={{fontSize:14,color:"var(--text)",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.3}}>{item.value}</div>
           </div>
         ))}
+      </div>
+      <div style={{padding:"12px 14px",borderRadius:16,border:"1px solid rgba(var(--accentRgb),0.16)",background:"rgba(var(--accentRgb),0.05)",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.5}}>
+        You’re creating a second cellar card from this wine. Journal notes stay shared, but stock, location, dates and pricing can be different on the duplicate.
       </div>
     </div>
   );
@@ -3619,13 +3646,23 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAdjustConsumption,onDup
         showSource={duplicateShowSource}
         sourcePanel={sel?<DuplicateSourcePreview wine={sel} onHide={()=>setDuplicateShowSource(false)}/>:null}
         editorPanel={sel?(
-          <div style={{background:"var(--surface)",border:"1px solid rgba(var(--accentRgb),0.16)",borderRadius:26,boxShadow:"0 24px 54px rgba(0,0,0,0.18)",overflow:"hidden",maxHeight:desktop?"84vh":"calc(100dvh - 32px)",display:"flex",flexDirection:"column"}}>
-            <div style={{padding:"18px 20px 14px",borderBottom:"1px solid var(--border)",background:"linear-gradient(180deg,rgba(var(--accentRgb),0.08),rgba(var(--accentRgb),0.02))"}}>
+          <div style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:28,boxShadow:"0 24px 54px rgba(0,0,0,0.18)",overflow:"hidden",maxHeight:desktop?"84vh":"calc(100dvh - 32px)",display:"flex",flexDirection:"column"}}>
+            <div style={{height:4,background:"var(--accent)"}}/>
+            <div style={{padding:"20px 22px 16px",borderBottom:"1px solid var(--border)",background:"var(--surface)"}}>
               <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12}}>
                 <div>
                   <div style={{fontSize:10,fontWeight:900,color:"var(--accent)",letterSpacing:"0.9px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Duplicate Card</div>
-                  <div style={{fontSize:22,fontWeight:700,color:"var(--text)",lineHeight:1.05,fontFamily:"'Plus Jakarta Sans',sans-serif",marginTop:4}}>Create a second cellar card</div>
-                  <div style={{fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginTop:6,lineHeight:1.45}}>Adjust location, stock, dates and pricing here. Journal notes remain shared with the original wine.</div>
+                  <div style={{fontSize:24,fontWeight:800,color:"var(--text)",lineHeight:1.05,fontFamily:"'Plus Jakarta Sans',sans-serif",marginTop:5}}>Create a second cellar card</div>
+                  <div style={{fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginTop:7,lineHeight:1.5,maxWidth:420}}>Adjust location, stock, dates and pricing here. Journal notes remain shared with the original wine.</div>
+                  <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginTop:12}}>
+                    <span style={{display:"inline-flex",alignItems:"center",gap:6,padding:"6px 10px",borderRadius:999,background:"rgba(var(--accentRgb),0.08)",border:"1px solid rgba(var(--accentRgb),0.14)",fontSize:11,fontWeight:800,color:"var(--accent)",letterSpacing:"0.55px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+                      <span style={{width:7,height:7,borderRadius:"50%",background:"var(--accent)"}}/>
+                      New cellar card
+                    </span>
+                    <span style={{display:"inline-flex",alignItems:"center",padding:"6px 10px",borderRadius:999,background:"var(--inputBg)",border:"1px solid var(--border)",fontSize:11,fontWeight:800,color:"var(--sub)",letterSpacing:"0.55px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+                      Shared journal
+                    </span>
+                  </div>
                 </div>
                 <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
                   {!duplicateShowSource&&(
@@ -3637,10 +3674,9 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAdjustConsumption,onDup
                 </div>
               </div>
             </div>
-            <div style={{padding:"14px 18px 18px",overflowY:"auto",minHeight:0}}>
-              <div style={{display:"inline-flex",alignItems:"center",gap:6,padding:"6px 10px",borderRadius:999,border:"1px solid rgba(var(--accentRgb),0.22)",background:"rgba(var(--accentRgb),0.08)",fontSize:11,fontWeight:800,color:"var(--accent)",letterSpacing:"0.65px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:12}}>
-                <span style={{width:7,height:7,borderRadius:"50%",background:"var(--accent)"}}/>
-                Duplicate details
+            <div style={{padding:"16px 18px 18px",overflowY:"auto",minHeight:0,background:"linear-gradient(180deg,var(--surface) 0%,rgba(var(--accentRgb),0.03) 100%)"}}>
+              <div style={{padding:"12px 14px",borderRadius:16,background:"var(--card)",border:"1px solid var(--border)",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.5,marginBottom:14,boxShadow:"0 8px 18px rgba(0,0,0,0.05)"}}>
+                Save the duplicate when the second location is ready. The original wine card will stay as your reference until then.
               </div>
               <WineForm
                 initial={sel}
