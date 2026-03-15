@@ -5,7 +5,7 @@ import { wineHoldings2021 } from "./data/wineHoldings2021";
 const SUPA_URL = "https://dfnvmwoacprkhxfbpybv.supabase.co";
 const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRmbnZtd29hY3Bya2h4ZmJweWJ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE4MTkwNTksImV4cCI6MjA4NzM5NTA1OX0.40VqzdfZ9zoJitgCTShNiMTOYheDRYgn84mZXX5ZECs";
 const supa = t => `${SUPA_URL}/rest/v1/${t}`;
-const APP_VERSION = "7.65";
+const APP_VERSION = "7.66";
 const BH = { "Content-Type":"application/json","apikey":SUPA_KEY,"Authorization":`Bearer ${SUPA_KEY}`,"x-app-version":APP_VERSION };
 const UH = { ...BH, "Prefer":"resolution=merge-duplicates,return=minimal" };
 const CHANGE_LOG_KEY = "vino_change_log_v1";
@@ -1820,6 +1820,9 @@ const makeCSS=dark=>`
   @keyframes pulse{0%,100%{opacity:0.6;transform:scale(1)}50%{opacity:1;transform:scale(1.05)}}
   @keyframes heroGlassIn{from{opacity:0;transform:translateY(14px) scale(0.985)}to{opacity:1;transform:translateY(0) scale(1)}}
   @keyframes heroPhotoFloat{0%{transform:translateY(12px) scale(0.98)}100%{transform:translateY(0) scale(1)}}
+  @keyframes duplicateSourceIn{from{opacity:0;transform:translate3d(-18px,10px,0) scale(0.985)}to{opacity:1;transform:translate3d(0,0,0) scale(1)}}
+  @keyframes duplicateEditorIn{from{opacity:0;transform:translate3d(18px,14px,0) scale(0.985)}to{opacity:1;transform:translate3d(0,0,0) scale(1)}}
+  @keyframes duplicateStackIn{from{opacity:0;transform:translate3d(0,18px,0) scale(0.988)}to{opacity:1;transform:translate3d(0,0,0) scale(1)}}
   input,textarea,select{font-family:'Plus Jakarta Sans',sans-serif;font-size:15px;color:${dark?"#F4ECE6":"#221812"};background:${dark?"#241C1E":"#FFFFFF"};border:1.5px solid ${dark?"rgba(255,255,255,0.09)":"rgba(103,75,57,0.16)"};border-radius:13px;padding:12px 14px;width:100%;outline:none;transition:border-color 0.2s,box-shadow 0.2s,transform .12s;-webkit-appearance:none;box-shadow:${dark?"0 2px 10px rgba(0,0,0,.25)":"0 2px 8px rgba(81,45,19,.07)"};}
   input:focus,textarea:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 4px ${dark?"rgba(var(--accentRgb),.2)":"rgba(var(--accentRgb),.12)"};}
   select option{background:${dark?"#201A1A":"#fff"};}
@@ -1868,9 +1871,15 @@ const ModalHeader=({title,onClose})=>(
 
 const DuplicateWorkspaceModal=({show,onClose,desktop,showSource,sourcePanel,editorPanel})=>{
   if(!show)return null;
+  const sourceAnim=desktop
+    ? "duplicateSourceIn .36s cubic-bezier(0.22,1,0.36,1) both"
+    : "duplicateStackIn .3s cubic-bezier(0.22,1,0.36,1) both";
+  const editorAnim=desktop
+    ? "duplicateEditorIn .42s cubic-bezier(0.22,1,0.36,1) .04s both"
+    : "duplicateStackIn .34s cubic-bezier(0.22,1,0.36,1) .05s both";
   return(
     <div style={{position:"fixed",inset:0,zIndex:9999,padding:desktop?24:16}} onClick={onClose}>
-      <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.65)",backdropFilter:"blur(10px)",WebkitBackdropFilter:"blur(10px)",animation:"fadeIn .2s"}}/>
+      <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.65)",backdropFilter:"blur(10px)",WebkitBackdropFilter:"blur(10px)",animation:"fadeIn .26s ease-out"}}/>
       <div
         style={{
           position:"relative",
@@ -1889,11 +1898,11 @@ const DuplicateWorkspaceModal=({show,onClose,desktop,showSource,sourcePanel,edit
         }}
       >
         {showSource&&sourcePanel&&(
-          <div onClick={e=>e.stopPropagation()} style={{width:"100%",animation:"modalIn .22s cubic-bezier(0.34,1.2,0.64,1)",position:desktop?"sticky":"static",top:20,alignSelf:"start"}}>
+          <div onClick={e=>e.stopPropagation()} style={{width:"100%",animation:sourceAnim,position:desktop?"sticky":"static",top:20,alignSelf:"start",willChange:"transform,opacity"}}>
             {sourcePanel}
           </div>
         )}
-        <div onClick={e=>e.stopPropagation()} style={{width:"100%",animation:"modalIn .22s cubic-bezier(0.34,1.2,0.64,1)"}}>
+        <div onClick={e=>e.stopPropagation()} style={{width:"100%",animation:editorAnim,willChange:"transform,opacity"}}>
           {editorPanel}
         </div>
       </div>
@@ -2348,7 +2357,7 @@ const DuplicateSourcePreview=({wine,onHide})=>{
   const primaryGeo=[geo.region||geo.country,geo.country&&geo.region?geo.country:null].filter(Boolean).join(" · ");
   const hasPhoto=!!wine.photo;
   return(
-    <div style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:28,padding:16,boxShadow:"0 24px 54px rgba(0,0,0,0.18)",animation:"modalIn .2s cubic-bezier(0.34,1.2,0.64,1)",display:"flex",flexDirection:"column",gap:14}}>
+    <div style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:28,padding:16,boxShadow:"0 24px 54px rgba(0,0,0,0.18)",display:"flex",flexDirection:"column",gap:14}}>
       <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:10}}>
         <div>
           <div style={{fontSize:10,fontWeight:900,color:"var(--accent)",letterSpacing:"0.9px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Original Card</div>
