@@ -5,7 +5,7 @@ import { wineHoldings2021 } from "./data/wineHoldings2021";
 const SUPA_URL = "https://dfnvmwoacprkhxfbpybv.supabase.co";
 const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRmbnZtd29hY3Bya2h4ZmJweWJ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE4MTkwNTksImV4cCI6MjA4NzM5NTA1OX0.40VqzdfZ9zoJitgCTShNiMTOYheDRYgn84mZXX5ZECs";
 const supa = t => `${SUPA_URL}/rest/v1/${t}`;
-const APP_VERSION = "7.66";
+const APP_VERSION = "7.67";
 const BH = { "Content-Type":"application/json","apikey":SUPA_KEY,"Authorization":`Bearer ${SUPA_KEY}`,"x-app-version":APP_VERSION };
 const UH = { ...BH, "Prefer":"resolution=merge-duplicates,return=minimal" };
 const CHANGE_LOG_KEY = "vino_change_log_v1";
@@ -3497,6 +3497,24 @@ const Chip=({label,onX})=>(
     <button onClick={onX} style={{background:"none",border:"none",color:"var(--accent)",padding:0,lineHeight:1,display:"flex",cursor:"pointer"}}><Icon n="x" size={11}/></button>
   </div>
 );
+const SegmentedToggle=({options,value,onChange,minWidth=240})=>{
+  const activeIndex=Math.max(0,options.findIndex(opt=>opt.value===value));
+  return(
+    <div style={{position:"relative",display:"grid",gridTemplateColumns:`repeat(${options.length}, minmax(0,1fr))`,alignItems:"center",padding:4,minWidth,borderRadius:999,background:"linear-gradient(180deg,rgba(var(--accentRgb),0.1),rgba(var(--accentRgb),0.04))",border:"1px solid rgba(var(--accentRgb),0.2)",boxShadow:"inset 0 1px 0 rgba(255,255,255,0.34), 0 8px 18px rgba(0,0,0,0.06)",overflow:"hidden"}}>
+      <div style={{position:"absolute",top:4,bottom:4,left:4,width:`calc(${100/options.length}% - ${4*(options.length-1)/options.length}px)`,borderRadius:999,background:"var(--card)",border:"1px solid rgba(var(--accentRgb),0.12)",boxShadow:"0 10px 20px rgba(0,0,0,0.12)",transform:`translateX(${activeIndex*100}%)`,transition:"transform .28s cubic-bezier(0.22,1,0.36,1)"}}/>
+      {options.map(opt=>(
+        <button
+          key={opt.value}
+          type="button"
+          onClick={()=>onChange(opt.value)}
+          style={{position:"relative",zIndex:1,border:"none",background:"transparent",padding:"10px 16px",fontSize:12,fontWeight:800,color:value===opt.value?"var(--text)":"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",letterSpacing:"0.2px"}}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+};
 
 /* ── COLLECTION ───────────────────────────────────────────────── */
 const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAdjustConsumption,onDuplicate,desktop,savedLocations,onSaveLocation,onRemoveLocation,deletedWines=[],onRestoreDeleted,onDismissDeleted})=>{
@@ -3510,11 +3528,16 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAdjustConsumption,onDup
   const [search,setSearch]=useState("");
   const [filters,setFilters]=useState(DEFAULT_FILTERS);
   const [filterOpen,setFilterOpen]=useState(false);
+  const [stockView,setStockView]=useState("all");
   const col=wines.filter(w=>!w.wishlist);
   const locationOptions=dedupeLocations(col.map(w=>w.location));
   const originOptions=[...new Set(col.map(w=>normalizeOriginLabel(w.origin||"")).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
   const reviewerSuggestions=reviewerSuggestionsFromWines(col);
-  const filt=applyFilters(wines,filters,search);
+  const filteredBase=applyFilters(wines,filters,search);
+  const filt=stockView==="unconsumed"
+    ? filteredBase.filter(w=>(safeNum(w.bottles)||0)>0)
+    : filteredBase;
+  const hiddenConsumedCount=Math.max(0,filteredBase.length-filt.length);
   const recentGrouped=filters.sort==="recent"
     ? RECENT_BUCKETS.map(bucket=>({
         ...bucket,
@@ -3548,10 +3571,6 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAdjustConsumption,onDup
     {id:"ready",label:"Ready now",active:filters.readiness==="ready",onClick:()=>setFilters(p=>({...p,readiness:p.readiness==="ready"?"":"ready"}))},
     {id:"notReady",label:"Not ready",active:filters.readiness==="notReady",onClick:()=>setFilters(p=>({...p,readiness:p.readiness==="notReady"?"":"notReady"}))},
     {id:"past",label:"Past peak",active:filters.readiness==="past",onClick:()=>setFilters(p=>({...p,readiness:p.readiness==="past"?"":"past"}))},
-    {id:"budget",label:"<$25",active:filters.priceBand==="budget",onClick:()=>setFilters(p=>({...p,priceBand:p.priceBand==="budget"?"":"budget"}))},
-    {id:"mid",label:"$25-$59",active:filters.priceBand==="mid",onClick:()=>setFilters(p=>({...p,priceBand:p.priceBand==="mid"?"":"mid"}))},
-    {id:"premium",label:"$60-$119",active:filters.priceBand==="premium",onClick:()=>setFilters(p=>({...p,priceBand:p.priceBand==="premium"?"":"premium"}))},
-    {id:"luxury",label:"$120+",active:filters.priceBand==="luxury",onClick:()=>setFilters(p=>({...p,priceBand:p.priceBand==="luxury"?"":"luxury"}))},
     {id:"added30",label:"Added 30d",active:filters.addedRange==="30d",onClick:()=>setFilters(p=>({...p,addedRange:p.addedRange==="30d"?"":"30d"}))},
   ];
   useEffect(()=>{
@@ -3571,6 +3590,22 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAdjustConsumption,onDup
         </div>
       </div>
       <div style={{background:"linear-gradient(180deg,rgba(var(--accentRgb),0.08),var(--card))",border:"1px solid rgba(var(--accentRgb),0.2)",borderRadius:16,padding:desktop?"10px":"10px 10px 8px",marginBottom:12,boxShadow:"0 10px 22px rgba(0,0,0,0.08)"}}>
+        <div style={{display:"flex",alignItems:desktop?"center":"flex-start",justifyContent:"space-between",gap:10,flexDirection:desktop?"row":"column",marginBottom:10}}>
+          <SegmentedToggle
+            options={[
+              {value:"all",label:"Every wine"},
+              {value:"unconsumed",label:"Unconsumed"},
+            ]}
+            value={stockView}
+            onChange={setStockView}
+            minWidth={desktop?250:220}
+          />
+          <div style={{fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:700,whiteSpace:"nowrap"}}>
+            {stockView==="unconsumed"
+              ? (hiddenConsumedCount>0?`${hiddenConsumedCount} consumed hidden`:"Showing wines with stock left")
+              : "Showing full cellar"}
+          </div>
+        </div>
         {desktop?(
           <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) 174px 96px 58px 46px 46px",gap:8,alignItems:"center"}}>
             <div style={{position:"relative",minWidth:0}}>
@@ -3676,7 +3711,7 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAdjustConsumption,onDup
         </div>
       )}
       {filt.length===0
-        ? <Empty icon="wine" text={search||active?"No wines match your filters.":"Your cellar is empty. Add your first wine."}/>
+        ? <Empty icon="wine" text={stockView==="unconsumed"?(search||active?"No unconsumed wines match your filters.":"No wines with stock left are visible."):(search||active?"No wines match your filters.":"Your cellar is empty. Add your first wine.")}/>
         : filters.sort==="recent"
           ? <div style={{display:"grid",gap:14}}>
               {recentGrouped.map(group=>(
