@@ -5,7 +5,7 @@ import { wineHoldings2021 } from "./data/wineHoldings2021";
 const SUPA_URL = "https://dfnvmwoacprkhxfbpybv.supabase.co";
 const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRmbnZtd29hY3Bya2h4ZmJweWJ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE4MTkwNTksImV4cCI6MjA4NzM5NTA1OX0.40VqzdfZ9zoJitgCTShNiMTOYheDRYgn84mZXX5ZECs";
 const supa = t => `${SUPA_URL}/rest/v1/${t}`;
-const APP_VERSION = "7.71";
+const APP_VERSION = "7.72";
 const BH = { "Content-Type":"application/json","apikey":SUPA_KEY,"Authorization":`Bearer ${SUPA_KEY}`,"x-app-version":APP_VERSION };
 const UH = { ...BH, "Prefer":"resolution=merge-duplicates,return=minimal" };
 const CHANGE_LOG_KEY = "vino_change_log_v1";
@@ -152,6 +152,7 @@ const saveIndexedSnapshot = async (reason,state) => {
         wines:Array.isArray(state?.wines)?state.wines:[],
         notes:Array.isArray(state?.notes)?state.notes:[],
         profile:state?.profile||null,
+        audits:Array.isArray(state?.audits)?state.audits:[],
       }
     };
     await new Promise(resolve=>{
@@ -337,6 +338,21 @@ const profileHasSavedPinRecord = (profile,pinRecord) => {
     Number(profile.pinDigits) === Number(pinRecord.pinDigits)
   );
 };
+const buildRemoteSnapshotRecord = ({table="",action="",entityId="",before=null,after=null,meta=null}) => ({
+  id:makeLocalId(),
+  reason:`${table}:${action}`,
+  payload:{
+    table,
+    action,
+    entityId:(entityId||"").toString(),
+    before:before??null,
+    after:after??null,
+    meta:meta??null,
+    appVersion:APP_VERSION,
+    capturedAt:new Date().toISOString(),
+  },
+  created_at:new Date().toISOString(),
+});
 const profileFullPayload = p => ({
   name:p?.name||"",
   description:p?.description||"",
@@ -405,21 +421,48 @@ const db = {
     });
     this.scheduleFlush();
   },
+  async _writeRemoteSnapshot(snapshot){
+    try{
+      const r=await fetch(supa("cellar_snapshots"),{method:"POST",headers:UH,body:JSON.stringify(snapshot||{})});
+      if(!r.ok){
+        return {ok:false,error:await r.text().catch(()=>`HTTP ${r.status}`),permanent:r.status===404};
+      }
+      return {ok:true};
+    }catch(e){
+      return {ok:false,error:String(e)};
+    }
+  },
+  async persistSnapshot(snapshot){
+    if(!snapshot) return {ok:false,error:"missing snapshot"};
+    const res=await this._writeRemoteSnapshot(snapshot);
+    if(!res.ok && !res.permanent){
+      this.queue({kind:"snapshot",snapshot});
+    }
+    return res;
+  },
   async _execOutboxOp(op){
     try{
       if(op?.kind==="upsert"){
         const r=await fetch(supa(op.table),{method:"POST",headers:UH,body:JSON.stringify(op.row||{})});
         if(!r.ok) return {ok:false,error:await r.text().catch(()=>`HTTP ${r.status}`),permanent:r.status===404&&op.optional===true};
-        return {ok:true};
+        const entityId=op?.row?.id||op?.row?.alias||"";
+        const snapshot=op.snapshot||buildRemoteSnapshotRecord({table:op.table,action:"upsert",entityId,after:op.row||null});
+        const snapRes=await this._writeRemoteSnapshot(snapshot);
+        return snapRes.ok||snapRes.permanent ? {ok:true} : {ok:true,followUps:[{kind:"snapshot",snapshot}]};
       }
       if(op?.kind==="delete"){
         const r=await fetch(`${supa(op.table)}?id=eq.${encodeURIComponent(op.id||"")}`,{method:"DELETE",headers:BH});
         if(!r.ok) return {ok:false,error:await r.text().catch(()=>`HTTP ${r.status}`),permanent:r.status===404&&op.optional===true};
-        return {ok:true};
+        const snapshot=op.snapshot||buildRemoteSnapshotRecord({table:op.table,action:"delete",entityId:op.id||"",before:op.before||{id:op.id||""}});
+        const snapRes=await this._writeRemoteSnapshot(snapshot);
+        return snapRes.ok||snapRes.permanent ? {ok:true} : {ok:true,followUps:[{kind:"snapshot",snapshot}]};
       }
       if(op?.kind==="save_profile"){
         const res=await performProfileWrite(op.profile||{});
-        return res.ok ? {ok:true} : {ok:false,error:res.error||"profile write failed"};
+        if(!res.ok) return {ok:false,error:res.error||"profile write failed"};
+        const snapshot=op.snapshot||buildRemoteSnapshotRecord({table:"profile",action:"upsert",entityId:"1",after:profileFullPayload(op.profile||{})});
+        const snapRes=await this._writeRemoteSnapshot(snapshot);
+        return snapRes.ok||snapRes.permanent ? {ok:true} : {ok:true,followUps:[{kind:"snapshot",snapshot}]};
       }
       if(op?.kind==="event"){
         const r=await fetch(supa("cellar_events"),{method:"POST",headers:UH,body:JSON.stringify(op.event||{})});
@@ -428,6 +471,9 @@ const db = {
           return {ok:false,error:err,permanent:r.status===404};
         }
         return {ok:true};
+      }
+      if(op?.kind==="snapshot"){
+        return await this._writeRemoteSnapshot(op.snapshot||{});
       }
       return {ok:true};
     }catch(e){
@@ -456,7 +502,12 @@ const db = {
       let firstErr="";
       for(const op of queue){
         const res=await this._execOutboxOp(op);
-        if(res.ok) continue;
+        if(res.ok){
+          (Array.isArray(res.followUps)?res.followUps:[]).forEach(follow=>{
+            next.push({...follow,id:follow?.id||makeLocalId(),created_at:follow?.created_at||new Date().toISOString(),attempts:0});
+          });
+          continue;
+        }
         if(!firstErr) firstErr = res.error||"sync failed";
         const attempts=Math.max(0,Math.round(Number(op?.attempts)||0))+1;
         const isPermanent=!!res.permanent;
@@ -506,6 +557,7 @@ const db = {
         return false;
       }
       const entityId=row?.id||row?.alias||"";
+      await this.persistSnapshot(buildRemoteSnapshotRecord({table:t,action:"upsert",entityId,after:row||null}));
       await this.logEvent(t,"upsert",entityId,row);
       return true;
     }
@@ -515,21 +567,22 @@ const db = {
     }
     return false;
   },
-  async del(t,id) {
+  async del(t,id,before=null) {
     try {
       const r=await fetch(`${supa(t)}?id=eq.${encodeURIComponent(id)}`,{method:"DELETE",headers:BH});
       if(!r.ok){
         const err=await r.text();
         console.error("del fail",err);
-        this.queue({kind:"delete",table:t,id});
+        this.queue({kind:"delete",table:t,id,before:before||null});
         return false;
       }
+      await this.persistSnapshot(buildRemoteSnapshotRecord({table:t,action:"delete",entityId:id,before:before||{id}}));
       await this.logEvent(t,"delete",id,{id});
       return true;
     }
     catch(e){
       console.error(e);
-      this.queue({kind:"delete",table:t,id});
+      this.queue({kind:"delete",table:t,id,before:before||null});
     }
     return false;
   },
@@ -550,6 +603,7 @@ const db = {
           body:JSON.stringify({ai_memory:aiMemory})
         });
       }catch{}
+      await this.persistSnapshot(buildRemoteSnapshotRecord({table:"profile",action:"upsert",entityId:"1",after:profileFullPayload(p)}));
       await this.logEvent("profile","upsert","1",{
         name:p.name,description:p.description,avatar:p.avatar,surname:p.surname||"",
         cellar_name:p.cellarName||"",bio:p.bio||"",country:p.country||"",profile_bg:p.profileBg||"",
@@ -600,6 +654,7 @@ const db = {
         this.queue({kind:"upsert",table:"audits",row});
         return {ok:false,error:err};
       }
+      await this.persistSnapshot(buildRemoteSnapshotRecord({table:"audits",action:"upsert",entityId:row?.id||"",after:row||null}));
       await this.logEvent("audits","upsert",row?.id||"",row);
       return {ok:true};
     }catch(e){
@@ -607,18 +662,19 @@ const db = {
       return {ok:false,error:String(e)};
     }
   },
-  async delAudit(id){
+  async delAudit(id,before=null){
     try{
       const r=await fetch(`${supa("audits")}?id=eq.${encodeURIComponent(id)}`,{method:"DELETE",headers:BH});
       if(!r.ok){
         const err=await r.text();
-        this.queue({kind:"delete",table:"audits",id});
+        this.queue({kind:"delete",table:"audits",id,before:before||null});
         return {ok:false,error:err};
       }
+      await this.persistSnapshot(buildRemoteSnapshotRecord({table:"audits",action:"delete",entityId:id,before:before||{id}}));
       await this.logEvent("audits","delete",id,{id});
       return {ok:true};
     }catch(e){
-      this.queue({kind:"delete",table:"audits",id});
+      this.queue({kind:"delete",table:"audits",id,before:before||null});
       return {ok:false,error:String(e)};
     }
   },
@@ -4170,10 +4226,11 @@ const AuditScreen=({wines,desktop,onSetWineBottles,onRemoveWine,onRevokeAudit})=
   };
   const deleteAudit=async()=>{
     if(!confirmDeleteId) return;
+    const targetAudit=audits.find(a=>a.id===confirmDeleteId)||null;
     setAudits(prev=>prev.filter(a=>a.id!==confirmDeleteId));
     if(activeId===confirmDeleteId) setActiveId(null);
     if(syncState==="ready"){
-      const res=await db.delAudit(confirmDeleteId);
+      const res=await db.delAudit(confirmDeleteId,targetAudit?toDbAudit(targetAudit):null);
       if(!res.ok){
         console.error("audit delete sync failed",res.error);
         setSyncState("unavailable");
@@ -6995,7 +7052,7 @@ export default function App(){
     Object.entries(cssVars).forEach(([k,v])=>document.documentElement.style.setProperty(k,v));
   });
   useEffect(()=>{
-    const state={wines,notes,profile};
+    const state={wines,notes,profile,audits:readAudits()};
     try{
       localStorage.setItem(CACHE_KEY,JSON.stringify(state));
     }catch{}
@@ -7078,7 +7135,7 @@ export default function App(){
     });
     if(!removed) return null;
     setDeletedWines(prev=>[{wine:removed,deletedAt:new Date().toISOString()},...prev.filter(entry=>entry?.wine?.id!==id)].slice(0,40));
-    await db.del("wines",id);
+    await db.del("wines",id,toDb.wine(removed));
     return id;
   };
   const restoreDeletedWine=async id=>{
@@ -7141,7 +7198,14 @@ export default function App(){
   });
   const removeSavedLocation=loc=>setSavedLocations(prev=>prev.filter(x=>locationKey(x)!==locationKey(loc)));
   const addNote=async n=>{setNotes(p=>[...p,n]);await db.upsert("tasting_notes",toDb.note(n));};
-  const delNote=async id=>{setNotes(p=>p.filter(x=>x.id!==id));await db.del("tasting_notes",id);};
+  const delNote=async id=>{
+    let removed=null;
+    setNotes(prev=>{
+      removed=prev.find(x=>x.id===id)||null;
+      return prev.filter(x=>x.id!==id);
+    });
+    await db.del("tasting_notes",id,removed?toDb.note(removed):null);
+  };
   const setProfile=async p=>{
     const syncedAccent=detectAccentFromProfileBg(p.profileBg||"")||p.accent||DEFAULT_PROFILE.accent;
     const next={
