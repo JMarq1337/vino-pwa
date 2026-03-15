@@ -5,7 +5,7 @@ import { wineHoldings2021 } from "./data/wineHoldings2021";
 const SUPA_URL = "https://dfnvmwoacprkhxfbpybv.supabase.co";
 const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRmbnZtd29hY3Bya2h4ZmJweWJ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE4MTkwNTksImV4cCI6MjA4NzM5NTA1OX0.40VqzdfZ9zoJitgCTShNiMTOYheDRYgn84mZXX5ZECs";
 const supa = t => `${SUPA_URL}/rest/v1/${t}`;
-const APP_VERSION = "7.63";
+const APP_VERSION = "7.64";
 const BH = { "Content-Type":"application/json","apikey":SUPA_KEY,"Authorization":`Bearer ${SUPA_KEY}`,"x-app-version":APP_VERSION };
 const UH = { ...BH, "Prefer":"resolution=merge-duplicates,return=minimal" };
 const CHANGE_LOG_KEY = "vino_change_log_v1";
@@ -2756,37 +2756,51 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
   const renderPricingSection=(cardStyle)=>(
     <div style={cardStyle}>
       {sectionTitle("Pricing")}
-      <div style={sectionHintStyle}>Set what you paid and optionally override bottle RRP.</div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-        <Field label="Amount Paid" value={f.totalPaid} onChange={v=>set("totalPaid",v)} type="number" placeholder="179.5" optional/>
-        <Field label="Bottles Paid For" value={f.priceForBottles} onChange={handlePriceForBottlesChange} type="number" placeholder="6" optional/>
-      </div>
-      <Field label="Supplier" value={f.supplier} onChange={v=>set("supplier",v)} placeholder="WS / Local shop" optional/>
       {isDuplicateMode?(
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:2,marginBottom:10}}>
-          <div style={{background:"var(--inputBg)",border:"1px solid var(--border)",borderRadius:12,padding:"10px 11px"}}>
-            <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:3,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Paid / Bottle</div>
-            <div style={{fontSize:15,color:"var(--text)",fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{(calculatedPricePerBottle??existingPaidPerBottle)!=null?`$${Number(calculatedPricePerBottle??existingPaidPerBottle).toFixed(2)}`:"—"}</div>
+        <>
+          <div style={{fontSize:12,color:"var(--sub)",marginBottom:10,fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.45,fontWeight:600}}>Paid amount, bottle count and optional RRP override.</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
+            <div style={{background:"var(--inputBg)",border:"1px solid var(--border)",borderRadius:12,padding:"10px 11px"}}>
+              <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:3,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Paid / Bottle</div>
+              <div style={{fontSize:15,color:"var(--text)",fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{(calculatedPricePerBottle??existingPaidPerBottle)!=null?`$${Number(calculatedPricePerBottle??existingPaidPerBottle).toFixed(2)}`:"—"}</div>
+            </div>
+            <div style={{background:"rgba(var(--accentRgb),0.08)",border:"1px solid rgba(var(--accentRgb),0.16)",borderRadius:12,padding:"10px 11px"}}>
+              <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:3,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Auto RRP / Bottle</div>
+              <div style={{fontSize:15,color:"var(--accent)",fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{autoRrpPerBottle!=null?`$${Number(autoRrpPerBottle).toFixed(2)}`:"—"}</div>
+            </div>
           </div>
-          <div style={{background:"rgba(var(--accentRgb),0.08)",border:"1px solid rgba(var(--accentRgb),0.16)",borderRadius:12,padding:"10px 11px"}}>
-            <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:3,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Auto RRP / Bottle</div>
-            <div style={{fontSize:15,color:"var(--accent)",fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{autoRrpPerBottle!=null?`$${Number(autoRrpPerBottle).toFixed(2)}`:"—"}</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <Field label="Amount Paid" value={f.totalPaid} onChange={v=>set("totalPaid",v)} type="number" placeholder="179.5" optional/>
+            <Field label="Bottles Paid For" value={f.priceForBottles} onChange={handlePriceForBottlesChange} type="number" placeholder="6" optional/>
+            <Field label="RRP / Bottle" value={f.rrp} onChange={v=>set("rrp",v)} type="number" placeholder="40" optional/>
+            <Field label="Supplier" value={f.supplier} onChange={v=>set("supplier",v)} placeholder="WS / Local shop" optional/>
           </div>
-        </div>
+          <div style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.55,marginTop:8}}>
+            Leave RRP blank to keep the calculated paid-per-bottle value.
+          </div>
+        </>
       ):(
-        <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:2,marginBottom:10}}>
-          <span style={{padding:"4px 9px",borderRadius:16,background:"var(--inputBg)",border:"1px solid var(--border)",fontSize:12,color:"var(--text)",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
-            Calculated paid/bottle: {(calculatedPricePerBottle??existingPaidPerBottle)!=null?`$${Number(calculatedPricePerBottle??existingPaidPerBottle).toFixed(2)}`:"—"}
-          </span>
-          <span style={{padding:"4px 9px",borderRadius:16,background:"rgba(var(--accentRgb),0.12)",border:"1px solid rgba(var(--accentRgb),0.22)",fontSize:12,color:"var(--accent)",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
-            Calculated RRP/bottle: {autoRrpPerBottle!=null?`$${Number(autoRrpPerBottle).toFixed(2)}`:"—"}
-          </span>
-        </div>
+        <>
+          <div style={sectionHintStyle}>Set what you paid and optionally override bottle RRP.</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <Field label="Amount Paid" value={f.totalPaid} onChange={v=>set("totalPaid",v)} type="number" placeholder="179.5" optional/>
+            <Field label="Bottles Paid For" value={f.priceForBottles} onChange={handlePriceForBottlesChange} type="number" placeholder="6" optional/>
+          </div>
+          <Field label="Supplier" value={f.supplier} onChange={v=>set("supplier",v)} placeholder="WS / Local shop" optional/>
+          <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:2,marginBottom:10}}>
+            <span style={{padding:"4px 9px",borderRadius:16,background:"var(--inputBg)",border:"1px solid var(--border)",fontSize:12,color:"var(--text)",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+              Calculated paid/bottle: {(calculatedPricePerBottle??existingPaidPerBottle)!=null?`$${Number(calculatedPricePerBottle??existingPaidPerBottle).toFixed(2)}`:"—"}
+            </span>
+            <span style={{padding:"4px 9px",borderRadius:16,background:"rgba(var(--accentRgb),0.12)",border:"1px solid rgba(var(--accentRgb),0.22)",fontSize:12,color:"var(--accent)",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+              Calculated RRP/bottle: {autoRrpPerBottle!=null?`$${Number(autoRrpPerBottle).toFixed(2)}`:"—"}
+            </span>
+          </div>
+          <Field label="RRP / Bottle (optional override)" value={f.rrp} onChange={v=>set("rrp",v)} type="number" placeholder="40" optional/>
+          <div style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.55}}>
+            If RRP is left blank, it will use the calculated paid per bottle automatically.
+          </div>
+        </>
       )}
-      <Field label="RRP / Bottle (optional override)" value={f.rrp} onChange={v=>set("rrp",v)} type="number" placeholder="40" optional/>
-      <div style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.55}}>
-        If RRP is left blank, it will use the calculated paid per bottle automatically.
-      </div>
     </div>
   );
   useEffect(()=>{
