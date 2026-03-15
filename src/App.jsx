@@ -5,7 +5,7 @@ import { wineHoldings2021 } from "./data/wineHoldings2021";
 const SUPA_URL = "https://dfnvmwoacprkhxfbpybv.supabase.co";
 const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRmbnZtd29hY3Bya2h4ZmJweWJ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE4MTkwNTksImV4cCI6MjA4NzM5NTA1OX0.40VqzdfZ9zoJitgCTShNiMTOYheDRYgn84mZXX5ZECs";
 const supa = t => `${SUPA_URL}/rest/v1/${t}`;
-const APP_VERSION = "7.60";
+const APP_VERSION = "7.61";
 const BH = { "Content-Type":"application/json","apikey":SUPA_KEY,"Authorization":`Bearer ${SUPA_KEY}`,"x-app-version":APP_VERSION };
 const UH = { ...BH, "Prefer":"resolution=merge-duplicates,return=minimal" };
 const CHANGE_LOG_KEY = "vino_change_log_v1";
@@ -2379,7 +2379,7 @@ const DuplicateSourcePreview=({wine,onHide})=>{
 
 /* ── WINE FORM ────────────────────────────────────────────────── */
 const CUSTOM_LOCATION_OPTION = "__custom_location__";
-const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocations=[],originOptions=[],onSaveLocation,onRemoveLocation,reviewerSuggestions=[],mode})=>{
+const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocations=[],originOptions=[],onSaveLocation,onRemoveLocation,reviewerSuggestions=[],mode,embedded})=>{
   const formMode=mode||(initial?"edit":"create");
   const isDuplicateMode=formMode==="duplicate";
   const draftKeyRef=useRef(wineFormDraftStorageKey({initial,isWishlist,mode:formMode}));
@@ -2542,7 +2542,9 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
   const topShellStyle={background:"linear-gradient(165deg,rgba(var(--accentRgb),0.16),rgba(var(--accentRgb),0.06) 46%,var(--card))",border:"1px solid rgba(var(--accentRgb),0.26)",borderRadius:18,padding:"12px",marginTop:-2,marginBottom:14,boxShadow:"0 14px 24px rgba(0,0,0,0.09)"};
   const topMetaPillStyle={display:"inline-flex",alignItems:"center",gap:6,padding:"4px 9px",borderRadius:999,border:"1px solid rgba(var(--accentRgb),0.28)",background:"rgba(var(--accentRgb),0.1)",fontSize:10,fontWeight:800,color:"var(--accent)",letterSpacing:"0.8px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"};
   const detailsGridStyle={display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(250px,1fr))",gap:12};
-  const actionRailStyle={position:"sticky",bottom:0,zIndex:3,marginTop:12,paddingTop:10,background:"linear-gradient(180deg,rgba(255,255,255,0),var(--surface) 22%)"};
+  const actionRailStyle=embedded&&isDuplicateMode
+    ? {position:"sticky",bottom:0,zIndex:3,marginTop:12,paddingTop:10,background:"var(--surface)",borderTop:"1px solid var(--border)"}
+    : {position:"sticky",bottom:0,zIndex:3,marginTop:12,paddingTop:10,background:"linear-gradient(180deg,rgba(255,255,255,0),var(--surface) 22%)"};
   const saveActionLabel=isDuplicateMode?"Save Duplicate":initial?"Save Changes":"Save Wine";
   const sectionTitle=(label)=>(
     <div style={sectionTitleStyle}>
@@ -2727,41 +2729,43 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
   };
   return(
     <div>
-      <ModalHeader title={isDuplicateMode?"Duplicate Wine":initial?"Edit Wine":isWishlist?"Add to Wishlist":"Add Wine"} onClose={onClose}/>
-      <div style={topShellStyle}>
-        <div style={{display:"grid",gridTemplateColumns:"78px minmax(0,1fr)",gap:12,alignItems:"center"}}>
-          <div style={{position:"relative",width:76,height:76}}>
-            <PhotoPicker value={f.photo} onChange={v=>set("photo",v)} size={76}/>
-            {f.photo&&(
-              <button
-                type="button"
-                onClick={e=>{e.preventDefault();e.stopPropagation();set("photo",null);}}
-                title="Remove photo"
-                aria-label="Remove photo"
-                style={{position:"absolute",top:-7,right:-7,width:22,height:22,borderRadius:"50%",border:"1.5px solid rgba(255,255,255,0.65)",background:"#D23131",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",boxShadow:"0 6px 10px rgba(0,0,0,0.2)",padding:0,zIndex:4}}
-              >
-                <Icon n="x" size={11} sw={2}/>
-              </button>
-            )}
-          </div>
-          <div>
-            <div style={{display:"flex",flexWrap:"wrap",gap:7,marginBottom:7}}>
-              <span style={topMetaPillStyle}>{isDuplicateMode?"Duplicate Card":initial?"Edit Mode":"New Entry"}</span>
-              <span style={{...topMetaPillStyle,border:"1px solid var(--border)",background:"var(--surface)",color:"var(--sub)"}}>
-                Autosave on{draftRestored?" · restored draft":""}
-              </span>
+      {!(embedded&&isDuplicateMode)&&<ModalHeader title={isDuplicateMode?"Duplicate Wine":initial?"Edit Wine":isWishlist?"Add to Wishlist":"Add Wine"} onClose={onClose}/>}
+      {!(embedded&&isDuplicateMode)&&(
+        <div style={topShellStyle}>
+          <div style={{display:"grid",gridTemplateColumns:"78px minmax(0,1fr)",gap:12,alignItems:"center"}}>
+            <div style={{position:"relative",width:76,height:76}}>
+              <PhotoPicker value={f.photo} onChange={v=>set("photo",v)} size={76}/>
+              {f.photo&&(
+                <button
+                  type="button"
+                  onClick={e=>{e.preventDefault();e.stopPropagation();set("photo",null);}}
+                  title="Remove photo"
+                  aria-label="Remove photo"
+                  style={{position:"absolute",top:-7,right:-7,width:22,height:22,borderRadius:"50%",border:"1.5px solid rgba(255,255,255,0.65)",background:"#D23131",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",boxShadow:"0 6px 10px rgba(0,0,0,0.2)",padding:0,zIndex:4}}
+                >
+                  <Icon n="x" size={11} sw={2}/>
+                </button>
+              )}
             </div>
-            <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:13,color:"var(--sub)",lineHeight:1.45}}>
-              {isDuplicateMode
-                ? "Create a second cellar card from this wine. Journal notes stay shared while location, quantities, dates and pricing can change here."
-                : isWishlist
-                ? "Capture key details quickly and keep notes clean."
-                : "Structured entry with synced inventory, pricing, dates and journal notes."
-              }
+            <div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:7,marginBottom:7}}>
+                <span style={topMetaPillStyle}>{isDuplicateMode?"Duplicate Card":initial?"Edit Mode":"New Entry"}</span>
+                <span style={{...topMetaPillStyle,border:"1px solid var(--border)",background:"var(--surface)",color:"var(--sub)"}}>
+                  Autosave on{draftRestored?" · restored draft":""}
+                </span>
+              </div>
+              <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:13,color:"var(--sub)",lineHeight:1.45}}>
+                {isDuplicateMode
+                  ? "Create a second cellar card from this wine. Journal notes stay shared while location, quantities, dates and pricing can change here."
+                  : isWishlist
+                  ? "Capture key details quickly and keep notes clean."
+                  : "Structured entry with synced inventory, pricing, dates and journal notes."
+                }
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
       {!isDuplicateMode&&(
         <div style={{...sectionCardStyle,marginBottom:14,position:"relative"}}>
           {sectionTitle("Search Wine Database")}
@@ -3615,35 +3619,48 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAdjustConsumption,onDup
         showSource={duplicateShowSource}
         sourcePanel={sel?<DuplicateSourcePreview wine={sel} onHide={()=>setDuplicateShowSource(false)}/>:null}
         editorPanel={sel?(
-          <div style={{background:"linear-gradient(180deg,rgba(var(--accentRgb),0.14),var(--card) 32%)",border:"1px solid rgba(var(--accentRgb),0.28)",borderRadius:24,padding:desktop?10:6,boxShadow:"0 18px 38px rgba(var(--accentRgb),0.14), 0 12px 28px rgba(0,0,0,0.12)"}}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"8px 10px 2px"}}>
-              <div>
-                <div style={{fontSize:10,fontWeight:900,color:"var(--accent)",letterSpacing:"0.9px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Duplicate Card</div>
-                <div style={{fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginTop:3}}>This creates a second cellar card while keeping the journal shared.</div>
+          <div style={{background:"var(--surface)",border:"1px solid rgba(var(--accentRgb),0.16)",borderRadius:26,boxShadow:"0 24px 54px rgba(0,0,0,0.18)",overflow:"hidden",maxHeight:desktop?"84vh":"calc(100dvh - 32px)",display:"flex",flexDirection:"column"}}>
+            <div style={{padding:"18px 20px 14px",borderBottom:"1px solid var(--border)",background:"linear-gradient(180deg,rgba(var(--accentRgb),0.08),rgba(var(--accentRgb),0.02))"}}>
+              <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12}}>
+                <div>
+                  <div style={{fontSize:10,fontWeight:900,color:"var(--accent)",letterSpacing:"0.9px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Duplicate Card</div>
+                  <div style={{fontSize:22,fontWeight:700,color:"var(--text)",lineHeight:1.05,fontFamily:"'Plus Jakarta Sans',sans-serif",marginTop:4}}>Create a second cellar card</div>
+                  <div style={{fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginTop:6,lineHeight:1.45}}>Adjust location, stock, dates and pricing here. Journal notes remain shared with the original wine.</div>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                  {!duplicateShowSource&&(
+                    <button onClick={()=>setDuplicateShowSource(true)} style={{padding:"8px 10px",borderRadius:10,border:"1px solid var(--border)",background:"var(--inputBg)",color:"var(--sub)",fontSize:11,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:"pointer"}}>
+                      Show original
+                    </button>
+                  )}
+                  <button onClick={()=>{setDuplicating(false);setDuplicateShowSource(true);}} style={{background:"var(--inputBg)",border:"none",borderRadius:10,width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",color:"var(--sub)",cursor:"pointer"}}><Icon n="x" size={15}/></button>
+                </div>
               </div>
-              {!duplicateShowSource&&(
-                <button onClick={()=>setDuplicateShowSource(true)} style={{padding:"7px 10px",borderRadius:10,border:"1px solid var(--border)",background:"var(--inputBg)",color:"var(--sub)",fontSize:11,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:"pointer"}}>
-                  Show original
-                </button>
-              )}
             </div>
-            <WineForm
-              initial={sel}
-              mode="duplicate"
-              onSave={async w=>{
-                const result=await onDuplicate?.(sel,w);
-                setSel(result?.source||sel);
-                setDuplicating(false);
-                setDuplicateShowSource(true);
-              }}
-              onClose={()=>{setDuplicating(false);setDuplicateShowSource(true);}}
-              locationOptions={locationOptions}
-              savedLocations={savedLocations}
-              originOptions={originOptions}
-              onSaveLocation={onSaveLocation}
-              onRemoveLocation={onRemoveLocation}
-              reviewerSuggestions={reviewerSuggestions}
-            />
+            <div style={{padding:"14px 18px 18px",overflowY:"auto",minHeight:0}}>
+              <div style={{display:"inline-flex",alignItems:"center",gap:6,padding:"6px 10px",borderRadius:999,border:"1px solid rgba(var(--accentRgb),0.22)",background:"rgba(var(--accentRgb),0.08)",fontSize:11,fontWeight:800,color:"var(--accent)",letterSpacing:"0.65px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:12}}>
+                <span style={{width:7,height:7,borderRadius:"50%",background:"var(--accent)"}}/>
+                Duplicate details
+              </div>
+              <WineForm
+                initial={sel}
+                mode="duplicate"
+                embedded
+                onSave={async w=>{
+                  const result=await onDuplicate?.(sel,w);
+                  setSel(result?.source||sel);
+                  setDuplicating(false);
+                  setDuplicateShowSource(true);
+                }}
+                onClose={()=>{setDuplicating(false);setDuplicateShowSource(true);}}
+                locationOptions={locationOptions}
+                savedLocations={savedLocations}
+                originOptions={originOptions}
+                onSaveLocation={onSaveLocation}
+                onRemoveLocation={onRemoveLocation}
+                reviewerSuggestions={reviewerSuggestions}
+              />
+            </div>
           </div>
         ):null}
       />
