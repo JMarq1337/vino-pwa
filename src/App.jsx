@@ -1,20 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { authApi, dbApi } from "./apiClient";
 import { wineHoldings2021 } from "./data/wineHoldings2021";
 
-/* ── SUPABASE ─────────────────────────────────────────────────── */
-const SUPA_URL = "https://dfnvmwoacprkhxfbpybv.supabase.co";
-const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRmbnZtd29hY3Bya2h4ZmJweWJ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE4MTkwNTksImV4cCI6MjA4NzM5NTA1OX0.40VqzdfZ9zoJitgCTShNiMTOYheDRYgn84mZXX5ZECs";
-const supa = t => `${SUPA_URL}/rest/v1/${t}`;
-const APP_VERSION = "7.72";
-const BH = { "Content-Type":"application/json","apikey":SUPA_KEY,"Authorization":`Bearer ${SUPA_KEY}`,"x-app-version":APP_VERSION };
-const UH = { ...BH, "Prefer":"resolution=merge-duplicates,return=minimal" };
+const APP_VERSION = "8.0";
+const ADMIN_PIN_DIGITS = 8;
 const CHANGE_LOG_KEY = "vino_change_log_v1";
 const OUTBOX_KEY = "vino_sync_outbox_v2";
 const SYNC_HEALTH_KEY = "vino_sync_health_v1";
 const OUTBOX_HOTFIX_MARKER = "vino_outbox_hotfix_2026_03_12";
 const OUTBOX_MAX = 3000;
-const UNLOCK_SESSION_KEY = "vino_unlock_session_v1";
-const ADMIN_PIN = "19642002";
 const IDB_SNAPSHOT_DB = "vinology-backups";
 const IDB_DB_VERSION = 2;
 const IDB_SNAPSHOT_STORE = "snapshots";
@@ -253,91 +247,12 @@ const normalizeAiMemoryList = value => {
   return out.slice(0,80);
 };
 const toHex = value => Array.from(new Uint8Array(value)).map(b=>b.toString(16).padStart(2,"0")).join("");
-const generatePinSalt = () => {
-  try{
-    const bytes=new Uint8Array(16);
-    window.crypto?.getRandomValues?.(bytes);
-    if(bytes.some(Boolean)) return toHex(bytes.buffer);
-  }catch{}
-  return Math.random().toString(36).slice(2)+Date.now().toString(36);
-};
 const normalizePinDigits = value => Number(value)===6 ? 6 : 4;
 const normalizePinInput = (value,digits=4) => {
   const maxLen=Math.max(1,Math.round(Number(digits)||0));
   return (value||"").toString().replace(/\D/g,"").slice(0,maxLen);
 };
-const hasPinConfigured = profile => !!((profile?.pinHash||"").trim() && (profile?.pinSalt||"").trim() && [4,6].includes(Number(profile?.pinDigits)));
-const readUnlockSession = () => {
-  try{
-    const raw=sessionStorage.getItem(UNLOCK_SESSION_KEY);
-    if(!raw) return null;
-    const parsed=JSON.parse(raw);
-    if(!parsed||typeof parsed!=="object") return null;
-    return {
-      role:parsed.role==="admin"?"admin":"user",
-      pinHash:(parsed.pinHash||"").toString(),
-      createdAt:(parsed.createdAt||"").toString(),
-    };
-  }catch{
-    return null;
-  }
-};
-const writeUnlockSession = (role,profile) => {
-  try{
-    sessionStorage.setItem(UNLOCK_SESSION_KEY,JSON.stringify({
-      role:role==="admin"?"admin":"user",
-      pinHash:(profile?.pinHash||"").toString(),
-      createdAt:new Date().toISOString(),
-    }));
-  }catch{}
-};
-const clearUnlockSession = () => {
-  try{sessionStorage.removeItem(UNLOCK_SESSION_KEY);}catch{}
-};
-const unlockSessionMatchesProfile = (session,profile) => {
-  if(!session) return false;
-  if(session.role==="admin") return true;
-  return hasPinConfigured(profile) && session.pinHash===(profile?.pinHash||"");
-};
-const hashPinValue = async (pin,salt) => {
-  const pinText=(pin||"").toString();
-  const saltText=(salt||"").toString();
-  try{
-    if(window?.crypto?.subtle){
-      const encoder=new TextEncoder();
-      const key=await window.crypto.subtle.importKey("raw",encoder.encode(pinText),{name:"PBKDF2"},false,["deriveBits"]);
-      const bits=await window.crypto.subtle.deriveBits({
-        name:"PBKDF2",
-        hash:"SHA-256",
-        salt:encoder.encode(`vinology:${saltText}`),
-        iterations:120000,
-      },key,256);
-      return toHex(bits);
-    }
-  }catch{}
-  return btoa(`${saltText}:${pinText}`).replace(/=/g,"");
-};
-const createPinRecord = async (pin,digits) => {
-  const salt=generatePinSalt();
-  return {
-    pinHash:await hashPinValue(pin,salt),
-    pinSalt:salt,
-    pinDigits:normalizePinDigits(digits),
-  };
-};
-const verifyProfilePin = async (profile,pin) => {
-  if(!hasPinConfigured(profile)) return false;
-  const hashed=await hashPinValue(pin,profile.pinSalt||"");
-  return hashed===(profile.pinHash||"");
-};
-const profileHasSavedPinRecord = (profile,pinRecord) => {
-  if(!profile||!pinRecord) return false;
-  return (
-    (profile.pinHash||"") === (pinRecord.pinHash||"") &&
-    (profile.pinSalt||"") === (pinRecord.pinSalt||"") &&
-    Number(profile.pinDigits) === Number(pinRecord.pinDigits)
-  );
-};
+const hasPinConfigured = profile => !!(profile?.pinEnabled && [4,6].includes(Number(profile?.pinDigits)));
 const buildRemoteSnapshotRecord = ({table="",action="",entityId="",before=null,after=null,meta=null}) => ({
   id:makeLocalId(),
   reason:`${table}:${action}`,
@@ -362,9 +277,7 @@ const profileFullPayload = p => ({
   bio:p?.bio||"",
   country:p?.country||"",
   profile_bg:p?.profileBg||"",
-  pin_hash:p?.pinHash||"",
-  pin_salt:p?.pinSalt||"",
-  pin_digits:[4,6].includes(Number(p?.pinDigits))?Number(p.pinDigits):null,
+  ai_memory:normalizeAiMemoryList(p?.aiMemory),
 });
 const profileBasePayload = p => ({
   name:p?.name||"",
@@ -372,23 +285,16 @@ const profileBasePayload = p => ({
   avatar:p?.avatar||null,
 });
 const performProfileWrite = async p => {
-  const tryWrite = async payload => {
-    const patchHeaders={...BH,"Prefer":"return=representation"};
-    const rPatch=await fetch(`${supa("profile")}?id=eq.1`,{method:"PATCH",headers:patchHeaders,body:JSON.stringify(payload)});
-    if(rPatch.ok){
-      const rows=await rPatch.json().catch(()=>[]);
-      if(Array.isArray(rows)&&rows.length>0) return {ok:true};
-    }
-    const patchErr=await rPatch.text().catch(()=>`HTTP ${rPatch.status}`);
-    const rPost=await fetch(`${supa("profile")}?on_conflict=id`,{method:"POST",headers:patchHeaders,body:JSON.stringify({id:1,...payload})});
-    if(rPost.ok) return {ok:true};
-    const postErr=await rPost.text().catch(()=>`HTTP ${rPost.status}`);
-    return {ok:false,error:`patch:${patchErr} | post:${postErr}`};
-  };
-  const full=await tryWrite(profileFullPayload(p));
-  if(full.ok) return full;
-  const base=await tryWrite(profileBasePayload(p));
-  return base.ok ? base : {ok:false,error:full.error||base.error||"profile write failed"};
+  const full=await dbApi.call("saveProfile",{profile:{
+    ...profileBasePayload(p),
+    surname:p?.surname||"",
+    cellarName:p?.cellarName||"",
+    bio:p?.bio||"",
+    country:p?.country||"",
+    profileBg:p?.profileBg||"",
+    aiMemory:normalizeAiMemoryList(p?.aiMemory),
+  }});
+  return full.ok ? {ok:true,profile:full.data?.profile||null} : {ok:false,error:full.error||"profile write failed"};
 };
 
 const db = {
@@ -423,9 +329,9 @@ const db = {
   },
   async _writeRemoteSnapshot(snapshot){
     try{
-      const r=await fetch(supa("cellar_snapshots"),{method:"POST",headers:UH,body:JSON.stringify(snapshot||{})});
-      if(!r.ok){
-        return {ok:false,error:await r.text().catch(()=>`HTTP ${r.status}`),permanent:r.status===404};
+      const res=await dbApi.call("upsert",{table:"cellar_snapshots",row:snapshot||{}});
+      if(!res.ok){
+        return {ok:false,error:res.error||`HTTP ${res.status}`,permanent:res.status===404};
       }
       return {ok:true};
     }catch(e){
@@ -443,16 +349,16 @@ const db = {
   async _execOutboxOp(op){
     try{
       if(op?.kind==="upsert"){
-        const r=await fetch(supa(op.table),{method:"POST",headers:UH,body:JSON.stringify(op.row||{})});
-        if(!r.ok) return {ok:false,error:await r.text().catch(()=>`HTTP ${r.status}`),permanent:r.status===404&&op.optional===true};
+        const res=await dbApi.call("upsert",{table:op.table,row:op.row||{}});
+        if(!res.ok) return {ok:false,error:res.error||`HTTP ${res.status}`,permanent:res.status===404&&op.optional===true};
         const entityId=op?.row?.id||op?.row?.alias||"";
         const snapshot=op.snapshot||buildRemoteSnapshotRecord({table:op.table,action:"upsert",entityId,after:op.row||null});
         const snapRes=await this._writeRemoteSnapshot(snapshot);
         return snapRes.ok||snapRes.permanent ? {ok:true} : {ok:true,followUps:[{kind:"snapshot",snapshot}]};
       }
       if(op?.kind==="delete"){
-        const r=await fetch(`${supa(op.table)}?id=eq.${encodeURIComponent(op.id||"")}`,{method:"DELETE",headers:BH});
-        if(!r.ok) return {ok:false,error:await r.text().catch(()=>`HTTP ${r.status}`),permanent:r.status===404&&op.optional===true};
+        const res=await dbApi.call("delete",{table:op.table,id:op.id||""});
+        if(!res.ok) return {ok:false,error:res.error||`HTTP ${res.status}`,permanent:res.status===404&&op.optional===true};
         const snapshot=op.snapshot||buildRemoteSnapshotRecord({table:op.table,action:"delete",entityId:op.id||"",before:op.before||{id:op.id||""}});
         const snapRes=await this._writeRemoteSnapshot(snapshot);
         return snapRes.ok||snapRes.permanent ? {ok:true} : {ok:true,followUps:[{kind:"snapshot",snapshot}]};
@@ -465,10 +371,9 @@ const db = {
         return snapRes.ok||snapRes.permanent ? {ok:true} : {ok:true,followUps:[{kind:"snapshot",snapshot}]};
       }
       if(op?.kind==="event"){
-        const r=await fetch(supa("cellar_events"),{method:"POST",headers:UH,body:JSON.stringify(op.event||{})});
-        if(!r.ok){
-          const err=await r.text().catch(()=>`HTTP ${r.status}`);
-          return {ok:false,error:err,permanent:r.status===404};
+        const res=await dbApi.call("upsert",{table:"cellar_events",row:op.event||{}});
+        if(!res.ok){
+          return {ok:false,error:res.error||`HTTP ${res.status}`,permanent:res.status===404};
         }
         return {ok:true};
       }
@@ -541,17 +446,16 @@ const db = {
   },
   async get(t) {
     try {
-      let r = await fetch(`${supa(t)}?order=created_at`,{headers:BH});
-      if(!r.ok) r = await fetch(supa(t),{headers:BH});
-      return {ok:r.ok,rows:r.ok?await r.json():[],error:r.ok?"":await r.text()};
+      const res = await dbApi.call("get",{table:t});
+      return {ok:res.ok,rows:res.ok?(res.data?.rows||[]):[],error:res.ok?"":(res.error||"")};
     }
     catch(e){ return {ok:false,rows:[],error:String(e)}; }
   },
   async upsert(t,row) {
     try {
-      const r=await fetch(supa(t),{method:"POST",headers:UH,body:JSON.stringify(row)});
-      if(!r.ok){
-        const err=await r.text();
+      const res=await dbApi.call("upsert",{table:t,row});
+      if(!res.ok){
+        const err=res.error||"";
         console.error("upsert fail",err);
         this.queue({kind:"upsert",table:t,row});
         return false;
@@ -569,9 +473,9 @@ const db = {
   },
   async del(t,id,before=null) {
     try {
-      const r=await fetch(`${supa(t)}?id=eq.${encodeURIComponent(id)}`,{method:"DELETE",headers:BH});
-      if(!r.ok){
-        const err=await r.text();
+      const res=await dbApi.call("delete",{table:t,id});
+      if(!res.ok){
+        const err=res.error||"";
         console.error("del fail",err);
         this.queue({kind:"delete",table:t,id,before:before||null});
         return false;
@@ -595,14 +499,6 @@ const db = {
         return false;
       }
       // Optional memory sync (safe: ignored when column doesn't exist).
-      try{
-        const aiMemory=normalizeAiMemoryList(p.aiMemory);
-        await fetch(`${supa("profile")}?id=eq.1`,{
-          method:"PATCH",
-          headers:{...BH,"Prefer":"return=minimal"},
-          body:JSON.stringify({ai_memory:aiMemory})
-        });
-      }catch{}
       await this.persistSnapshot(buildRemoteSnapshotRecord({table:"profile",action:"upsert",entityId:"1",after:profileFullPayload(p)}));
       await this.logEvent("profile","upsert","1",{
         name:p.name,description:p.description,avatar:p.avatar,surname:p.surname||"",
@@ -618,39 +514,25 @@ const db = {
   },
   async getProfile() {
     try {
-      let r=await fetch(`${supa("profile")}?id=eq.1`,{headers:BH});
-      const d=r.ok?await r.json():[]; const p=d[0]||null; if(!p)return null;
-      return{
-        name:p.name,
-        description:p.description,
-        avatar:p.avatar||null,
-        surname:p.surname||"",
-        cellarName:p.cellar_name||"",
-        bio:p.bio||"",
-        country:p.country||"",
-        profileBg:p.profile_bg||"",
-        aiMemory:normalizeAiMemoryList(p.ai_memory),
-        pinHash:(p.pin_hash||"").toString(),
-        pinSalt:(p.pin_salt||"").toString(),
-        pinDigits:[4,6].includes(Number(p.pin_digits))?Number(p.pin_digits):null,
-      };
+      const res=await dbApi.call("getProfile");
+      if(!res.ok) return null;
+      return res.data?.profile||null;
     }
     catch{return null;}
   },
   async listAudits(){
     try{
-      const r=await fetch(`${supa("audits")}?order=updated_at.desc`,{headers:BH});
-      if(!r.ok) return {ok:false,rows:[],error:await r.text()};
-      return {ok:true,rows:await r.json()};
+      const res=await dbApi.call("listAudits");
+      return {ok:res.ok,rows:res.ok?(res.data?.rows||[]):[],error:res.ok?"":(res.error||"")};
     }catch(e){
       return {ok:false,rows:[],error:String(e)};
     }
   },
   async upsertAudit(row){
     try{
-      const r=await fetch(supa("audits"),{method:"POST",headers:UH,body:JSON.stringify(row)});
-      if(!r.ok){
-        const err=await r.text();
+      const res=await dbApi.call("upsert",{table:"audits",row});
+      if(!res.ok){
+        const err=res.error||"";
         this.queue({kind:"upsert",table:"audits",row});
         return {ok:false,error:err};
       }
@@ -664,9 +546,9 @@ const db = {
   },
   async delAudit(id,before=null){
     try{
-      const r=await fetch(`${supa("audits")}?id=eq.${encodeURIComponent(id)}`,{method:"DELETE",headers:BH});
-      if(!r.ok){
-        const err=await r.text();
+      const res=await dbApi.call("delete",{table:"audits",id});
+      if(!res.ok){
+        const err=res.error||"";
         this.queue({kind:"delete",table:"audits",id,before:before||null});
         return {ok:false,error:err};
       }
@@ -680,18 +562,17 @@ const db = {
   },
   async listGrapeAliases(){
     try{
-      const r=await fetch(`${supa("grape_aliases")}?select=alias,wine_type`,{headers:BH});
-      if(!r.ok) return {ok:false,rows:[],error:await r.text()};
-      return {ok:true,rows:await r.json()};
+      const res=await dbApi.call("listGrapeAliases");
+      return {ok:res.ok,rows:res.ok?(res.data?.rows||[]):[],error:res.ok?"":(res.error||"")};
     }catch(e){
       return {ok:false,rows:[],error:String(e)};
     }
   },
   async upsertGrapeAlias(row){
     try{
-      const r=await fetch(supa("grape_aliases"),{method:"POST",headers:UH,body:JSON.stringify(row)});
-      if(!r.ok){
-        const err=await r.text();
+      const res=await dbApi.call("upsert",{table:"grape_aliases",row});
+      if(!res.ok){
+        const err=res.error||"";
         this.queue({kind:"upsert",table:"grape_aliases",row});
         return {ok:false,error:err};
       }
@@ -1760,7 +1641,7 @@ const SEED_NOTES=[
   {id:"n1",wineId:"s1",title:"Christmas Dinner 2023",content:"Opened with family. Paired with slow-roasted lamb. Absolutely magical.",date:"2023-12-25"},
   {id:"n2",wineId:"s3",title:"Summer BBQ Pairings",content:"Incredible with fresh prawns on the barbie. Also tried with grilled snapper — even better.",date:"2023-11-12"},
 ];
-const DEFAULT_PROFILE={name:"Neale",description:"Winemaker & Collector",avatar:null,accent:"wine",aiMemory:[],pinHash:"",pinSalt:"",pinDigits:null};
+const DEFAULT_PROFILE={name:"Neale",description:"Winemaker & Collector",avatar:null,accent:"wine",aiMemory:[],pinEnabled:false,pinDigits:null};
 
 /* ── ICONS ────────────────────────────────────────────────────── */
 const IC={
@@ -6667,9 +6548,11 @@ export default function App(){
   const [savedLocations,setSavedLocations]=useState(()=>readSavedLocations());
   const [ready,setReady]=useState(false);
   const [syncHealth,setSyncHealth]=useState(()=>readSyncHealth());
-  const [splashPhase,setSplashPhase]=useState("loading"); // loading | setup | setupPin | unlock | done
+  const [splashPhase,setSplashPhase]=useState("loading"); // loading | setup | unlock | done
   const [isDesktop,setIsDesktop]=useState(()=>window.innerWidth>=768);
   const [isNewUser,setIsNewUser]=useState(false);
+  const [isAuthenticated,setIsAuthenticated]=useState(false);
+  const [adminEnabled,setAdminEnabled]=useState(true);
   const [authRole,setAuthRole]=useState("user");
   const [authBusy,setAuthBusy]=useState(false);
   const [authError,setAuthError]=useState("");
@@ -6717,6 +6600,7 @@ export default function App(){
     return()=>window.removeEventListener("resize",h);
   },[]);
   useEffect(()=>{
+    if(!isAuthenticated) return;
     const flush=()=>{db.flushOutbox();};
     flush();
     const interval=setInterval(flush,12000);
@@ -6734,16 +6618,46 @@ export default function App(){
       document.removeEventListener("visibilitychange",onVisible);
       window.removeEventListener("vino-sync-health",onSyncEvent);
     };
-  },[]);
+  },[isAuthenticated]);
   useEffect(()=>{
     async function load(){
       const cache=readCache();
+      let authGranted=false;
       const normalizeLegacyWineRows=rows=>(rows||[]).map(w=>{
         if(!w || !w.wishlist) return w;
         const legacyBottles=Math.max(1,Math.round(safeNum(w.bottles)||0)||1);
         return {...w,wishlist:false,bottles:legacyBottles};
       });
       try{
+        const boot=await authApi.bootstrap();
+        const preview=boot.ok?(boot.data?.profile||null):null;
+        const previewAccent=detectAccentFromProfileBg(preview?.profileBg||"")||DEFAULT_PROFILE.accent;
+        const previewProfile={
+          ...DEFAULT_PROFILE,
+          name:preview?.name||DEFAULT_PROFILE.name,
+          description:preview?.description||DEFAULT_PROFILE.description,
+          cellarName:preview?.cellarName||"",
+          profileBg:preview?.profileBg||"",
+          accent:previewAccent,
+          aiMemory:readSommelierMemory(),
+          pinEnabled:!!preview?.pinEnabled,
+          pinDigits:[4,6].includes(Number(preview?.pinDigits))?Number(preview.pinDigits):null,
+        };
+        setProfileState(prev=>({...prev,...previewProfile}));
+        setOName(previewProfile.name||"");
+        setOCellar(previewProfile.cellarName||"");
+        setPinDigits([4,6].includes(Number(previewProfile?.pinDigits))?Number(previewProfile.pinDigits):4);
+        setIsNewUser(!previewProfile.name||(previewProfile.name===DEFAULT_PROFILE.name&&!previewProfile.cellarName));
+        setAdminEnabled(!!(boot.ok&&boot.data?.adminEnabled));
+        setAuthRole(boot.ok&&boot.data?.authenticated?(boot.data?.role==="admin"?"admin":"user"):"user");
+        setIsAuthenticated(!!(boot.ok&&boot.data?.authenticated));
+        if(!(boot.ok&&boot.data?.authenticated)){
+          setWines([]);
+          setNotes([]);
+          setReady(true);
+          return;
+        }
+        authGranted=true;
         const [wineRes,noteRes,prof,aliasRes]=await Promise.all([db.get("wines"),db.get("tasting_notes"),db.getProfile(),db.listGrapeAliases()]);
         const wineRows=wineRes.ok?(wineRes.rows||[]):[];
         const noteRows=noteRes.ok?(noteRes.rows||[]):[];
@@ -6974,6 +6888,7 @@ export default function App(){
             // Remote profile is authoritative for cross-device sync.
             const bgAccent=detectAccentFromProfileBg(prof.profileBg||"");
             const remoteProfile={
+              ...DEFAULT_PROFILE,
               name:prof.name,
               description:prof.description,
               avatar:prof.avatar||null,
@@ -6984,8 +6899,7 @@ export default function App(){
               profileBg:prof.profileBg||"",
               accent:bgAccent||cache?.profile?.accent||DEFAULT_PROFILE.accent,
               aiMemory:normalizeAiMemoryList((prof.aiMemory||[]).length?prof.aiMemory:((cache?.profile?.aiMemory||[]).length?cache.profile.aiMemory:readSommelierMemory())),
-              pinHash:(prof.pinHash||"").toString(),
-              pinSalt:(prof.pinSalt||"").toString(),
+              pinEnabled:!!prof.pinEnabled,
               pinDigits:[4,6].includes(Number(prof.pinDigits))?Number(prof.pinDigits):null,
             };
             setProfileState(remoteProfile);
@@ -6996,22 +6910,23 @@ export default function App(){
             setIsNewUser(!prof.name||(prof.name===DEFAULT_PROFILE.name&&!prof.cellarName));
           }else if(cache?.profile && wineRows.length===0){
             // Offline-only fallback.
-            setProfileState(cache.profile);
-            setOName(cache.profile?.name||"");
-            setOCellar(cache.profile?.cellarName||"");
-            setPinDigits([4,6].includes(Number(cache.profile?.pinDigits))?Number(cache.profile.pinDigits):4);
-            setIsNewUser(!(cache.profile?.name));
+            const cachedProfile={...DEFAULT_PROFILE,...cache.profile,pinEnabled:!!cache.profile?.pinEnabled,pinDigits:[4,6].includes(Number(cache.profile?.pinDigits))?Number(cache.profile.pinDigits):null};
+            setProfileState(cachedProfile);
+            setOName(cachedProfile?.name||"");
+            setOCellar(cachedProfile?.cellarName||"");
+            setPinDigits([4,6].includes(Number(cachedProfile?.pinDigits))?Number(cachedProfile.pinDigits):4);
+            setIsNewUser(!(cachedProfile?.name));
           }else{
             setIsNewUser(true);
           }
         }
       }catch(e){
         console.error("Load error:",e);
-        if(cache?.wines?.length){
+        if(authGranted && cache?.wines?.length){
           setWines(normalizeLegacyWineRows([...(cache.wines||[]),...(cache.wishlist||[])]));setNotes(cache.notes||[]);
-          if(cache.profile)setProfileState(cache.profile);
+          if(cache.profile)setProfileState(prev=>({...prev,...cache.profile,pinEnabled:!!cache.profile?.pinEnabled,pinDigits:[4,6].includes(Number(cache.profile?.pinDigits))?Number(cache.profile.pinDigits):null}));
         }else{
-          setWines(SEED_WINES);setNotes(SEED_NOTES);
+          setWines([]);setNotes([]);
         }
       }
       setReady(true);
@@ -7022,13 +6937,10 @@ export default function App(){
   useEffect(()=>{
     if(!ready) return;
     const timer=setTimeout(()=>{
-      const session=readUnlockSession();
-      if(unlockSessionMatchesProfile(session,profile)){
-        setAuthRole(session?.role==="admin"?"admin":"user");
+      if(isAuthenticated){
         setSplashPhase("done");
         return;
       }
-      clearUnlockSession();
       setAuthRole("user");
       setUnlockPin("");
       setUnlockShow(false);
@@ -7040,7 +6952,7 @@ export default function App(){
       setSplashPhase(isNewUser ? "setup" : (hasPinConfigured(profile) ? "unlock" : "setupPin"));
     },780);
     return()=>clearTimeout(timer);
-  },[ready]);
+  },[ready,isAuthenticated,isNewUser,profile?.pinDigits,profile?.pinEnabled]);
 
   const dark=themeMode==="dark"||(themeMode==="system"&&sysDark);
   const th=T(dark);
@@ -7212,8 +7124,7 @@ export default function App(){
       ...p,
       accent:syncedAccent,
       aiMemory:normalizeAiMemoryList(p.aiMemory||[]),
-      pinHash:(p.pinHash||"").toString(),
-      pinSalt:(p.pinSalt||"").toString(),
+      pinEnabled:!!p.pinEnabled,
       pinDigits:[4,6].includes(Number(p.pinDigits))?Number(p.pinDigits):null,
     };
     setProfileState(next);
@@ -7230,9 +7141,6 @@ export default function App(){
           aiMemory:normalizeAiMemoryList(fresh.aiMemory||next.aiMemory||[]),
         };
         setProfileState(prev=>({...prev,...syncedProfile}));
-        if(splashPhase==="done"){
-          writeUnlockSession(authRole,syncedProfile);
-        }
       }
       return true;
     }
@@ -7245,6 +7153,7 @@ export default function App(){
     if(nextTab) setTab(nextTab);
     setSplashPhase("done");
   };
+  const reloadAfterAuth=()=>window.location.reload();
   const finishProfileSetup=async()=>{
     const owner=(oName||"").trim();
     const cellar=(oCellar||"").trim();
@@ -7266,23 +7175,15 @@ export default function App(){
     setAuthBusy(true);
     setAuthError("");
     try{
-      const pinRecord=await createPinRecord(nextPin,digits);
-      const nextProfile={
-        ...profile,
-        name:owner,
-        cellarName:cellar||`${owner}'s Winery`,
-        ...pinRecord,
-      };
-      const ok=await setProfile(nextProfile);
-      const fresh=ok?await db.getProfile():null;
-      if(!ok || !profileHasSavedPinRecord(fresh,pinRecord)){
-        setAuthError("The winery profile could not be secured. Add the new profile PIN columns in Supabase, then try again.");
+      const res=await authApi.setupPin({ownerName:owner,cellarName:cellar||`${owner}'s Winery`,nextPin,digits});
+      if(!res.ok){
+        setAuthError(res.error||"The winery profile could not be secured.");
         return;
       }
       setIsNewUser(false);
-      writeUnlockSession("user",nextProfile);
+      setIsAuthenticated(true);
       setAuthRole("user");
-      setSplashPhase("done");
+      reloadAfterAuth();
     }finally{
       setAuthBusy(false);
     }
@@ -7302,24 +7203,21 @@ export default function App(){
     setAuthBusy(true);
     setAuthError("");
     try{
-      const pinRecord=await createPinRecord(nextPin,digits);
-      const nextProfile={...profile,...pinRecord};
-      const ok=await setProfile(nextProfile);
-      const fresh=ok?await db.getProfile():null;
-      if(!ok || !profileHasSavedPinRecord(fresh,pinRecord)){
-        setAuthError("The winery PIN could not be saved. Add the new profile PIN columns in Supabase, then try again.");
+      const res=await authApi.setupPin({ownerName:profile.name,cellarName:profile.cellarName,nextPin,digits});
+      if(!res.ok){
+        setAuthError(res.error||"The winery PIN could not be saved.");
         return;
       }
-      writeUnlockSession("user",nextProfile);
+      setIsAuthenticated(true);
       setAuthRole("user");
-      setSplashPhase("done");
+      reloadAfterAuth();
     }finally{
       setAuthBusy(false);
     }
   };
   const unlockApp=async()=>{
     const isAdmin=authRole==="admin";
-    const digits=isAdmin?ADMIN_PIN.length:normalizePinDigits(profile?.pinDigits);
+    const digits=isAdmin?ADMIN_PIN_DIGITS:normalizePinDigits(profile?.pinDigits);
     const entered=normalizePinInput(unlockPin,digits);
     if(entered.length!==digits){
       setAuthError(`Enter the ${digits}-digit ${isAdmin?"admin":"winery"} PIN.`);
@@ -7328,13 +7226,13 @@ export default function App(){
     setAuthBusy(true);
     setAuthError("");
     try{
-      const ok=isAdmin ? entered===ADMIN_PIN : await verifyProfilePin(profile,entered);
-      if(!ok){
-        setAuthError(isAdmin?"Admin PIN did not match.":"PIN did not match this winery.");
+      const res=await authApi.login({role:authRole,pin:entered});
+      if(!res.ok){
+        setAuthError(res.error||(isAdmin?"Admin PIN did not match.":"PIN did not match this winery."));
         return;
       }
-      writeUnlockSession(isAdmin?"admin":"user",profile);
-      setSplashPhase("done");
+      setIsAuthenticated(true);
+      reloadAfterAuth();
     }finally{
       setAuthBusy(false);
     }
@@ -7359,36 +7257,25 @@ export default function App(){
     if(nextClean.length!==targetDigits){
       return {ok:false,error:`Enter a ${targetDigits}-digit PIN.`};
     }
-    if(hasPinConfigured(profile) && authRole!=="admin"){
-      const currentDigits=normalizePinDigits(profile?.pinDigits);
-      const currentClean=normalizePinInput(currentPin,currentDigits);
-      const currentOk=await verifyProfilePin(profile,currentClean);
-      if(!currentOk){
-        return {ok:false,error:"Current PIN did not match."};
-      }
+    const res=await authApi.changePin({currentPin,nextPin:nextClean,digits:targetDigits});
+    if(!res.ok){
+      return {ok:false,error:res.error||"The winery PIN could not be saved."};
     }
-    const pinRecord=await createPinRecord(nextClean,targetDigits);
-    const nextProfile={...profile,...pinRecord};
-    const ok=await setProfile(nextProfile);
-    const fresh=ok?await db.getProfile():null;
-    if(!ok || !profileHasSavedPinRecord(fresh,pinRecord)){
-      return {ok:false,error:"The winery PIN could not be saved."};
-    }
-    writeUnlockSession(authRole,nextProfile);
-    setProfileState(prev=>({...prev,...nextProfile}));
+    setProfileState(prev=>({...prev,...(res.data?.profile||{}),pinEnabled:true,pinDigits:targetDigits}));
     return {ok:true};
   };
 
   const splashCollection=(wines||[]).filter(w=>!w?.wishlist);
-  const splashReadyCount=splashCollection.filter(w=>wineReadiness(w).key==="ready").length;
-  const splashBottlesLeft=splashCollection.reduce((sum,w)=>sum+Math.max(0,Math.round(safeNum(w?.bottles)||0)),0);
-  const splashConsumedCount=splashCollection.reduce((sum,w)=>sum+getConsumedBottles(w),0);
-  const splashValue=splashCollection.reduce((sum,w)=>sum+((safeNum(w?.cellarMeta?.rrp)||0)*getTotalPurchased(w)),0);
-  const splashAudits=readAudits();
+  const splashMetricsVisible=isAuthenticated;
+  const splashReadyCount=splashMetricsVisible?splashCollection.filter(w=>wineReadiness(w).key==="ready").length:0;
+  const splashBottlesLeft=splashMetricsVisible?splashCollection.reduce((sum,w)=>sum+Math.max(0,Math.round(safeNum(w?.bottles)||0)),0):0;
+  const splashConsumedCount=splashMetricsVisible?splashCollection.reduce((sum,w)=>sum+getConsumedBottles(w),0):0;
+  const splashValue=splashMetricsVisible?splashCollection.reduce((sum,w)=>sum+((safeNum(w?.cellarMeta?.rrp)||0)*getTotalPurchased(w)),0):0;
+  const splashAudits=splashMetricsVisible?readAudits():[];
   const splashInProgressAudits=splashAudits.filter(a=>(a?.status||"")==="in_progress").length;
-  const splashFooterLine=wines.length>0
+  const splashFooterLine=splashMetricsVisible&&wines.length>0
     ? `${wines.length} wines · ${splashBottlesLeft} bottles left · ${splashConsumedCount} consumed`
-    : "Loading winery data…";
+    : "Secure winery access";
   const splashGreeting=(()=>{
     const hour=new Date().getHours();
     if(hour<5) return "Good evening";
@@ -7403,7 +7290,7 @@ export default function App(){
     || (isNewUser && !(oName||"").trim()
       ? "Your Winery"
       : (((oName||profile.name||"Vinology").trim()?`${(oName||profile.name||"Vinology").trim()}'s Winery`:"Your Winery")));
-  const splashDigits=authRole==="admin" ? ADMIN_PIN.length : normalizePinDigits(splashPhase==="unlock" ? profile?.pinDigits : pinDigits);
+  const splashDigits=authRole==="admin" ? ADMIN_PIN_DIGITS : normalizePinDigits(splashPhase==="unlock" ? profile?.pinDigits : pinDigits);
 
   const SPLASH_BG={background:"radial-gradient(circle at 18% 0%,rgba(var(--accentRgb),0.24),transparent 34%), linear-gradient(155deg,#100405 0%,#170809 42%,#0B0203 100%)",minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",position:"relative",overflow:"hidden"};
   const Bubbles=()=>(
@@ -7477,7 +7364,7 @@ export default function App(){
     <div style={SPLASH_BG}>
       <style>{CSS}</style>
       <Bubbles/>
-      {splashPhase!=="loading"&&(
+      {splashPhase!=="loading"&&(adminEnabled||authRole==="admin")&&(
         <button
           type="button"
           onClick={authRole==="admin"?returnToWineryAccess:openAdminAccess}
@@ -7501,7 +7388,7 @@ export default function App(){
             <div style={{fontSize:isDesktop?40:34,fontWeight:900,color:"#F8F1EC",lineHeight:1,letterSpacing:"-1.8px",fontFamily:"'Plus Jakarta Sans',sans-serif",marginTop:4}}>Personal Cellar</div>
           </div>
         </div>
-        <div style={{display:isDesktop?"block":"none",minWidth:180}}>
+        <div style={{display:isDesktop&&splashMetricsVisible?"block":"none",minWidth:180}}>
           <div style={{...miniStat,textAlign:"right"}}>
             <div style={{fontSize:12,color:"rgba(246,238,233,0.62)",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Winery value</div>
             <div style={{fontSize:28,fontWeight:900,color:"#fff",lineHeight:1.05,marginTop:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>${splashValue.toLocaleString(undefined,{maximumFractionDigits:0})}</div>
@@ -7522,17 +7409,19 @@ export default function App(){
               ? "Unlock the cellar to review inventory, audits, journal entries, and sommelier prompts."
               : "The cellar is loaded. Secure it now with a winery PIN so only trusted users can open it."}
       </div>
-      <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:18}}>
-        <div style={pillStyle}>{splashReadyCount} ready now</div>
-        <div style={pillStyle}>{splashBottlesLeft} bottles left</div>
-        <div style={pillStyle}>{splashInProgressAudits} audits open</div>
-      </div>
+      {splashMetricsVisible && (
+        <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:18}}>
+          <div style={pillStyle}>{splashReadyCount} ready now</div>
+          <div style={pillStyle}>{splashBottlesLeft} bottles left</div>
+          <div style={pillStyle}>{splashInProgressAudits} audits open</div>
+        </div>
+      )}
       <div style={{display:"grid",gridTemplateColumns:isDesktop?"repeat(2,minmax(0,1fr))":"1fr",gap:10,marginTop:22}}>
         <div style={miniStat}>
-          <div style={{fontSize:12,color:"rgba(246,238,233,0.62)",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Cellar status</div>
-          <div style={{fontSize:22,fontWeight:900,color:"#fff",marginTop:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{wines.length} wines tracked</div>
+          <div style={{fontSize:12,color:"rgba(246,238,233,0.62)",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{splashMetricsVisible?"Cellar status":"Access"}</div>
+          <div style={{fontSize:22,fontWeight:900,color:"#fff",marginTop:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{splashMetricsVisible?`${wines.length} wines tracked`:"Protected winery"}</div>
           <div style={{fontSize:12,color:"rgba(246,238,233,0.66)",marginTop:6,fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.5}}>
-            {splashConsumedCount} consumed · {splashInProgressAudits} audits open
+            {splashMetricsVisible ? `${splashConsumedCount} consumed · ${splashInProgressAudits} audits open` : "The cellar loads after the PIN is verified on the server."}
           </div>
         </div>
         <div style={miniStat}>

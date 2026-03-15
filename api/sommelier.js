@@ -1,5 +1,6 @@
 const DEFAULT_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 const MAX_HISTORY = 18;
+const { requireSession } = require("./_lib/auth");
 
 const SYSTEM_PROMPT = `You are Vinology Sommelier, a practical assistant for one private cellar.
 Rules:
@@ -764,9 +765,12 @@ const extractGeminiText = data =>
     .trim();
 
 module.exports = async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
+  const session = await requireSession(req, res);
+  if (!session) return;
 
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
