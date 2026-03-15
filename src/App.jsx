@@ -5,7 +5,7 @@ import { wineHoldings2021 } from "./data/wineHoldings2021";
 const SUPA_URL = "https://dfnvmwoacprkhxfbpybv.supabase.co";
 const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRmbnZtd29hY3Bya2h4ZmJweWJ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE4MTkwNTksImV4cCI6MjA4NzM5NTA1OX0.40VqzdfZ9zoJitgCTShNiMTOYheDRYgn84mZXX5ZECs";
 const supa = t => `${SUPA_URL}/rest/v1/${t}`;
-const APP_VERSION = "7.70";
+const APP_VERSION = "7.71";
 const BH = { "Content-Type":"application/json","apikey":SUPA_KEY,"Authorization":`Bearer ${SUPA_KEY}`,"x-app-version":APP_VERSION };
 const UH = { ...BH, "Prefer":"resolution=merge-duplicates,return=minimal" };
 const CHANGE_LOG_KEY = "vino_change_log_v1";
@@ -261,7 +261,10 @@ const generatePinSalt = () => {
   return Math.random().toString(36).slice(2)+Date.now().toString(36);
 };
 const normalizePinDigits = value => Number(value)===6 ? 6 : 4;
-const normalizePinInput = (value,digits=4) => (value||"").toString().replace(/\D/g,"").slice(0,normalizePinDigits(digits));
+const normalizePinInput = (value,digits=4) => {
+  const maxLen=Math.max(1,Math.round(Number(digits)||0));
+  return (value||"").toString().replace(/\D/g,"").slice(0,maxLen);
+};
 const hasPinConfigured = profile => !!((profile?.pinHash||"").trim() && (profile?.pinSalt||"").trim() && [4,6].includes(Number(profile?.pinDigits)));
 const readUnlockSession = () => {
   try{
@@ -7379,7 +7382,7 @@ export default function App(){
     background:"rgba(255,255,255,0.06)",
     border:"1px solid rgba(255,255,255,0.09)",
     borderRadius:18,
-    padding:"14px 14px 12px",
+    padding:"16px 16px 14px",
   };
   const translucentInput={
     background:"rgba(255,255,255,0.04)",
@@ -7390,7 +7393,6 @@ export default function App(){
   const smallLabel={fontSize:11,fontWeight:700,color:"rgba(246,238,233,0.58)",letterSpacing:"1.4px",textTransform:"uppercase",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"};
   const pillStyle={display:"inline-flex",alignItems:"center",gap:8,padding:"8px 12px",borderRadius:999,border:"1px solid rgba(255,255,255,0.1)",background:"rgba(255,255,255,0.05)",fontSize:11,fontWeight:700,color:"rgba(246,238,233,0.78)",fontFamily:"'Plus Jakarta Sans',sans-serif"};
   const primaryAction={width:"100%",padding:"15px 18px",borderRadius:18,border:"none",background:"linear-gradient(135deg,var(--accent) 0%,#7F1A2A 100%)",color:"#fff",fontSize:15,fontWeight:800,boxShadow:"0 18px 40px rgba(var(--accentRgb),0.38)"};
-  const secondaryAction={width:"100%",padding:"14px 16px",borderRadius:16,border:"1px solid rgba(255,255,255,0.12)",background:"rgba(255,255,255,0.05)",color:"#F6EEE9",fontSize:14,fontWeight:700};
   const pinFieldStyle={...translucentInput,fontSize:18,fontWeight:800,letterSpacing:pinShow||unlockShow?"0.14em":"0.26em",textAlign:"center",padding:"16px 18px"};
   const renderPinChooser=()=>(
     <div style={{marginBottom:18}}>
@@ -7437,9 +7439,9 @@ export default function App(){
         </div>
         <div style={{display:isDesktop?"block":"none",minWidth:180}}>
           <div style={{...miniStat,textAlign:"right"}}>
-            <div style={{fontSize:10,color:"rgba(246,238,233,0.56)",letterSpacing:"1px",textTransform:"uppercase",fontWeight:700}}>RRP Value</div>
-            <div style={{fontSize:26,fontWeight:900,color:"#fff",lineHeight:1.05,marginTop:6}}>${splashValue.toLocaleString(undefined,{maximumFractionDigits:0})}</div>
-            <div style={{fontSize:11,color:"rgba(246,238,233,0.62)",marginTop:6}}>{splashBottlesLeft} bottles left</div>
+            <div style={{fontSize:12,color:"rgba(246,238,233,0.62)",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Winery value</div>
+            <div style={{fontSize:28,fontWeight:900,color:"#fff",lineHeight:1.05,marginTop:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>${splashValue.toLocaleString(undefined,{maximumFractionDigits:0})}</div>
+            <div style={{fontSize:12,color:"rgba(246,238,233,0.64)",marginTop:6,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{splashReadyCount} ready now</div>
           </div>
         </div>
       </div>
@@ -7461,23 +7463,21 @@ export default function App(){
         <div style={pillStyle}>{splashBottlesLeft} bottles left</div>
         <div style={pillStyle}>{splashInProgressAudits} audits open</div>
       </div>
-      <div style={{display:"grid",gridTemplateColumns:isDesktop?"repeat(3,minmax(0,1fr))":"1fr",gap:10,marginTop:22}}>
+      <div style={{display:"grid",gridTemplateColumns:isDesktop?"repeat(2,minmax(0,1fr))":"1fr",gap:10,marginTop:22}}>
         <div style={miniStat}>
-          <div style={{fontSize:10,color:"rgba(246,238,233,0.56)",letterSpacing:"1px",textTransform:"uppercase",fontWeight:700}}>Owner</div>
-          <div style={{fontSize:18,fontWeight:800,color:"#fff",marginTop:7}}>{[profile.name||oName,profile.surname].filter(Boolean).join(" ")||"Not set yet"}</div>
+          <div style={{fontSize:12,color:"rgba(246,238,233,0.62)",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Cellar status</div>
+          <div style={{fontSize:22,fontWeight:900,color:"#fff",marginTop:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{wines.length} wines tracked</div>
+          <div style={{fontSize:12,color:"rgba(246,238,233,0.66)",marginTop:6,fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.5}}>
+            {splashConsumedCount} consumed · {splashInProgressAudits} audits open
+          </div>
         </div>
         <div style={miniStat}>
-          <div style={{fontSize:10,color:"rgba(246,238,233,0.56)",letterSpacing:"1px",textTransform:"uppercase",fontWeight:700}}>Cellar Snapshot</div>
-          <div style={{fontSize:18,fontWeight:800,color:"#fff",marginTop:7}}>{wines.length} wines tracked</div>
-          <div style={{fontSize:11,color:"rgba(246,238,233,0.62)",marginTop:5}}>{splashFooterLine}</div>
-        </div>
-        <div style={miniStat}>
-          <div style={{fontSize:10,color:"rgba(246,238,233,0.56)",letterSpacing:"1px",textTransform:"uppercase",fontWeight:700}}>Access</div>
-          <div style={{fontSize:18,fontWeight:800,color:"#fff",marginTop:7}}>
+          <div style={{fontSize:12,color:"rgba(246,238,233,0.62)",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Security</div>
+          <div style={{fontSize:22,fontWeight:900,color:"#fff",marginTop:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
             {authRole==="admin" ? "Admin Recovery" : (hasPinConfigured(profile) ? `${normalizePinDigits(profile.pinDigits)}-digit PIN` : "PIN not set")}
           </div>
-          <div style={{fontSize:11,color:"rgba(246,238,233,0.62)",marginTop:5}}>
-            {authRole==="admin" ? "Opens the same synced cellar." : "Session stays open after unlock until the tab is closed."}
+          <div style={{fontSize:12,color:"rgba(246,238,233,0.66)",marginTop:6,fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.5}}>
+            {authRole==="admin" ? "Opens the same synced cellar." : `Session stays open until this tab is closed.`}
           </div>
         </div>
       </div>
