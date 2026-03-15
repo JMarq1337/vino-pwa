@@ -5,7 +5,7 @@ import { wineHoldings2021 } from "./data/wineHoldings2021";
 const SUPA_URL = "https://dfnvmwoacprkhxfbpybv.supabase.co";
 const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRmbnZtd29hY3Bya2h4ZmJweWJ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE4MTkwNTksImV4cCI6MjA4NzM5NTA1OX0.40VqzdfZ9zoJitgCTShNiMTOYheDRYgn84mZXX5ZECs";
 const supa = t => `${SUPA_URL}/rest/v1/${t}`;
-const APP_VERSION = "7.62";
+const APP_VERSION = "7.63";
 const BH = { "Content-Type":"application/json","apikey":SUPA_KEY,"Authorization":`Bearer ${SUPA_KEY}`,"x-app-version":APP_VERSION };
 const UH = { ...BH, "Prefer":"resolution=merge-duplicates,return=minimal" };
 const CHANGE_LOG_KEY = "vino_change_log_v1";
@@ -1875,13 +1875,13 @@ const DuplicateWorkspaceModal=({show,onClose,desktop,showSource,sourcePanel,edit
         style={{
           position:"relative",
           width:"100%",
-          maxWidth:desktop?1080:640,
+          maxWidth:desktop?1020:640,
           height:"100%",
           margin:"0 auto",
           display:"grid",
           alignItems:"start",
           justifyItems:"center",
-          gridTemplateColumns:desktop&&showSource?"320px minmax(0,560px)":"minmax(0,560px)",
+          gridTemplateColumns:desktop&&showSource?"292px minmax(0,580px)":"minmax(0,580px)",
           gap:18,
           overflowY:"auto",
           paddingTop:desktop?20:0,
@@ -2387,9 +2387,6 @@ const DuplicateSourcePreview=({wine,onHide})=>{
           {label:"Left",value:Math.max(0,Math.round(safeNum(wine.bottles)||0))},
           {label:"Location",value:locationText},
           {label:"Readiness",value:ready.label},
-          {label:"Added",value:addedOn},
-          {label:"RRP / Bottle",value:rrpPerBottle?`$${rrpPerBottle.toFixed(2)}`:"—"},
-          {label:"Paid / Bottle",value:paidPerBottle?`$${paidPerBottle.toFixed(2)}`:"—"},
         ].map(item=>(
           <div key={item.label} style={{background:"var(--inputBg)",borderRadius:14,padding:"11px 12px",border:"1px solid var(--border)"}}>
             <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:3,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{item.label}</div>
@@ -2397,8 +2394,14 @@ const DuplicateSourcePreview=({wine,onHide})=>{
           </div>
         ))}
       </div>
-      <div style={{padding:"12px 14px",borderRadius:16,border:"1px solid rgba(var(--accentRgb),0.16)",background:"rgba(var(--accentRgb),0.05)",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.5}}>
-        You’re creating a second cellar card from this wine. Journal notes stay shared, but stock, location, dates and pricing can be different on the duplicate.
+      <div style={{display:"flex",flexWrap:"wrap",gap:7}}>
+        <span style={{padding:"6px 10px",borderRadius:999,background:"var(--inputBg)",border:"1px solid var(--border)",fontSize:11,fontWeight:800,color:"var(--sub)",letterSpacing:"0.45px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{`Added ${addedOn}`}</span>
+        {rrpPerBottle?(
+          <span style={{padding:"6px 10px",borderRadius:999,background:"rgba(var(--accentRgb),0.08)",border:"1px solid rgba(var(--accentRgb),0.14)",fontSize:11,fontWeight:800,color:"var(--accent)",letterSpacing:"0.45px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{`RRP $${rrpPerBottle.toFixed(2)}`}</span>
+        ):null}
+        {paidPerBottle?(
+          <span style={{padding:"6px 10px",borderRadius:999,background:"var(--inputBg)",border:"1px solid var(--border)",fontSize:11,fontWeight:800,color:"var(--text)",letterSpacing:"0.45px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{`Paid $${paidPerBottle.toFixed(2)}`}</span>
+        ):null}
       </div>
     </div>
   );
@@ -2562,6 +2565,14 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
     marginBottom:12,
     boxShadow:"0 12px 24px rgba(0,0,0,0.09), inset 0 1px 0 rgba(255,255,255,0.36)"
   };
+  const duplicateSectionCardStyle={
+    background:"linear-gradient(180deg,#faf5ef 0%,var(--card) 100%)",
+    border:"1px solid rgba(89,61,45,0.1)",
+    borderRadius:18,
+    padding:"14px 14px 12px",
+    marginBottom:12,
+    boxShadow:"0 12px 24px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.5)"
+  };
   const sectionTitleStyle={display:"flex",alignItems:"center",gap:8,fontSize:10,color:"var(--accent)",fontWeight:900,textTransform:"uppercase",letterSpacing:"1.02px",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"};
   const sectionTitleDotStyle={width:7,height:7,borderRadius:"50%",background:"var(--accent)",boxShadow:"0 0 0 4px rgba(var(--accentRgb),0.14)"};
   const sectionHintStyle={fontSize:12,color:"var(--sub)",marginBottom:10,fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.45,fontWeight:600};
@@ -2569,14 +2580,213 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
   const topShellStyle={background:"linear-gradient(165deg,rgba(var(--accentRgb),0.16),rgba(var(--accentRgb),0.06) 46%,var(--card))",border:"1px solid rgba(var(--accentRgb),0.26)",borderRadius:18,padding:"12px",marginTop:-2,marginBottom:14,boxShadow:"0 14px 24px rgba(0,0,0,0.09)"};
   const topMetaPillStyle={display:"inline-flex",alignItems:"center",gap:6,padding:"4px 9px",borderRadius:999,border:"1px solid rgba(var(--accentRgb),0.28)",background:"rgba(var(--accentRgb),0.1)",fontSize:10,fontWeight:800,color:"var(--accent)",letterSpacing:"0.8px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"};
   const detailsGridStyle={display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(250px,1fr))",gap:12};
+  const duplicateDetailsGridStyle={display:"grid",gridTemplateColumns:"minmax(0,1.06fr) minmax(0,0.94fr)",gap:12,alignItems:"start"};
   const actionRailStyle=embedded&&isDuplicateMode
-    ? {position:"sticky",bottom:0,zIndex:3,marginTop:12,paddingTop:10,background:"var(--surface)",borderTop:"1px solid var(--border)"}
+    ? {position:"sticky",bottom:12,zIndex:5,marginTop:18,paddingTop:12}
     : {position:"sticky",bottom:0,zIndex:3,marginTop:12,paddingTop:10,background:"linear-gradient(180deg,rgba(255,255,255,0),var(--surface) 22%)"};
+  const actionRailBoxStyle=embedded&&isDuplicateMode
+    ? {display:"flex",gap:8,padding:"12px",borderRadius:18,border:"1px solid rgba(var(--accentRgb),0.14)",background:"var(--card)",boxShadow:"0 18px 34px rgba(0,0,0,0.16), 0 3px 10px rgba(0,0,0,0.08)",backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)"}
+    : {display:"flex",gap:8,padding:"10px",borderRadius:14,border:"1px solid var(--border)",background:"var(--card)",boxShadow:"0 10px 22px rgba(0,0,0,0.12)"};
   const saveActionLabel=isDuplicateMode?"Save Duplicate":initial?"Save Changes":"Save Wine";
   const sectionTitle=(label)=>(
     <div style={sectionTitleStyle}>
       <span style={sectionTitleDotStyle}/>
       <span>{label}</span>
+    </div>
+  );
+  const renderStorageInventorySection=(cardStyle)=>(
+    <div style={{...cardStyle,gridColumn:isDuplicateMode?"1 / -1":"1 / -1"}}>
+      {sectionTitle("Storage & Inventory")}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 2fr 1fr",gap:10}}>
+        <Field label="Bottles" value={f.bottles} onChange={handleBottlesChange} type="number" placeholder="1" optional/>
+        <SelField
+          label="Location"
+          value={selectedLocationValue}
+          onChange={handleLocationSelect}
+          options={[...selectableLocations.map(loc=>({value:loc,label:loc})),{value:CUSTOM_LOCATION_OPTION,label:"Custom location…"}]}
+        />
+        <Field label={isKennardsLocation?"Box No.":"Slot"} value={f.locationSlot} onChange={v=>set("locationSlot",v)} placeholder={isKennardsLocation?"e.g. 12":"A3"} optional/>
+      </div>
+      {isKennardsLocation&&(
+        <SelField
+          label="Kennards Placement"
+          value={normalizeKennardsSection(f.locationSection)||"Cube"}
+          onChange={v=>set("locationSection",normalizeKennardsSection(v))}
+          options={KENNARDS_SECTIONS}
+        />
+      )}
+      {locationMode==="custom"&&(
+        <div style={{marginBottom:12,marginTop:-4,padding:"10px 11px",borderRadius:12,background:"linear-gradient(180deg,rgba(var(--accentRgb),0.08),var(--inputBg))",border:"1px solid rgba(var(--accentRgb),0.2)"}}>
+          <Field label="Custom Location" value={customLocation} onChange={setCustomLocation} placeholder="e.g. Events Cellar" optional/>
+          <button type="button" onClick={()=>setRememberLocation(v=>!v)}
+            style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"8px 2px 2px",border:"none",background:"transparent",fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:12,color:"var(--text)",fontWeight:600,width:"100%",cursor:"pointer"}}>
+            <span style={{color:"var(--sub)"}}>Save this location for future wines</span>
+            <span style={{width:40,height:22,borderRadius:999,background:rememberLocation?"var(--accent)":"var(--card)",border:rememberLocation?"1.5px solid rgba(var(--accentRgb),0.55)":"1.5px solid var(--border)",position:"relative",transition:"all .16s",display:"inline-flex"}}>
+              <span style={{position:"absolute",top:2,left:rememberLocation?20:2,width:16,height:16,borderRadius:"50%",background:"#fff",boxShadow:"0 1px 4px rgba(0,0,0,.28)",transition:"left .16s"}}/>
+            </span>
+          </button>
+        </div>
+      )}
+      {!initial&&(
+        <div style={{marginBottom:12,padding:"10px 11px",borderRadius:12,background:"linear-gradient(180deg,rgba(var(--accentRgb),0.08),var(--inputBg))",border:"1px solid rgba(var(--accentRgb),0.2)"}}>
+          <button
+            type="button"
+            onClick={()=>{
+              const next=!splitEnabled;
+              set("splitEnabled",next);
+              if(next){
+                const suggested=Math.max(1,Math.floor(leftInput/2)||1);
+                if((f.splitSecondBottles||"0")==="0") set("splitSecondBottles",String(suggested));
+                if(!(f.splitLocation||"").trim()) set("splitLocation",selectableLocations.find(loc=>locationKey(loc)!==locationKey(primaryLocationPreview))||primaryLocationPreview||defaultLocation);
+              }
+            }}
+            style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"2px 2px 6px",border:"none",background:"transparent",fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:13,color:"var(--text)",fontWeight:700,width:"100%",cursor:"pointer"}}
+          >
+            <span>Create a second cellar card from this wine</span>
+            <span style={{width:42,height:23,borderRadius:999,background:splitEnabled?"var(--accent)":"var(--card)",border:splitEnabled?"1.5px solid rgba(var(--accentRgb),0.55)":"1.5px solid var(--border)",position:"relative",transition:"all .16s",display:"inline-flex"}}>
+              <span style={{position:"absolute",top:2,left:splitEnabled?21:2,width:17,height:17,borderRadius:"50%",background:"#fff",boxShadow:"0 1px 4px rgba(0,0,0,.28)",transition:"left .16s"}}/>
+            </span>
+          </button>
+          <div style={{fontSize:11.5,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.5}}>
+            Split bottles across two locations.
+          </div>
+        </div>
+      )}
+      {splitEnabled&&(
+        <div style={{marginBottom:12,padding:"10px 11px",borderRadius:12,background:"linear-gradient(180deg,rgba(var(--accentRgb),0.14),var(--inputBg))",border:"1px solid rgba(var(--accentRgb),0.3)",boxShadow:"inset 0 1px 0 rgba(255,255,255,0.35)"}}>
+          <div style={{fontSize:10,color:"var(--accent)",fontWeight:800,textTransform:"uppercase",letterSpacing:"0.8px",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Second Card Setup</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 2fr 1fr",gap:10}}>
+            <Field label="2nd Qty" value={f.splitSecondBottles} onChange={handleSplitSecondBottlesChange} type="number" placeholder="1"/>
+            <SelField
+              label="Second Location"
+              value={splitSelectedLocationValue}
+              onChange={value=>{
+                if(value===CUSTOM_LOCATION_OPTION){
+                  set("splitLocationMode","custom");
+                  return;
+                }
+                set("splitLocationMode","preset");
+                set("splitLocation",canonicalLocation(value,splitSelectableLocations));
+              }}
+              options={[...splitSelectableLocations.map(loc=>({value:loc,label:loc})),{value:CUSTOM_LOCATION_OPTION,label:"Custom location…"}]}
+            />
+            <Field label={splitIsKennardsLocation?"Box No.":"Slot"} value={f.splitLocationSlot} onChange={v=>set("splitLocationSlot",v)} placeholder={splitIsKennardsLocation?"e.g. 204":"A3"}/>
+          </div>
+          {splitIsKennardsLocation&&(
+            <SelField
+              label="Second Kennards Placement"
+              value={normalizeKennardsSection(f.splitLocationSection)||"Cube"}
+              onChange={v=>set("splitLocationSection",normalizeKennardsSection(v))}
+              options={KENNARDS_SECTIONS}
+            />
+          )}
+          {(f.splitLocationMode||"preset")==="custom"&&(
+            <Field label="Custom Second Location" value={f.splitCustomLocation} onChange={v=>set("splitCustomLocation",v)} placeholder="e.g. Home Cellar Annex" optional/>
+          )}
+          <div style={{marginTop:6,fontSize:11.5,color:invalidSplitConfig?"#B42318":"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.5}}>
+            {invalidSplitConfig
+              ? "Split setup needs both card quantities above 0 and a valid second location."
+              : `Will create two cards: ${leftInput} in ${primaryLocationPreview||"Location A"} and ${splitSecondInput} in ${splitLocationPreview||"Location B"}.`}
+          </div>
+        </div>
+      )}
+      <div style={{background:"linear-gradient(180deg,rgba(var(--accentRgb),0.08),var(--inputBg))",borderRadius:12,padding:"10px 12px",marginBottom:12,border:"1px solid rgba(var(--accentRgb),0.2)",boxShadow:"inset 0 1px 0 rgba(255,255,255,0.35)"}}>
+        <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Bottle Tracker</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:8}}>
+          {[["Purchased",projectedPurchased],["Left",projectedLeft],["Consumed",projectedConsumed]].map(([label,val])=>(
+            <div
+              key={label}
+              style={{background:"var(--card)",borderRadius:10,padding:"7px 8px",border:"1px solid var(--border)",boxShadow:"0 4px 10px rgba(0,0,0,0.05)"}}
+            >
+              <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:1,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{label}</div>
+              {label==="Purchased"
+                ? (
+                  <input
+                    value={purchasedManual?f.purchasedTotal:String(projectedPurchased)}
+                    onChange={e=>handlePurchasedTotalChange(e.target.value)}
+                    onBlur={()=>{
+                      if(!purchasedManual) return;
+                      if(String(f.purchasedTotal||"").trim()===""){
+                        setPurchasedManual(false);
+                        return;
+                      }
+                      const normalized=Math.max(projectedLeft,Math.max(0,parseInt(f.purchasedTotal)||0));
+                      set("purchasedTotal",String(normalized));
+                    }}
+                    inputMode="numeric"
+                    style={{margin:0,padding:0,minHeight:0,height:"auto",background:"transparent",border:"none",borderRadius:0,boxShadow:"none",fontSize:15,color:"var(--text)",fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.2,textAlign:"left"}}
+                  />
+                )
+                : <div style={{fontSize:15,color:"var(--text)",fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.2}}>{val}</div>
+              }
+            </div>
+          ))}
+        </div>
+        {initial&&<Field label="Add Newly Purchased Bottles" value={f.addPurchased} onChange={v=>set("addPurchased",v.replace(/[^0-9]/g,""))} type="number" placeholder="0" optional/>}
+      </div>
+      {savedLocations.length>0&&(
+        <div style={{marginBottom:6}}>
+          <div style={{fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Saved Locations</div>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            {savedLocations.map(loc=>(
+              <button
+                key={loc}
+                type="button"
+                onClick={()=>onRemoveLocation?.(loc)}
+                style={{display:"inline-flex",alignItems:"center",gap:6,padding:"6px 10px",borderRadius:20,border:"1.5px solid var(--border)",background:"linear-gradient(180deg,var(--inputBg),rgba(var(--accentRgb),0.06))",color:"var(--text)",fontSize:12,fontWeight:600,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:"pointer"}}
+              >
+                <span>{loc}</span>
+                <span style={{color:"var(--sub)",lineHeight:1}}>×</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+  const renderDrinkWindowSection=(cardStyle)=>(
+    <div style={cardStyle}>
+      {sectionTitle("Drinking Window")}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+        <Field label="Drink From" value={f.drinkStart} onChange={v=>set("drinkStart",v)} type="number" placeholder="2026" optional/>
+        <Field label="Drink By" value={f.drinkEnd} onChange={v=>set("drinkEnd",v)} type="number" placeholder="2034" optional/>
+      </div>
+    </div>
+  );
+  const renderPricingSection=(cardStyle)=>(
+    <div style={cardStyle}>
+      {sectionTitle("Pricing")}
+      <div style={sectionHintStyle}>Set what you paid and optionally override bottle RRP.</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+        <Field label="Amount Paid" value={f.totalPaid} onChange={v=>set("totalPaid",v)} type="number" placeholder="179.5" optional/>
+        <Field label="Bottles Paid For" value={f.priceForBottles} onChange={handlePriceForBottlesChange} type="number" placeholder="6" optional/>
+      </div>
+      <Field label="Supplier" value={f.supplier} onChange={v=>set("supplier",v)} placeholder="WS / Local shop" optional/>
+      {isDuplicateMode?(
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:2,marginBottom:10}}>
+          <div style={{background:"var(--inputBg)",border:"1px solid var(--border)",borderRadius:12,padding:"10px 11px"}}>
+            <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:3,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Paid / Bottle</div>
+            <div style={{fontSize:15,color:"var(--text)",fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{(calculatedPricePerBottle??existingPaidPerBottle)!=null?`$${Number(calculatedPricePerBottle??existingPaidPerBottle).toFixed(2)}`:"—"}</div>
+          </div>
+          <div style={{background:"rgba(var(--accentRgb),0.08)",border:"1px solid rgba(var(--accentRgb),0.16)",borderRadius:12,padding:"10px 11px"}}>
+            <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:3,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Auto RRP / Bottle</div>
+            <div style={{fontSize:15,color:"var(--accent)",fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{autoRrpPerBottle!=null?`$${Number(autoRrpPerBottle).toFixed(2)}`:"—"}</div>
+          </div>
+        </div>
+      ):(
+        <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:2,marginBottom:10}}>
+          <span style={{padding:"4px 9px",borderRadius:16,background:"var(--inputBg)",border:"1px solid var(--border)",fontSize:12,color:"var(--text)",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+            Calculated paid/bottle: {(calculatedPricePerBottle??existingPaidPerBottle)!=null?`$${Number(calculatedPricePerBottle??existingPaidPerBottle).toFixed(2)}`:"—"}
+          </span>
+          <span style={{padding:"4px 9px",borderRadius:16,background:"rgba(var(--accentRgb),0.12)",border:"1px solid rgba(var(--accentRgb),0.22)",fontSize:12,color:"var(--accent)",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+            Calculated RRP/bottle: {autoRrpPerBottle!=null?`$${Number(autoRrpPerBottle).toFixed(2)}`:"—"}
+          </span>
+        </div>
+      )}
+      <Field label="RRP / Bottle (optional override)" value={f.rrp} onChange={v=>set("rrp",v)} type="number" placeholder="40" optional/>
+      <div style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.55}}>
+        If RRP is left blank, it will use the calculated paid per bottle automatically.
+      </div>
     </div>
   );
   useEffect(()=>{
@@ -2834,7 +3044,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
           {showDetailsStep&&(
             <>
               {!isWishlist&&(
-                <div style={sectionCardStyle}>
+                <div style={isDuplicateMode?duplicateSectionCardStyle:sectionCardStyle}>
                   {sectionTitle("Timeline")}
                   <div style={sectionHintStyle}>Set purchase and inventory dates first.</div>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
@@ -2843,6 +3053,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
                   </div>
                 </div>
               )}
+              {!isDuplicateMode&&(
               <div style={sectionCardStyle}>
                 {sectionTitle("Wine Details")}
                 <Field label="Wine Name" value={f.name} onChange={v=>set("name",v)} placeholder="e.g. Penfolds Grange"/>
@@ -2931,185 +3142,21 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
                   </div>
                 )}
               </div>
+              )}
               {!isWishlist&&(
-                <div style={detailsGridStyle}>
-                  <div style={{...sectionCardStyle,gridColumn:"1 / -1"}}>
-                    {sectionTitle("Storage & Inventory")}
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 2fr 1fr",gap:10}}>
-                      <Field label="Bottles" value={f.bottles} onChange={handleBottlesChange} type="number" placeholder="1" optional/>
-                      <SelField
-                        label="Location"
-                        value={selectedLocationValue}
-                        onChange={handleLocationSelect}
-                        options={[...selectableLocations.map(loc=>({value:loc,label:loc})),{value:CUSTOM_LOCATION_OPTION,label:"Custom location…"}]}
-                      />
-                      <Field label={isKennardsLocation?"Box No.":"Slot"} value={f.locationSlot} onChange={v=>set("locationSlot",v)} placeholder={isKennardsLocation?"e.g. 12":"A3"} optional/>
-                    </div>
-                    {isKennardsLocation&&(
-                      <SelField
-                        label="Kennards Placement"
-                        value={normalizeKennardsSection(f.locationSection)||"Cube"}
-                        onChange={v=>set("locationSection",normalizeKennardsSection(v))}
-                        options={KENNARDS_SECTIONS}
-                      />
-                    )}
-                    {locationMode==="custom"&&(
-                      <div style={{marginBottom:12,marginTop:-4,padding:"10px 11px",borderRadius:12,background:"linear-gradient(180deg,rgba(var(--accentRgb),0.08),var(--inputBg))",border:"1px solid rgba(var(--accentRgb),0.2)"}}>
-                        <Field label="Custom Location" value={customLocation} onChange={setCustomLocation} placeholder="e.g. Events Cellar" optional/>
-                        <button type="button" onClick={()=>setRememberLocation(v=>!v)}
-                          style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"8px 2px 2px",border:"none",background:"transparent",fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:12,color:"var(--text)",fontWeight:600,width:"100%",cursor:"pointer"}}>
-                          <span style={{color:"var(--sub)"}}>Save this location for future wines</span>
-                          <span style={{width:40,height:22,borderRadius:999,background:rememberLocation?"var(--accent)":"var(--card)",border:rememberLocation?"1.5px solid rgba(var(--accentRgb),0.55)":"1.5px solid var(--border)",position:"relative",transition:"all .16s",display:"inline-flex"}}>
-                            <span style={{position:"absolute",top:2,left:rememberLocation?20:2,width:16,height:16,borderRadius:"50%",background:"#fff",boxShadow:"0 1px 4px rgba(0,0,0,.28)",transition:"left .16s"}}/>
-                          </span>
-                        </button>
-                      </div>
-                    )}
-                    {!initial&&(
-                      <div style={{marginBottom:12,padding:"10px 11px",borderRadius:12,background:"linear-gradient(180deg,rgba(var(--accentRgb),0.08),var(--inputBg))",border:"1px solid rgba(var(--accentRgb),0.2)"}}>
-                        <button
-                          type="button"
-                          onClick={()=>{
-                            const next=!splitEnabled;
-                            set("splitEnabled",next);
-                            if(next){
-                              const suggested=Math.max(1,Math.floor(leftInput/2)||1);
-                              if((f.splitSecondBottles||"0")==="0") set("splitSecondBottles",String(suggested));
-                              if(!(f.splitLocation||"").trim()) set("splitLocation",selectableLocations.find(loc=>locationKey(loc)!==locationKey(primaryLocationPreview))||primaryLocationPreview||defaultLocation);
-                            }
-                          }}
-                          style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"2px 2px 6px",border:"none",background:"transparent",fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:13,color:"var(--text)",fontWeight:700,width:"100%",cursor:"pointer"}}
-                        >
-                          <span>Create a second cellar card from this wine</span>
-                          <span style={{width:42,height:23,borderRadius:999,background:splitEnabled?"var(--accent)":"var(--card)",border:splitEnabled?"1.5px solid rgba(var(--accentRgb),0.55)":"1.5px solid var(--border)",position:"relative",transition:"all .16s",display:"inline-flex"}}>
-                            <span style={{position:"absolute",top:2,left:splitEnabled?21:2,width:17,height:17,borderRadius:"50%",background:"#fff",boxShadow:"0 1px 4px rgba(0,0,0,.28)",transition:"left .16s"}}/>
-                          </span>
-                        </button>
-                        <div style={{fontSize:11.5,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.5}}>
-                          Split bottles across two locations.
-                        </div>
-                      </div>
-                    )}
-                    {splitEnabled&&(
-                      <div style={{marginBottom:12,padding:"10px 11px",borderRadius:12,background:"linear-gradient(180deg,rgba(var(--accentRgb),0.14),var(--inputBg))",border:"1px solid rgba(var(--accentRgb),0.3)",boxShadow:"inset 0 1px 0 rgba(255,255,255,0.35)"}}>
-                        <div style={{fontSize:10,color:"var(--accent)",fontWeight:800,textTransform:"uppercase",letterSpacing:"0.8px",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Second Card Setup</div>
-                        <div style={{display:"grid",gridTemplateColumns:"1fr 2fr 1fr",gap:10}}>
-                          <Field label="2nd Qty" value={f.splitSecondBottles} onChange={handleSplitSecondBottlesChange} type="number" placeholder="1"/>
-                          <SelField
-                            label="Second Location"
-                            value={splitSelectedLocationValue}
-                            onChange={value=>{
-                              if(value===CUSTOM_LOCATION_OPTION){
-                                set("splitLocationMode","custom");
-                                return;
-                              }
-                              set("splitLocationMode","preset");
-                              set("splitLocation",canonicalLocation(value,splitSelectableLocations));
-                            }}
-                            options={[...splitSelectableLocations.map(loc=>({value:loc,label:loc})),{value:CUSTOM_LOCATION_OPTION,label:"Custom location…"}]}
-                          />
-                          <Field label={splitIsKennardsLocation?"Box No.":"Slot"} value={f.splitLocationSlot} onChange={v=>set("splitLocationSlot",v)} placeholder={splitIsKennardsLocation?"e.g. 204":"A3"}/>
-                        </div>
-                        {splitIsKennardsLocation&&(
-                          <SelField
-                            label="Second Kennards Placement"
-                            value={normalizeKennardsSection(f.splitLocationSection)||"Cube"}
-                            onChange={v=>set("splitLocationSection",normalizeKennardsSection(v))}
-                            options={KENNARDS_SECTIONS}
-                          />
-                        )}
-                        {(f.splitLocationMode||"preset")==="custom"&&(
-                          <Field label="Custom Second Location" value={f.splitCustomLocation} onChange={v=>set("splitCustomLocation",v)} placeholder="e.g. Home Cellar Annex" optional/>
-                        )}
-                        <div style={{marginTop:6,fontSize:11.5,color:invalidSplitConfig?"#B42318":"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.5}}>
-                          {invalidSplitConfig
-                            ? "Split setup needs both card quantities above 0 and a valid second location."
-                            : `Will create two cards: ${leftInput} in ${primaryLocationPreview||"Location A"} and ${splitSecondInput} in ${splitLocationPreview||"Location B"}.`}
-                        </div>
-                      </div>
-                    )}
-                    <div style={{background:"linear-gradient(180deg,rgba(var(--accentRgb),0.08),var(--inputBg))",borderRadius:12,padding:"10px 12px",marginBottom:12,border:"1px solid rgba(var(--accentRgb),0.2)",boxShadow:"inset 0 1px 0 rgba(255,255,255,0.35)"}}>
-                      <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Bottle Tracker</div>
-                      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:8}}>
-                        {[["Purchased",projectedPurchased],["Left",projectedLeft],["Consumed",projectedConsumed]].map(([label,val])=>(
-                          <div
-                            key={label}
-                            style={{background:"var(--card)",borderRadius:10,padding:"7px 8px",border:"1px solid var(--border)",boxShadow:"0 4px 10px rgba(0,0,0,0.05)"}}
-                          >
-                            <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:1,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{label}</div>
-                            {label==="Purchased"
-                              ? (
-                                <input
-                                  value={purchasedManual?f.purchasedTotal:String(projectedPurchased)}
-                                  onChange={e=>handlePurchasedTotalChange(e.target.value)}
-                                  onBlur={()=>{
-                                    if(!purchasedManual) return;
-                                    if(String(f.purchasedTotal||"").trim()===""){
-                                      setPurchasedManual(false);
-                                      return;
-                                    }
-                                    const normalized=Math.max(projectedLeft,Math.max(0,parseInt(f.purchasedTotal)||0));
-                                    set("purchasedTotal",String(normalized));
-                                  }}
-                                  inputMode="numeric"
-                                  style={{margin:0,padding:0,minHeight:0,height:"auto",background:"transparent",border:"none",borderRadius:0,boxShadow:"none",fontSize:15,color:"var(--text)",fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.2,textAlign:"left"}}
-                                />
-                              )
-                              : <div style={{fontSize:15,color:"var(--text)",fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.2}}>{val}</div>
-                            }
-                          </div>
-                        ))}
-                      </div>
-                      {initial&&<Field label="Add Newly Purchased Bottles" value={f.addPurchased} onChange={v=>set("addPurchased",v.replace(/[^0-9]/g,""))} type="number" placeholder="0" optional/>}
-                    </div>
-                    {savedLocations.length>0&&(
-                      <div style={{marginBottom:6}}>
-                        <div style={{fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Saved Locations</div>
-                        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                          {savedLocations.map(loc=>(
-                            <button
-                              key={loc}
-                              type="button"
-                              onClick={()=>onRemoveLocation?.(loc)}
-                              style={{display:"inline-flex",alignItems:"center",gap:6,padding:"6px 10px",borderRadius:20,border:"1.5px solid var(--border)",background:"linear-gradient(180deg,var(--inputBg),rgba(var(--accentRgb),0.06))",color:"var(--text)",fontSize:12,fontWeight:600,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:"pointer"}}
-                            >
-                              <span>{loc}</span>
-                              <span style={{color:"var(--sub)",lineHeight:1}}>×</span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                isDuplicateMode?(
+                  <div style={duplicateDetailsGridStyle}>
+                    {renderStorageInventorySection(duplicateSectionCardStyle)}
+                    {renderDrinkWindowSection(duplicateSectionCardStyle)}
+                    {renderPricingSection(duplicateSectionCardStyle)}
                   </div>
-                  <div style={sectionCardStyle}>
-                    {sectionTitle("Drinking Window")}
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                      <Field label="Drink From" value={f.drinkStart} onChange={v=>set("drinkStart",v)} type="number" placeholder="2026" optional/>
-                      <Field label="Drink By" value={f.drinkEnd} onChange={v=>set("drinkEnd",v)} type="number" placeholder="2034" optional/>
-                    </div>
+                ):(
+                  <div style={detailsGridStyle}>
+                    {renderStorageInventorySection(sectionCardStyle)}
+                    {renderDrinkWindowSection(sectionCardStyle)}
+                    {renderPricingSection(sectionCardStyle)}
                   </div>
-                  <div style={sectionCardStyle}>
-                    {sectionTitle("Pricing")}
-                    <div style={sectionHintStyle}>Set what you paid and optionally override bottle RRP.</div>
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                      <Field label="Amount Paid" value={f.totalPaid} onChange={v=>set("totalPaid",v)} type="number" placeholder="179.5" optional/>
-                      <Field label="Bottles Paid For" value={f.priceForBottles} onChange={handlePriceForBottlesChange} type="number" placeholder="6" optional/>
-                    </div>
-                    <Field label="Supplier" value={f.supplier} onChange={v=>set("supplier",v)} placeholder="WS / Local shop" optional/>
-                    <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:2,marginBottom:10}}>
-                      <span style={{padding:"4px 9px",borderRadius:16,background:"var(--inputBg)",border:"1px solid var(--border)",fontSize:12,color:"var(--text)",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
-                        Calculated paid/bottle: {(calculatedPricePerBottle??existingPaidPerBottle)!=null?`$${Number(calculatedPricePerBottle??existingPaidPerBottle).toFixed(2)}`:"—"}
-                      </span>
-                      <span style={{padding:"4px 9px",borderRadius:16,background:"rgba(var(--accentRgb),0.12)",border:"1px solid rgba(var(--accentRgb),0.22)",fontSize:12,color:"var(--accent)",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
-                        Calculated RRP/bottle: {autoRrpPerBottle!=null?`$${Number(autoRrpPerBottle).toFixed(2)}`:"—"}
-                      </span>
-                    </div>
-                    <Field label="RRP / Bottle (optional override)" value={f.rrp} onChange={v=>set("rrp",v)} type="number" placeholder="40" optional/>
-                    <div style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.55}}>
-                      If RRP is left blank, it will use the calculated paid per bottle automatically.
-                    </div>
-                  </div>
-                </div>
+                )
               )}
             </>
           )}
@@ -3148,19 +3195,19 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
           )}
           <div style={actionRailStyle}>
             {usesStepTabs&&step==="details"&&(
-              <div style={{display:"flex",gap:8,padding:"10px",borderRadius:14,border:"1px solid var(--border)",background:"var(--card)",boxShadow:"0 10px 22px rgba(0,0,0,0.12)"}}>
+              <div style={actionRailBoxStyle}>
                 <Btn variant="secondary" onClick={cancel} full>Cancel</Btn>
                 <Btn onClick={()=>setStep("journal")} full disabled={!canSubmit}>Continue</Btn>
               </div>
             )}
             {usesStepTabs&&step==="journal"&&(
-              <div style={{display:"flex",gap:8,padding:"10px",borderRadius:14,border:"1px solid var(--border)",background:"var(--card)",boxShadow:"0 10px 22px rgba(0,0,0,0.12)"}}>
+              <div style={actionRailBoxStyle}>
                 <Btn variant="secondary" onClick={()=>setStep("details")} full>Back</Btn>
                 <Btn onClick={save} full disabled={!canSubmit}>{saveActionLabel}</Btn>
               </div>
             )}
             {!usesStepTabs&&(
-              <div style={{display:"flex",gap:8,padding:"10px",borderRadius:14,border:"1px solid var(--border)",background:"var(--card)",boxShadow:"0 10px 22px rgba(0,0,0,0.12)"}}>
+              <div style={actionRailBoxStyle}>
                 <Btn variant="secondary" onClick={cancel} full>Cancel</Btn>
                 <Btn onClick={save} full disabled={!canSubmit}>{saveActionLabel}</Btn>
               </div>
@@ -3647,7 +3694,6 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAdjustConsumption,onDup
         sourcePanel={sel?<DuplicateSourcePreview wine={sel} onHide={()=>setDuplicateShowSource(false)}/>:null}
         editorPanel={sel?(
           <div style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:28,boxShadow:"0 24px 54px rgba(0,0,0,0.18)",overflow:"hidden",maxHeight:desktop?"84vh":"calc(100dvh - 32px)",display:"flex",flexDirection:"column"}}>
-            <div style={{height:4,background:"var(--accent)"}}/>
             <div style={{padding:"20px 22px 16px",borderBottom:"1px solid var(--border)",background:"var(--surface)"}}>
               <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12}}>
                 <div>
@@ -3675,6 +3721,15 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAdjustConsumption,onDup
               </div>
             </div>
             <div style={{padding:"16px 18px 18px",overflowY:"auto",minHeight:0,background:"linear-gradient(180deg,var(--surface) 0%,rgba(var(--accentRgb),0.03) 100%)"}}>
+              <div style={{padding:"13px 14px",borderRadius:18,background:"var(--card)",border:"1px solid var(--border)",boxShadow:"0 10px 22px rgba(0,0,0,0.06)",marginBottom:14}}>
+                <div style={{fontSize:10,fontWeight:900,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:8}}>Copied Wine Details</div>
+                <div style={{fontSize:21,fontWeight:800,color:"var(--text)",lineHeight:1.12,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{sel.name}</div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:7,marginTop:10}}>
+                  <WineTypePill type={resolveWineType(sel)} label={resolveVarietal(sel)}/>
+                  {sel.vintage&&<span style={{padding:"6px 10px",borderRadius:999,background:"var(--inputBg)",border:"1px solid var(--border)",fontSize:11,fontWeight:800,color:"var(--text)",letterSpacing:"0.45px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{sel.vintage}</span>}
+                  {sel.origin&&<span style={{padding:"6px 10px",borderRadius:999,background:"var(--inputBg)",border:"1px solid var(--border)",fontSize:11,fontWeight:700,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{sel.origin}</span>}
+                </div>
+              </div>
               <div style={{padding:"12px 14px",borderRadius:16,background:"var(--card)",border:"1px solid var(--border)",fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.5,marginBottom:14,boxShadow:"0 8px 18px rgba(0,0,0,0.05)"}}>
                 Save the duplicate when the second location is ready. The original wine card will stay as your reference until then.
               </div>
