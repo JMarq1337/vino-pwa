@@ -5,7 +5,7 @@ import { wineHoldings2021 } from "./data/wineHoldings2021";
 const SUPA_URL = "https://dfnvmwoacprkhxfbpybv.supabase.co";
 const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRmbnZtd29hY3Bya2h4ZmJweWJ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE4MTkwNTksImV4cCI6MjA4NzM5NTA1OX0.40VqzdfZ9zoJitgCTShNiMTOYheDRYgn84mZXX5ZECs";
 const supa = t => `${SUPA_URL}/rest/v1/${t}`;
-const APP_VERSION = "7.64";
+const APP_VERSION = "7.65";
 const BH = { "Content-Type":"application/json","apikey":SUPA_KEY,"Authorization":`Bearer ${SUPA_KEY}`,"x-app-version":APP_VERSION };
 const UH = { ...BH, "Prefer":"resolution=merge-duplicates,return=minimal" };
 const CHANGE_LOG_KEY = "vino_change_log_v1";
@@ -2580,7 +2580,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
   const topShellStyle={background:"linear-gradient(165deg,rgba(var(--accentRgb),0.16),rgba(var(--accentRgb),0.06) 46%,var(--card))",border:"1px solid rgba(var(--accentRgb),0.26)",borderRadius:18,padding:"12px",marginTop:-2,marginBottom:14,boxShadow:"0 14px 24px rgba(0,0,0,0.09)"};
   const topMetaPillStyle={display:"inline-flex",alignItems:"center",gap:6,padding:"4px 9px",borderRadius:999,border:"1px solid rgba(var(--accentRgb),0.28)",background:"rgba(var(--accentRgb),0.1)",fontSize:10,fontWeight:800,color:"var(--accent)",letterSpacing:"0.8px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"};
   const detailsGridStyle={display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(250px,1fr))",gap:12};
-  const duplicateDetailsGridStyle={display:"grid",gridTemplateColumns:"minmax(0,1.06fr) minmax(0,0.94fr)",gap:12,alignItems:"start"};
+  const duplicateDetailsGridStyle={display:"grid",gridTemplateColumns:"1fr",gap:12,alignItems:"start"};
   const actionRailStyle=embedded&&isDuplicateMode
     ? {position:"sticky",bottom:12,zIndex:5,marginTop:18,paddingTop:12}
     : {position:"sticky",bottom:0,zIndex:3,marginTop:12,paddingTop:10,background:"linear-gradient(180deg,rgba(255,255,255,0),var(--surface) 22%)"};
@@ -2769,10 +2769,12 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
               <div style={{fontSize:15,color:"var(--accent)",fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{autoRrpPerBottle!=null?`$${Number(autoRrpPerBottle).toFixed(2)}`:"—"}</div>
             </div>
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <div style={{display:"grid",gridTemplateColumns:"minmax(0,1.15fr) minmax(0,0.9fr) minmax(0,0.95fr)",gap:10,alignItems:"start"}}>
             <Field label="Amount Paid" value={f.totalPaid} onChange={v=>set("totalPaid",v)} type="number" placeholder="179.5" optional/>
             <Field label="Bottles Paid For" value={f.priceForBottles} onChange={handlePriceForBottlesChange} type="number" placeholder="6" optional/>
             <Field label="RRP / Bottle" value={f.rrp} onChange={v=>set("rrp",v)} type="number" placeholder="40" optional/>
+          </div>
+          <div style={{marginTop:10}}>
             <Field label="Supplier" value={f.supplier} onChange={v=>set("supplier",v)} placeholder="WS / Local shop" optional/>
           </div>
           <div style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.55,marginTop:8}}>
