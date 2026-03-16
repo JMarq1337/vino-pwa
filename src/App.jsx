@@ -2,8 +2,9 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { authApi, dbApi } from "./apiClient";
 import { wineHoldings2021 } from "./data/wineHoldings2021";
 
-const APP_VERSION = "8.0";
+const APP_VERSION = "8.1";
 const ADMIN_PIN_DIGITS = 8;
+const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
 const CHANGE_LOG_KEY = "vino_change_log_v1";
 const OUTBOX_KEY = "vino_sync_outbox_v2";
 const SYNC_HEALTH_KEY = "vino_sync_health_v1";
@@ -96,6 +97,10 @@ const appendLocalChangeLog = event => {
     const next=[...(Array.isArray(prev)?prev:[]),event].slice(-3000);
     localStorage.setItem(CHANGE_LOG_KEY,JSON.stringify(next));
   }catch{}
+};
+const readLocalChangeLog = () => {
+  const rows=readLSJson(CHANGE_LOG_KEY,[]);
+  return Array.isArray(rows)?rows:[];
 };
 const readOutbox = () => {
   const list=readLSJson(OUTBOX_KEY,[]);
@@ -864,6 +869,12 @@ const reviewerSuggestionsFromWines = wines => {
   });
   return [...names.values()].sort((a,b)=>a.localeCompare(b));
 };
+const parseEventTimestamp = raw => {
+  const value=(raw||"").toString().trim();
+  if(!value) return 0;
+  const ts=Date.parse(value);
+  return Number.isFinite(ts)?ts:0;
+};
 const wineReadiness = w => {
   const currentYear = new Date().getFullYear();
   const m=w.cellarMeta||{};
@@ -881,19 +892,33 @@ const getTotalPurchased = wine => {
   return Math.max(left,Math.round(metaTotal));
 };
 const getConsumedBottles = wine => Math.max(0,getTotalPurchased(wine)-Math.max(0,Math.round(safeNum(wine?.bottles)||0)));
-const wineAddedTimestamp = wine => {
+const wineCreatedTimestamp = wine => {
+  const createdTs=parseEventTimestamp(wine?.createdAt||wine?.cellarMeta?.createdAt||"");
+  if(createdTs) return createdTs;
   const raw=(wine?.cellarMeta?.addedDate||wine?.datePurchased||"").toString().slice(0,10);
   if(!raw) return 0;
   const ts=Date.parse(`${raw}T00:00:00`);
   return Number.isFinite(ts)?ts:0;
 };
+const wineAddedTimestamp = wine => {
+  return wineCreatedTimestamp(wine);
+};
 const dayStart = d => new Date(d.getFullYear(),d.getMonth(),d.getDate());
 const daysSinceWineAdded = wine => {
-  const raw=(wine?.cellarMeta?.addedDate||wine?.datePurchased||"").toString().slice(0,10);
-  if(!raw) return Number.POSITIVE_INFINITY;
-  const added=new Date(`${raw}T00:00:00`);
-  if(Number.isNaN(added.getTime())) return Number.POSITIVE_INFINITY;
-  const delta=Math.floor((dayStart(new Date())-dayStart(added))/86400000);
+  const addedTs=wineCreatedTimestamp(wine);
+  if(!addedTs) return Number.POSITIVE_INFINITY;
+  const delta=Math.floor((dayStart(new Date())-dayStart(new Date(addedTs)))/86400000);
+  return Math.max(0,delta);
+};
+const wineUpdatedTimestamp = wine => {
+  const updatedTs=parseEventTimestamp(wine?.cellarMeta?.updatedAt||wine?.cellarMeta?.journalUpdatedAt||"");
+  if(updatedTs) return updatedTs;
+  return wineCreatedTimestamp(wine);
+};
+const daysSinceWineUpdated = wine => {
+  const updatedTs=wineUpdatedTimestamp(wine);
+  if(!updatedTs) return Number.POSITIVE_INFINITY;
+  const delta=Math.floor((dayStart(new Date())-dayStart(new Date(updatedTs)))/86400000);
   return Math.max(0,delta);
 };
 const classifyRecentBucket = wine => {
@@ -912,10 +937,7 @@ const RECENT_BUCKETS = [
   { key:"older", label:"Added Earlier" },
 ];
 const journalUpdatedTimestamp = wine => {
-  const raw=(wine?.cellarMeta?.journalUpdatedAt||"").toString().trim();
-  if(!raw) return 0;
-  const ts=Date.parse(raw);
-  return Number.isFinite(ts)?ts:0;
+  return parseEventTimestamp(wine?.cellarMeta?.journalUpdatedAt||"");
 };
 const journalUpdatedBucket = wine => {
   const ts=journalUpdatedTimestamp(wine);
@@ -1081,7 +1103,7 @@ const fromDb = {
     return ({
       id:r.id,name:r.name,origin:r.origin,grape:r.grape,alcohol:r.alcohol,vintage:r.vintage,bottles:r.bottles,rating:r.rating,
       notes:personalNotes,cellarMeta:meta,review:primary.text,tastingNotes:r.tasting_notes,datePurchased:r.date_purchased,wishlist:r.wishlist,color:r.color,photo:r.photo,
-      location:normalizeLocation(r.location),locationSlot:r.location_slot,wineType:r.wine_type,
+      location:normalizeLocation(r.location),locationSlot:r.location_slot,wineType:r.wine_type,createdAt:r.created_at||"",
       reviewPrimaryReviewer:primary.reviewer,reviewPrimaryRating:primary.rating,otherReviews
     });
   },
@@ -1098,7 +1120,7 @@ const toDb = {
     return {
       id:w.id,name:w.name,origin:w.origin,grape:w.grape,alcohol:w.alcohol,vintage:w.vintage,bottles:w.bottles,rating:w.rating,
       notes:encodeWineNotes(w.notes,meta),review:w.review,tasting_notes:serializeOtherRatings(otherReviews),date_purchased:w.datePurchased,wishlist:w.wishlist||false,
-      color:w.color,photo:w.photo,location:normalizeLocation(w.location),location_slot:w.locationSlot,wine_type:w.wineType
+      color:w.color,photo:w.photo,location:normalizeLocation(w.location),location_slot:w.locationSlot,wine_type:w.wineType,created_at:w.createdAt||undefined
     };
   },
   note: n=>({ id:n.id,wine_id:n.wineId,title:n.title,content:n.content,date:n.date })
@@ -1387,14 +1409,55 @@ const wineIdentitySignature = wine => {
     normalizeWineText((wine?.locationSlot||"").toString()),
   ].join("|");
 };
+const buildWineSearchPool = wines => {
+  const map=new Map();
+  const add=item=>{
+    if(!item?.name) return;
+    const key=[
+      normalizeWineText(item.name||""),
+      normalizeWineText(item.grape||""),
+      normalizeWineText(item.origin||""),
+      String(item.vintage||""),
+    ].join("|");
+    if(!key.trim()||map.has(key)) return;
+    map.set(key,{
+      name:item.name||"",
+      origin:item.origin||"",
+      grape:item.grape||"",
+      alcohol:safeNum(item.alcohol),
+      tastingNotes:item.tastingNotes||"",
+      wineType:item.wineType||resolveWineType(item),
+      vintage:item.vintage||"",
+    });
+  };
+  (wines||[]).forEach(add);
+  WINE_DB.forEach(add);
+  return [...map.values()];
+};
+const searchWineDb = (query="",pool=[]) => {
+  const q=normalizeWineText(query);
+  if(q.length<2) return [];
+  const scored=[];
+  (pool||[]).forEach(item=>{
+    const haystack=normalizeWineText(`${item.name||""} ${item.grape||""} ${item.origin||""}`);
+    if(!haystack) return;
+    let score=99;
+    if(normalizeWineText(item.name||"").startsWith(q)) score=0;
+    else if(normalizeWineText(item.name||"").includes(q)) score=1;
+    else if(normalizeWineText(item.grape||"").startsWith(q)) score=2;
+    else if(normalizeWineText(item.origin||"").startsWith(q)) score=3;
+    else if(haystack.includes(q)) score=4;
+    if(score===99) return;
+    scored.push({item,score});
+  });
+  return scored
+    .sort((a,b)=>a.score-b.score||(a.item.name||"").localeCompare(b.item.name||""))
+    .slice(0,8)
+    .map(entry=>entry.item);
+};
 
 /* ── HELPERS ──────────────────────────────────────────────────── */
 const uid = ()=>Math.random().toString(36).slice(2,9);
-const fuzzySearch = q=>{
-  if(!q||q.length<2)return[];
-  const lq=q.toLowerCase();
-  return WINE_DB.filter(w=>w.name.toLowerCase().includes(lq)||w.grape.toLowerCase().includes(lq)||w.origin.toLowerCase().includes(lq)).slice(0,7);
-};
 const LOCATIONS=PRESET_LOCATIONS;
 const fmt=d=>d?new Date(d).toLocaleDateString("en-AU",{month:"short",year:"numeric"}):null;
 const fmtWithDay=d=>d?new Date(d).toLocaleDateString("en-AU",{day:"numeric",month:"short",year:"numeric"}):null;
@@ -2460,7 +2523,7 @@ const DuplicateSourcePreview=({wine,onHide})=>{
 
 /* ── WINE FORM ────────────────────────────────────────────────── */
 const CUSTOM_LOCATION_OPTION = "__custom_location__";
-const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocations=[],originOptions=[],onSaveLocation,onRemoveLocation,reviewerSuggestions=[],mode,embedded})=>{
+const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocations=[],originOptions=[],wineSearchPool=[],onSaveLocation,onRemoveLocation,reviewerSuggestions=[],mode,embedded})=>{
   const formMode=mode||(initial?"edit":"create");
   const isDuplicateMode=formMode==="duplicate";
   const draftKeyRef=useRef(wineFormDraftStorageKey({initial,isWishlist,mode:formMode}));
@@ -2545,6 +2608,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
   const [draftRestored,setDraftRestored]=useState(false);
   const [originSugOpen,setOriginSugOpen]=useState(false);
   const [grapeSugOpen,setGrapeSugOpen]=useState(false);
+  const searchPool=buildWineSearchPool(wineSearchPool);
   const selectableLocations=dedupeLocations([...knownLocations,f.location]);
   const selectedLocationValue=locationMode==="custom"
     ? CUSTOM_LOCATION_OPTION
@@ -2899,8 +2963,8 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
     const nextValue=String(Math.max(0,effectiveLeft)||0);
     setF(prev=>prev.priceForBottles===nextValue?prev:{...prev,priceForBottles:nextValue});
   },[initial,priceBottlesManual,effectiveLeft]);
-  const handleQ=v=>{setQ(v);set("name",v);setSugs(v.length>=2?fuzzySearch(v):[]);};
-  const pickSug=w=>{setF(p=>({...p,name:w.name,origin:w.origin||"",grape:w.grape||"",alcohol:w.alcohol?.toString()||"",tastingNotes:w.tastingNotes||""}));setQ(w.name);setSugs([]);setShowFields(true);};
+  const handleQ=v=>{setQ(v);set("name",v);setSugs(v.length>=2?searchWineDb(v,searchPool):[]);};
+  const pickSug=w=>{setF(p=>({...p,name:w.name,origin:w.origin||"",grape:w.grape||"",alcohol:w.alcohol?.toString()||"",tastingNotes:w.tastingNotes||"",vintage:w.vintage?.toString()||p.vintage||""}));setQ(w.name);setSugs([]);setShowFields(true);};
   const handleLocationSelect=value=>{
     if(value===CUSTOM_LOCATION_OPTION){
       setLocationMode("custom");
@@ -3073,26 +3137,29 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
       {!isDuplicateMode&&(
         <div style={{...sectionCardStyle,marginBottom:14,position:"relative"}}>
           {sectionTitle("Search Wine Database")}
-          <div style={{position:"relative"}}>
+          <div style={{fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.55,marginBottom:10}}>
+            Search the cellar and the built-in library. Wines added to the cellar are suggested here too.
+          </div>
+          <div style={{position:"relative",zIndex:12}}>
             <input value={q} onChange={e=>handleQ(e.target.value)} placeholder="Wine name, grape, or region…" style={{paddingLeft:38}} onBlur={()=>setTimeout(()=>setSugs([]),160)}/>
             <div style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"var(--sub)",pointerEvents:"none"}}><Icon n="search" size={16}/></div>
-          </div>
-          {sugs.length>0&&(
-            <div style={{position:"absolute",top:"100%",left:14,right:14,background:"var(--surface)",borderRadius:14,border:"1px solid var(--border)",zIndex:99,maxHeight:300,overflowY:"auto",overscrollBehavior:"contain",boxShadow:"0 12px 40px rgba(0,0,0,0.2)",marginTop:6}}
-              onWheel={e=>e.stopPropagation()}>
-              {sugs.map((w,i)=>(
-                <div key={i} onMouseDown={()=>pickSug(w)} style={{padding:"10px 14px",cursor:"pointer",borderBottom:i<sugs.length-1?"1px solid var(--border)":"none"}}
+            {sugs.length>0&&(
+              <div style={{position:"absolute",top:"calc(100% + 8px)",left:0,right:0,background:"var(--surface)",borderRadius:16,border:"1px solid rgba(var(--accentRgb),0.18)",zIndex:99,maxHeight:300,overflowY:"auto",overscrollBehavior:"contain",boxShadow:"0 18px 42px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.4)"}}
+                onWheel={e=>e.stopPropagation()}>
+                {sugs.map((w,i)=>(
+                <div key={`${w.name}-${w.origin}-${i}`} onMouseDown={()=>pickSug(w)} style={{padding:"11px 14px",cursor:"pointer",borderBottom:i<sugs.length-1?"1px solid var(--border)":"none"}}
                   onMouseEnter={e=>e.currentTarget.style.background="var(--inputBg)"}
                   onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                  <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:15,fontWeight:700,color:"var(--text)"}}>{w.name}</div>
-                  <div style={{fontSize:12,color:"var(--sub)",marginTop:1}}>{w.grape} · {w.origin}</div>
+                  <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:14,fontWeight:800,color:"var(--text)",lineHeight:1.3}}>{w.name}</div>
+                  <div style={{fontSize:12,color:"var(--sub)",marginTop:3,fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.45}}>{[w.grape,w.origin,w.vintage].filter(Boolean).join(" · ")}</div>
                 </div>
               ))}
-              <div onMouseDown={()=>{setSugs([]);setShowFields(true);}} style={{padding:"10px 14px",cursor:"pointer",color:"var(--accent)",fontSize:13,fontWeight:700,textAlign:"center",borderTop:"1px solid var(--border)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
-                Add "{q}" manually
+                <div onMouseDown={()=>{setSugs([]);setShowFields(true);}} style={{padding:"11px 14px",cursor:"pointer",color:"var(--accent)",fontSize:13,fontWeight:800,textAlign:"center",borderTop:"1px solid var(--border)",fontFamily:"'Plus Jakarta Sans',sans-serif",background:"rgba(var(--accentRgb),0.05)"}}>
+                  Add "{q}" manually
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
           {!showFields&&!sugs.length&&q.length>=1&&(
             <button onMouseDown={()=>setShowFields(true)} style={{marginTop:9,width:"100%",padding:"10px",borderRadius:11,border:"1.5px dashed var(--border)",background:"linear-gradient(180deg,var(--inputBg),rgba(var(--accentRgb),0.05))",color:"var(--accent)",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
               Enter details manually
@@ -3294,9 +3361,10 @@ const SORTS=[
   {value:"costDesc",label:"Most Expensive"},
   {value:"costAsc",label:"Least Expensive"},
   {value:"recent",label:"Recently Added"},
+  {value:"recentUpdated",label:"Recently Updated"},
 ];
-const DEFAULT_FILTERS={sort:"name",sortDir:"desc",varietal:"",category:"",location:"",section:"",readiness:"",region:"",country:"",priceBand:"",addedRange:""};
-const hasFilters=f=>f.sort!=="name"||f.varietal||f.category||f.location||f.section||f.readiness||f.region||f.country||f.priceBand||f.addedRange;
+const DEFAULT_FILTERS={sort:"name",sortDir:"desc",varietal:"",category:"",location:"",section:"",readiness:"",region:"",country:"",priceBand:"",addedRange:"",updatedRange:""};
+const hasFilters=f=>f.sort!=="name"||f.varietal||f.category||f.location||f.section||f.readiness||f.region||f.country||f.priceBand||f.addedRange||f.updatedRange;
 const activeFilterCount=f=>[
   f.sort!=="name",
   !!f.varietal,
@@ -3308,6 +3376,7 @@ const activeFilterCount=f=>[
   !!f.country,
   !!f.priceBand,
   !!f.addedRange,
+  !!f.updatedRange,
 ].filter(Boolean).length;
 const applyFilters=(wines,f,s)=>{
   let r=wines.filter(w=>!w.wishlist);
@@ -3351,6 +3420,16 @@ const applyFilters=(wines,f,s)=>{
       return true;
     });
   }
+  if(f.updatedRange){
+    r=r.filter(w=>{
+      const days=daysSinceWineUpdated(w);
+      if(!Number.isFinite(days)) return false;
+      if(f.updatedRange==="1d") return days<=1;
+      if(f.updatedRange==="7d") return days<=7;
+      if(f.updatedRange==="30d") return days<=30;
+      return true;
+    });
+  }
   return r.sort((a,b)=>{
     if(f.sort==="vintage"){
       const dir=f.sortDir==="asc"?1:-1;
@@ -3364,6 +3443,11 @@ const applyFilters=(wines,f,s)=>{
     if(f.sort==="costAsc")return (safeNum(a.cellarMeta?.pricePerBottle)||0)-(safeNum(b.cellarMeta?.pricePerBottle)||0);
     if(f.sort==="recent"){
       const delta=wineAddedTimestamp(b)-wineAddedTimestamp(a);
+      if(delta!==0) return delta;
+      return (a.name||"").localeCompare(b.name||"");
+    }
+    if(f.sort==="recentUpdated"){
+      const delta=wineUpdatedTimestamp(b)-wineUpdatedTimestamp(a);
       if(delta!==0) return delta;
       return (a.name||"").localeCompare(b.name||"");
     }
@@ -3413,10 +3497,10 @@ const FilterPanel=({filters,setFilters,wines,onClose})=>{
     {id:"ready",label:"Ready now",on:local.readiness==="ready",action:()=>setLocal(p=>({...p,readiness:p.readiness==="ready"?"":"ready"}))},
     {id:"notReady",label:"Not ready",on:local.readiness==="notReady",action:()=>setLocal(p=>({...p,readiness:p.readiness==="notReady"?"":"notReady"}))},
     {id:"past",label:"Past peak",on:local.readiness==="past",action:()=>setLocal(p=>({...p,readiness:p.readiness==="past"?"":"past"}))},
-    {id:"premium",label:"$60-$119",on:local.priceBand==="premium",action:()=>setLocal(p=>({...p,priceBand:p.priceBand==="premium"?"":"premium"}))},
-    {id:"luxury",label:"$120+",on:local.priceBand==="luxury",action:()=>setLocal(p=>({...p,priceBand:p.priceBand==="luxury"?"":"luxury"}))},
+    {id:"added1",label:"Added 24h",on:local.addedRange==="1d",action:()=>setLocal(p=>({...p,addedRange:p.addedRange==="1d"?"":"1d"}))},
     {id:"added30",label:"Added 30d",on:local.addedRange==="30d",action:()=>setLocal(p=>({...p,addedRange:p.addedRange==="30d"?"":"30d"}))},
-    {id:"recentSort",label:"Sort Recent",on:local.sort==="recent",action:()=>setLocal(p=>({...p,sort:p.sort==="recent"?"name":"recent"}))},
+    {id:"updated7",label:"Updated 7d",on:local.updatedRange==="7d",action:()=>setLocal(p=>({...p,updatedRange:p.updatedRange==="7d"?"":"7d"}))},
+    {id:"recentSort",label:"Sort Added",on:local.sort==="recent",action:()=>setLocal(p=>({...p,sort:p.sort==="recent"?"name":"recent"}))},
   ];
   return(
     <div>
@@ -3459,6 +3543,27 @@ const FilterPanel=({filters,setFilters,wines,onClose})=>{
                 </button>
               </div>
             )}
+          </div>
+        </div>
+        <div style={sectionCard}>
+          <div style={sectionLabel}>Timeline</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+            <select value={local.addedRange} onChange={e=>setLocal(p=>({...p,addedRange:e.target.value}))} style={selectBase}>
+              <option value="">Added: Any time</option>
+              <option value="1d">Added: Last 24 hours</option>
+              <option value="7d">Added: Last 7 days</option>
+              <option value="30d">Added: Last 30 days</option>
+            </select>
+            <select value={local.updatedRange} onChange={e=>setLocal(p=>({...p,updatedRange:e.target.value}))} style={selectBase}>
+              <option value="">Updated: Any time</option>
+              <option value="1d">Updated: Last 24 hours</option>
+              <option value="7d">Updated: Last 7 days</option>
+              <option value="30d">Updated: Last 30 days</option>
+            </select>
+          </div>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            <button onClick={()=>setLocal(p=>({...p,sort:p.sort==="recent"?"name":"recent"}))} style={chip(local.sort==="recent")}>Recently Added</button>
+            <button onClick={()=>setLocal(p=>({...p,sort:p.sort==="recentUpdated"?"name":"recentUpdated"}))} style={chip(local.sort==="recentUpdated")}>Recently Updated</button>
           </div>
         </div>
         <div style={sectionCard}>
@@ -3507,16 +3612,10 @@ const FilterPanel=({filters,setFilters,wines,onClose})=>{
           </div>
         </div>
         <div style={sectionCard}>
-          <div style={sectionLabel}>Price & Time</div>
+          <div style={sectionLabel}>Price</div>
           <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
             {[{id:"budget",label:"<$25"},{id:"mid",label:"$25-$59"},{id:"premium",label:"$60-$119"},{id:"luxury",label:"$120+"}].map(o=><button key={o.id} onClick={()=>toggle("priceBand",o.id)} style={chip(local.priceBand===o.id)}>{o.label}</button>)}
           </div>
-          <select value={local.addedRange} onChange={e=>setLocal(p=>({...p,addedRange:e.target.value}))} style={selectBase}>
-            <option value="">Added: Any time</option>
-            <option value="1d">Added: Last 24 hours</option>
-            <option value="7d">Added: Last 7 days</option>
-            <option value="30d">Added: Last 30 days</option>
-          </select>
         </div>
       </div>
       <div style={{display:"flex",gap:8}}>
@@ -3613,7 +3712,9 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAdjustConsumption,onDup
     {id:"ready",label:"Ready now",active:filters.readiness==="ready",onClick:()=>setFilters(p=>({...p,readiness:p.readiness==="ready"?"":"ready"}))},
     {id:"notReady",label:"Not ready",active:filters.readiness==="notReady",onClick:()=>setFilters(p=>({...p,readiness:p.readiness==="notReady"?"":"notReady"}))},
     {id:"past",label:"Past peak",active:filters.readiness==="past",onClick:()=>setFilters(p=>({...p,readiness:p.readiness==="past"?"":"past"}))},
+    {id:"added1",label:"Added 24h",active:filters.addedRange==="1d",onClick:()=>setFilters(p=>({...p,addedRange:p.addedRange==="1d"?"":"1d"}))},
     {id:"added30",label:"Added 30d",active:filters.addedRange==="30d",onClick:()=>setFilters(p=>({...p,addedRange:p.addedRange==="30d"?"":"30d"}))},
+    {id:"updated7",label:"Updated 7d",active:filters.updatedRange==="7d",onClick:()=>setFilters(p=>({...p,updatedRange:p.updatedRange==="7d"?"":"7d"}))},
   ];
   useEffect(()=>{
     if(!recentDelete)return;
@@ -3738,6 +3839,7 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAdjustConsumption,onDup
           {filters.location&&<Chip label={filters.location} onX={()=>setFilters(p=>({...p,location:"",section:""}))}/>}
           {filters.section&&<Chip label={`Kennards: ${filters.section}`} onX={()=>setFilters(p=>({...p,section:""}))}/>}
           {filters.addedRange&&<Chip label={{"1d":"Added 24h","7d":"Added 7d","30d":"Added 30d"}[filters.addedRange]||filters.addedRange} onX={()=>setFilters(p=>({...p,addedRange:""}))}/>}
+          {filters.updatedRange&&<Chip label={{"1d":"Updated 24h","7d":"Updated 7d","30d":"Updated 30d"}[filters.updatedRange]||filters.updatedRange} onX={()=>setFilters(p=>({...p,updatedRange:""}))}/>}
           <button onClick={()=>setFilters(DEFAULT_FILTERS)} style={{padding:"4px 10px",borderRadius:20,border:"none",background:"none",color:"var(--sub)",fontSize:12,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',sans-serif",textDecoration:"underline"}}>Clear all</button>
         </div>
       )}
@@ -3783,6 +3885,7 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAdjustConsumption,onDup
           locationOptions={locationOptions}
           savedLocations={savedLocations}
           originOptions={originOptions}
+          wineSearchPool={col}
           onSaveLocation={onSaveLocation}
           onRemoveLocation={onRemoveLocation}
           reviewerSuggestions={reviewerSuggestions}
@@ -3849,6 +3952,7 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAdjustConsumption,onDup
                 locationOptions={locationOptions}
                 savedLocations={savedLocations}
                 originOptions={originOptions}
+                wineSearchPool={col}
                 onSaveLocation={onSaveLocation}
                 onRemoveLocation={onRemoveLocation}
                 reviewerSuggestions={reviewerSuggestions}
@@ -3864,6 +3968,7 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAdjustConsumption,onDup
           locationOptions={locationOptions}
           savedLocations={savedLocations}
           originOptions={originOptions}
+          wineSearchPool={col}
           onSaveLocation={onSaveLocation}
           onRemoveLocation={onRemoveLocation}
           reviewerSuggestions={reviewerSuggestions}
@@ -6087,6 +6192,8 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile,onNavigateTa
   const [exportOpen,setExportOpen]=useState(false);
   const [kpiListOpen,setKpiListOpen]=useState(null);
   const [compact,setCompact]=useState(()=>window.innerWidth<920);
+  const [activityRange,setActivityRange]=useState("7d");
+  const [activityType,setActivityType]=useState("all");
   useEffect(()=>{
     const onResize=()=>setCompact(window.innerWidth<920);
     window.addEventListener("resize",onResize);
@@ -6119,6 +6226,7 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile,onNavigateTa
     return left>0&&left<=2;
   }).length;
   const rrpValue=col.reduce((s,w)=>s+((safeNum(w.cellarMeta?.rrp)||0)*getTotalPurchased(w)),0);
+  const unconsumedRrpValue=col.reduce((s,w)=>s+((safeNum(w.cellarMeta?.rrp)||0)*Math.max(0,Math.round(safeNum(w?.bottles)||0))),0);
   const avgBottle=purchasedBottles?rrpValue/purchasedBottles:0;
   const regionStats=col.reduce((acc,w)=>{
     const geo=deriveRegionCountry(w.origin||"");
@@ -6159,29 +6267,80 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile,onNavigateTa
     return Number.isFinite(parsed)?parsed:0;
   };
   const audits=readAudits();
+  const localEvents=readLocalChangeLog();
   const activity=[];
   const pushActivity=(ts,title,detail)=>{
     if(!ts||!Number.isFinite(ts)) return;
     activity.push({ts,title,detail});
   };
-  col.forEach(w=>{
-    const added=(w?.cellarMeta?.addedDate||w?.datePurchased||"").toString().slice(0,10);
-    if(added){
-      const ats=Date.parse(`${added}T00:00:00`);
-      pushActivity(ats,"Wine added",`${w.name} · ${fmtWithDay(added)||added}`);
-    }
-    const jts=tsFromRaw(w?.cellarMeta?.journalUpdatedAt);
-    if(jts) pushActivity(jts,"Journal updated",w.name||"Unnamed wine");
-  });
+  const semanticEvents=(localEvents||[])
+    .filter(ev=>["wine_added","wine_updated","journal_updated","consumption_updated","wine_duplicated","inventory_recounted","audit_reverted","profile_updated"].includes((ev?.action||"").toString()))
+    .map(ev=>{
+      const action=(ev?.action||"").toString();
+      const payload=ev?.payload||{};
+      const name=(payload?.name||payload?.auditName||"Activity").toString();
+      const ts=tsFromRaw(ev?.created_at||ev?.createdAt||"");
+      let type="inventory";
+      let title="Wine updated";
+      let detail=name;
+      if(action==="wine_added"){
+        title="Wine added";
+        detail=[name,payload?.location||"",payload?.bottlesLeft!=null?`${payload.bottlesLeft} left`:""].filter(Boolean).join(" · ");
+      }else if(action==="wine_updated"){
+        title="Wine edited";
+        detail=[name,payload?.location||"Inventory or pricing adjusted"].filter(Boolean).join(" · ");
+      }else if(action==="journal_updated"){
+        type="journal";
+        title="Journal updated";
+        detail=[name,"Reviews or notes changed"].join(" · ");
+      }else if(action==="consumption_updated"){
+        type="inventory";
+        title="Consumption updated";
+        detail=[name,payload?.consumed!=null?`${payload.consumed} consumed`:"",payload?.bottlesLeft!=null?`${payload.bottlesLeft} left`:""].filter(Boolean).join(" · ");
+      }else if(action==="wine_duplicated"){
+        title="Wine duplicated";
+        detail=[name,payload?.location||"Second cellar card created"].filter(Boolean).join(" · ");
+      }else if(action==="inventory_recounted"){
+        title="Bottle count updated";
+        detail=[name,payload?.bottlesLeft!=null?`${payload.bottlesLeft} left`:""].filter(Boolean).join(" · ");
+      }else if(action==="audit_reverted"){
+        type="audit";
+        title="Audit reverted";
+        detail=[name,payload?.winesRestored!=null?`${payload.winesRestored} wines restored`:""].filter(Boolean).join(" · ");
+      }else if(action==="profile_updated"){
+        type="settings";
+        title="Winery settings updated";
+        detail=name;
+      }
+      return {ts,title,detail,type};
+    });
+  semanticEvents.forEach(ev=>pushActivity(ev.ts,ev.title,ev.detail));
   audits.forEach(a=>{
     const ts=tsFromRaw(a?.updatedAt||a?.completedAt||a?.createdAt);
     pushActivity(ts,a?.status==="completed"?"Audit completed":"Audit saved",a?.name||"Audit");
   });
-  const recentActivity=activity
+  const rangedActivity=activity
     .sort((a,b)=>b.ts-a.ts)
-    .filter((item,idx,arr)=>arr.findIndex(x=>x.title===item.title&&x.detail===item.detail&&x.ts===item.ts)===idx)
-    .slice(0,6);
-  const lastSyncTs=recentActivity[0]?.ts||0;
+    .filter((item,idx,arr)=>arr.findIndex(x=>x.title===item.title&&x.detail===item.detail&&x.ts===item.ts)===idx);
+  const withinRange=(ts,range)=>{
+    if(range==="all") return true;
+    const diffDays=Math.max(0,Math.floor((Date.now()-ts)/86400000));
+    if(range==="1d") return diffDays<=1;
+    if(range==="7d") return diffDays<=7;
+    if(range==="30d") return diffDays<=30;
+    return true;
+  };
+  const inferActivityType=item=>{
+    if(/Journal/i.test(item.title)) return "journal";
+    if(/Audit/i.test(item.title)) return "audit";
+    if(/settings/i.test(item.title)) return "settings";
+    return "inventory";
+  };
+  const recentActivity=rangedActivity
+    .filter(item=>withinRange(item.ts,activityRange))
+    .filter(item=>activityType==="all"||inferActivityType(item)===activityType)
+    .slice(0,activityRange==="all"?14:8);
+  const lastSyncTs=rangedActivity[0]?.ts||0;
   const lastSyncLabel=lastSyncTs
     ? new Date(lastSyncTs).toLocaleString("en-AU",{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})
     : "No sync yet";
@@ -6266,13 +6425,16 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile,onNavigateTa
             <div style={{fontSize:11,color:"rgba(255,255,255,0.68)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginTop:4}}>
               {bottlesLeft} left · {purchasedBottles} purchased · {consumedBottles} consumed
             </div>
+            <div style={{fontSize:11,color:"rgba(255,255,255,0.62)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginTop:3}}>
+              Left-stock RRP: ${unconsumedRrpValue.toLocaleString(undefined,{maximumFractionDigits:2})}
+            </div>
           </div>
         </div>
       </div>
 
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:10,marginBottom:12}}>
         {[
-          {label:"RRP Value",value:`$${rrpValue.toLocaleString(undefined,{maximumFractionDigits:0})}`,meta:"Purchased-bottle basis"},
+          {label:"Unconsumed RRP",value:`$${unconsumedRrpValue.toLocaleString(undefined,{maximumFractionDigits:0})}`,meta:"Bottles currently left"},
           {label:"Ready to Drink",value:`${readyCount}`,meta:`${Math.round((readyCount/Math.max(1,col.length))*100)}% of cellar`,onClick:()=>setKpiListOpen({title:"Ready to Drink",rows:readyWines,subtitle:"Wines currently in drinking window."})},
           {label:"Past Peak Risk (12m)",value:`${pastPeakSoonCount}`,meta:"Ends this/next year",onClick:()=>setKpiListOpen({title:"Past Peak Risk (12 Months)",rows:pastPeakSoonWines,subtitle:"Wines whose drink window ends this year or next year."})},
           {label:"Low Stock Wines",value:`${lowStockCount}`,meta:"1-2 bottles left",onClick:()=>setKpiListOpen({title:"Low Stock Wines",rows:lowStockWines,subtitle:"Wines with one or two bottles left."})},
@@ -6371,16 +6533,16 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile,onNavigateTa
               <div style={{fontSize:15,color:"var(--text)",fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>${rrpValue.toLocaleString(undefined,{maximumFractionDigits:2})}</div>
             </div>
             <div style={{background:"var(--inputBg)",border:"1px solid var(--border)",borderRadius:11,padding:"9px 10px"}}>
+              <div style={{fontSize:10,color:"var(--sub)",textTransform:"uppercase",letterSpacing:"0.7px",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Left-Stock RRP</div>
+              <div style={{fontSize:15,color:"var(--text)",fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>${unconsumedRrpValue.toLocaleString(undefined,{maximumFractionDigits:2})}</div>
+            </div>
+            <div style={{background:"var(--inputBg)",border:"1px solid var(--border)",borderRadius:11,padding:"9px 10px"}}>
               <div style={{fontSize:10,color:"var(--sub)",textTransform:"uppercase",letterSpacing:"0.7px",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Avg Bottle RRP</div>
               <div style={{fontSize:15,color:"var(--text)",fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>${avgBottle.toLocaleString(undefined,{maximumFractionDigits:2})}</div>
             </div>
             <div style={{background:"var(--inputBg)",border:"1px solid var(--border)",borderRadius:11,padding:"9px 10px"}}>
               <div style={{fontSize:10,color:"var(--sub)",textTransform:"uppercase",letterSpacing:"0.7px",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Most Common Origin</div>
               <div style={{fontSize:15,color:"var(--text)",fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{topRegion}</div>
-            </div>
-            <div style={{background:"var(--inputBg)",border:"1px solid var(--border)",borderRadius:11,padding:"9px 10px"}}>
-              <div style={{fontSize:10,color:"var(--sub)",textTransform:"uppercase",letterSpacing:"0.7px",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Ready Wines</div>
-              <div style={{fontSize:15,color:"var(--text)",fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{readyCount}</div>
             </div>
           </div>
         </div>
@@ -6419,7 +6581,36 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile,onNavigateTa
 
       <div style={{display:"grid",gridTemplateColumns:compact?"1fr":"1.08fr 0.92fr",gap:10,marginBottom:14}}>
         <div style={{...panel,padding:"14px 14px"}}>
-          <div style={{...tinyLabel,marginBottom:8}}>Recent Activity</div>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:8,flexWrap:"wrap"}}>
+            <div style={tinyLabel}>Recent Activity</div>
+            <div style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:700}}>
+              {activityRange==="all"?"Full history":"Window"} · {activityType==="all"?"All activity":activityType}
+            </div>
+          </div>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
+            {[
+              {value:"all",label:"All"},
+              {value:"inventory",label:"Inventory"},
+              {value:"journal",label:"Journal"},
+              {value:"audit",label:"Audit"},
+            ].map(item=>(
+              <button key={item.value} onClick={()=>setActivityType(item.value)} style={{padding:"6px 10px",borderRadius:999,border:activityType===item.value?"1.5px solid rgba(var(--accentRgb),0.48)":"1.5px solid var(--border)",background:activityType===item.value?"rgba(var(--accentRgb),0.12)":"var(--inputBg)",color:activityType===item.value?"var(--accent)":"var(--sub)",fontSize:11,fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:"pointer"}}>
+                {item.label}
+              </button>
+            ))}
+          </div>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
+            {[
+              {value:"1d",label:"24h"},
+              {value:"7d",label:"7d"},
+              {value:"30d",label:"30d"},
+              {value:"all",label:"All time"},
+            ].map(item=>(
+              <button key={item.value} onClick={()=>setActivityRange(item.value)} style={{padding:"6px 10px",borderRadius:999,border:activityRange===item.value?"1.5px solid rgba(var(--accentRgb),0.48)":"1.5px solid var(--border)",background:activityRange===item.value?"rgba(var(--accentRgb),0.12)":"var(--inputBg)",color:activityRange===item.value?"var(--accent)":"var(--sub)",fontSize:11,fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:"pointer"}}>
+                {item.label}
+              </button>
+            ))}
+          </div>
           {recentActivity.length?(
             recentActivity.map((ev,idx)=>(
               <div key={`${ev.title}-${ev.detail}-${ev.ts}-${idx}`} style={{display:"flex",alignItems:"flex-start",gap:9,padding:"8px 0",borderBottom:idx<recentActivity.length-1?"1px dashed var(--border)":"none"}}>
@@ -6429,12 +6620,12 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile,onNavigateTa
                   <div style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{ev.detail}</div>
                 </div>
                 <div style={{marginLeft:"auto",fontSize:10,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap"}}>
-                  {new Date(ev.ts).toLocaleDateString("en-AU",{day:"numeric",month:"short"})}
+                  {new Date(ev.ts).toLocaleString("en-AU",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}
                 </div>
               </div>
             ))
           ):(
-            <div style={{fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>No activity yet.</div>
+            <div style={{fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>No activity in this window yet.</div>
           )}
         </div>
 
@@ -6565,6 +6756,17 @@ export default function App(){
   const [oName,setOName]=useState("");
   const [oCellar,setOCellar]=useState("");
   const snapshotTimerRef=useRef(null);
+  const idleTimerRef=useRef(null);
+  const relockToPin = useCallback(async(reason="Session expired after 15 minutes of inactivity.")=>{
+    try{await authApi.logout();}catch{}
+    setIsAuthenticated(false);
+    setAuthRole("user");
+    setUnlockPin("");
+    setUnlockShow(false);
+    setAuthBusy(false);
+    setAuthError(reason);
+    setSplashPhase(hasPinConfigured(profile)?"unlock":"setupPin");
+  },[profile]);
 
   useEffect(()=>{
     let cancelled=false;
@@ -6619,6 +6821,27 @@ export default function App(){
       window.removeEventListener("vino-sync-health",onSyncEvent);
     };
   },[isAuthenticated]);
+  useEffect(()=>{
+    if(!isAuthenticated) return;
+    const resetIdleTimer=()=>{
+      if(idleTimerRef.current) clearTimeout(idleTimerRef.current);
+      idleTimerRef.current=setTimeout(()=>{
+        relockToPin();
+      },INACTIVITY_TIMEOUT_MS);
+    };
+    const activityEvents=["pointerdown","pointermove","keydown","scroll","touchstart"];
+    activityEvents.forEach(evt=>window.addEventListener(evt,resetIdleTimer,{passive:true}));
+    document.addEventListener("visibilitychange",resetIdleTimer);
+    resetIdleTimer();
+    return()=>{
+      if(idleTimerRef.current){
+        clearTimeout(idleTimerRef.current);
+        idleTimerRef.current=null;
+      }
+      activityEvents.forEach(evt=>window.removeEventListener(evt,resetIdleTimer));
+      document.removeEventListener("visibilitychange",resetIdleTimer);
+    };
+  },[isAuthenticated,relockToPin]);
   useEffect(()=>{
     async function load(){
       const cache=readCache();
@@ -7008,27 +7231,59 @@ export default function App(){
     }
     return nextWine;
   },[]);
+  const stampWineMutation = useCallback((wineInput,{preserveCreated=false}={})=>{
+    const now=new Date().toISOString();
+    return {
+      ...wineInput,
+      createdAt:preserveCreated ? (wineInput?.createdAt||now) : (wineInput?.createdAt||now),
+      cellarMeta:{
+        ...(wineInput?.cellarMeta||{}),
+        updatedAt:now,
+      },
+    };
+  },[]);
+  const recordSemanticEvent = useCallback((entity,action,entityId,payload={})=>{
+    db.logEvent(entity,action,entityId,payload).catch(()=>{});
+  },[]);
 
   const addWine=async w=>{
-    const next=await applyWineTypeAndLearnAliases(w);
+    const next=stampWineMutation(await applyWineTypeAndLearnAliases(w));
     setWines(p=>[...p,next]);
     await db.upsert("wines",toDb.wine(next));
+    recordSemanticEvent("activity","wine_added",next.id,{
+      wineId:next.id,
+      name:next.name||"Unnamed wine",
+      location:formatWineLocation(next),
+      bottlesLeft:Math.max(0,Math.round(safeNum(next.bottles)||0)),
+      createdAt:next.createdAt||new Date().toISOString(),
+    });
   };
   const updWine=async w=>{
-    const next=await applyWineTypeAndLearnAliases(w);
+    const prev=wines.find(x=>x.id===w.id)||null;
+    const next=stampWineMutation(await applyWineTypeAndLearnAliases(w),{preserveCreated:true});
     setWines(p=>p.map(x=>x.id===next.id?next:x));
     await db.upsert("wines",toDb.wine(next));
+    const prevJournal=prev?JSON.stringify(toJournalState(prev)):null;
+    const nextJournal=JSON.stringify(toJournalState(next));
+    const action=prevJournal!==nextJournal?"journal_updated":"wine_updated";
+    recordSemanticEvent("activity",action,next.id,{
+      wineId:next.id,
+      name:next.name||"Unnamed wine",
+      location:formatWineLocation(next),
+      bottlesLeft:Math.max(0,Math.round(safeNum(next.bottles)||0)),
+      updatedAt:next.cellarMeta?.updatedAt||new Date().toISOString(),
+    });
   };
   const duplicateWine=async(sourceWine,duplicateInput)=>{
     const groupId=sharedJournalGroupId(sourceWine);
-    const sourcePatched=((sourceWine?.cellarMeta?.splitGroupId||"").toString().trim()===groupId)
+    const sourcePatched=stampWineMutation((((sourceWine?.cellarMeta?.splitGroupId||"").toString().trim()===groupId)
       ? sourceWine
-      : {...sourceWine,cellarMeta:{...(sourceWine.cellarMeta||{}),splitGroupId:groupId}};
+      : {...sourceWine,cellarMeta:{...(sourceWine.cellarMeta||{}),splitGroupId:groupId}}),{preserveCreated:true});
     const duplicateSeed={
       ...duplicateInput,
       cellarMeta:{...(duplicateInput.cellarMeta||{}),splitGroupId:groupId,journalUpdatedAt:sourcePatched.cellarMeta?.journalUpdatedAt||duplicateInput.cellarMeta?.journalUpdatedAt||new Date().toISOString()},
     };
-    const duplicatePatched=await applyWineTypeAndLearnAliases(duplicateSeed);
+    const duplicatePatched=stampWineMutation(await applyWineTypeAndLearnAliases(duplicateSeed));
     setWines(prev=>{
       const next=prev.map(w=>w.id===sourcePatched.id?sourcePatched:w);
       return [...next,duplicatePatched];
@@ -7037,6 +7292,14 @@ export default function App(){
       db.upsert("wines",toDb.wine(sourcePatched)),
       db.upsert("wines",toDb.wine(duplicatePatched)),
     ]);
+    recordSemanticEvent("activity","wine_duplicated",duplicatePatched.id,{
+      wineId:duplicatePatched.id,
+      sourceWineId:sourcePatched.id,
+      name:duplicatePatched.name||"Unnamed wine",
+      location:formatWineLocation(duplicatePatched),
+      bottlesLeft:Math.max(0,Math.round(safeNum(duplicatePatched.bottles)||0)),
+      createdAt:duplicatePatched.createdAt||new Date().toISOString(),
+    });
     return {source:sourcePatched,duplicate:duplicatePatched};
   };
   const delWine=async id=>{
@@ -7070,10 +7333,19 @@ export default function App(){
       const currentConsumed=getConsumedBottles(w);
       const nextConsumed=Math.max(0,Math.min(total,currentConsumed+delta));
       const nextLeft=Math.max(0,total-nextConsumed);
-      updated={...w,bottles:nextLeft,cellarMeta:{...(w.cellarMeta||{}),totalPurchased:total}};
+      updated=stampWineMutation({...w,bottles:nextLeft,cellarMeta:{...(w.cellarMeta||{}),totalPurchased:total}},{preserveCreated:true});
       return updated;
     }));
-    if(updated) await db.upsert("wines",toDb.wine(updated));
+    if(updated){
+      await db.upsert("wines",toDb.wine(updated));
+      recordSemanticEvent("activity","consumption_updated",updated.id,{
+        wineId:updated.id,
+        name:updated.name||"Unnamed wine",
+        bottlesLeft:Math.max(0,Math.round(safeNum(updated.bottles)||0)),
+        consumed:getConsumedBottles(updated),
+        updatedAt:updated.cellarMeta?.updatedAt||new Date().toISOString(),
+      });
+    }
     return updated;
   };
   const setWineBottleCount=async(id,count)=>{
@@ -7082,10 +7354,18 @@ export default function App(){
       if(w.id!==id) return w;
       const nextLeft=Math.max(0,Math.round(safeNum(count)||0));
       const nextTotal=Math.max(nextLeft,getTotalPurchased(w));
-      updated={...w,bottles:nextLeft,cellarMeta:{...(w.cellarMeta||{}),totalPurchased:nextTotal}};
+      updated=stampWineMutation({...w,bottles:nextLeft,cellarMeta:{...(w.cellarMeta||{}),totalPurchased:nextTotal}},{preserveCreated:true});
       return updated;
     }));
-    if(updated) await db.upsert("wines",toDb.wine(updated));
+    if(updated){
+      await db.upsert("wines",toDb.wine(updated));
+      recordSemanticEvent("activity","inventory_recounted",updated.id,{
+        wineId:updated.id,
+        name:updated.name||"Unnamed wine",
+        bottlesLeft:Math.max(0,Math.round(safeNum(updated.bottles)||0)),
+        updatedAt:updated.cellarMeta?.updatedAt||new Date().toISOString(),
+      });
+    }
     return updated;
   };
   const revokeAuditSnapshot=async audit=>{
@@ -7100,6 +7380,11 @@ export default function App(){
       return [...map.values()];
     });
     await Promise.all(unique.map(w=>db.upsert("wines",toDb.wine(w))));
+    recordSemanticEvent("activity","audit_reverted",audit?.id||uid(),{
+      auditName:audit?.name||"Audit",
+      winesRestored:unique.length,
+      updatedAt:new Date().toISOString(),
+    });
     return {restored:unique.length};
   };
   const addSavedLocation=loc=>setSavedLocations(prev=>{
@@ -7142,6 +7427,7 @@ export default function App(){
         };
         setProfileState(prev=>({...prev,...syncedProfile}));
       }
+      recordSemanticEvent("activity","profile_updated","1",{name:next.cellarName||next.name||"Winery profile"});
       return true;
     }
     return false;
@@ -7262,6 +7548,7 @@ export default function App(){
       return {ok:false,error:res.error||"The winery PIN could not be saved."};
     }
     setProfileState(prev=>({...prev,...(res.data?.profile||{}),pinEnabled:true,pinDigits:targetDigits}));
+    recordSemanticEvent("activity","profile_updated","1",{name:"Winery PIN"});
     return {ok:true};
   };
 
@@ -7430,7 +7717,7 @@ export default function App(){
             {authRole==="admin" ? "Admin Recovery" : (hasPinConfigured(profile) ? `${normalizePinDigits(profile.pinDigits)}-digit PIN` : "PIN not set")}
           </div>
           <div style={{fontSize:12,color:"rgba(246,238,233,0.66)",marginTop:6,fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.5}}>
-            {authRole==="admin" ? "Opens the same synced cellar." : `Session stays open until this tab is closed.`}
+            {authRole==="admin" ? "Opens the same synced cellar." : `Relocks after 15 minutes of inactivity.`}
           </div>
         </div>
       </div>
@@ -7546,12 +7833,12 @@ export default function App(){
             <div style={{fontSize:14,color:"rgba(246,238,233,0.64)",lineHeight:1.6,fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:18}}>Everything is loading now so once you pass this entry screen the app goes straight into the live cellar.</div>
             <div style={{display:"grid",gridTemplateColumns:isDesktop?"repeat(2,minmax(0,1fr))":"1fr",gap:10}}>
               <div style={miniStat}>
-                <div style={{fontSize:10,color:"rgba(246,238,233,0.56)",letterSpacing:"1px",textTransform:"uppercase",fontWeight:700}}>Loaded in Background</div>
-                <div style={{fontSize:16,fontWeight:800,color:"#fff",marginTop:7}}>Cellar, journal, audits, summary</div>
+                <div style={{fontSize:10,color:"rgba(246,238,233,0.56)",letterSpacing:"1px",textTransform:"uppercase",fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Background Preload</div>
+                <div style={{fontSize:16,fontWeight:800,color:"#fff",marginTop:7,fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.35}}>Cellar, journal, audits and settings ready</div>
               </div>
               <div style={miniStat}>
-                <div style={{fontSize:10,color:"rgba(246,238,233,0.56)",letterSpacing:"1px",textTransform:"uppercase",fontWeight:700}}>Current State</div>
-                <div style={{fontSize:16,fontWeight:800,color:"#fff",marginTop:7}}>{ready?"Ready to unlock":"Syncing latest winery data"}</div>
+                <div style={{fontSize:10,color:"rgba(246,238,233,0.56)",letterSpacing:"1px",textTransform:"uppercase",fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Current State</div>
+                <div style={{fontSize:16,fontWeight:800,color:"#fff",marginTop:7,fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.35}}>{ready?"Ready to unlock":"Syncing latest winery data"}</div>
               </div>
             </div>
           </div>
