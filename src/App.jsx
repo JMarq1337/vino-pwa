@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { authApi, dbApi } from "./apiClient";
 import { wineHoldings2021 } from "./data/wineHoldings2021";
 
-const APP_VERSION = "8.1";
+const APP_VERSION = "8.11";
 const ADMIN_PIN_DIGITS = 8;
 const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
 const CHANGE_LOG_KEY = "vino_change_log_v1";
@@ -3140,12 +3140,16 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
           <div style={{fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.55,marginBottom:10}}>
             Search the cellar and the built-in library. Wines added to the cellar are suggested here too.
           </div>
-          <div style={{position:"relative",zIndex:12}}>
+          <div style={{position:"relative"}}>
             <input value={q} onChange={e=>handleQ(e.target.value)} placeholder="Wine name, grape, or region…" style={{paddingLeft:38}} onBlur={()=>setTimeout(()=>setSugs([]),160)}/>
             <div style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"var(--sub)",pointerEvents:"none"}}><Icon n="search" size={16}/></div>
-            {sugs.length>0&&(
-              <div style={{position:"absolute",top:"calc(100% + 8px)",left:0,right:0,background:"var(--surface)",borderRadius:16,border:"1px solid rgba(var(--accentRgb),0.18)",zIndex:99,maxHeight:300,overflowY:"auto",overscrollBehavior:"contain",boxShadow:"0 18px 42px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.4)"}}
+          </div>
+          {sugs.length>0&&(
+              <div style={{marginTop:10,background:"linear-gradient(180deg,var(--surface),rgba(var(--accentRgb),0.03))",borderRadius:16,border:"1px solid rgba(var(--accentRgb),0.18)",maxHeight:260,overflowY:"auto",overscrollBehavior:"contain",boxShadow:"0 18px 42px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.4)"}}
                 onWheel={e=>e.stopPropagation()}>
+                <div style={{padding:"10px 14px 8px",fontSize:10,fontWeight:800,color:"var(--sub)",letterSpacing:"0.9px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif",borderBottom:"1px solid rgba(var(--accentRgb),0.08)"}}>
+                  Suggested wines
+                </div>
                 {sugs.map((w,i)=>(
                 <div key={`${w.name}-${w.origin}-${i}`} onMouseDown={()=>pickSug(w)} style={{padding:"11px 14px",cursor:"pointer",borderBottom:i<sugs.length-1?"1px solid var(--border)":"none"}}
                   onMouseEnter={e=>e.currentTarget.style.background="var(--inputBg)"}
@@ -3159,7 +3163,6 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
                 </div>
               </div>
             )}
-          </div>
           {!showFields&&!sugs.length&&q.length>=1&&(
             <button onMouseDown={()=>setShowFields(true)} style={{marginTop:9,width:"100%",padding:"10px",borderRadius:11,border:"1.5px dashed var(--border)",background:"linear-gradient(180deg,var(--inputBg),rgba(var(--accentRgb),0.05))",color:"var(--accent)",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
               Enter details manually
@@ -3493,30 +3496,13 @@ const FilterPanel=({filters,setFilters,wines,onClose})=>{
   const selectBase={background:"var(--inputBg)",fontSize:13,fontWeight:700,borderRadius:11,padding:"10px 34px 10px 12px"};
   const withAll=(arr,label)=>[{value:"",label},...arr.map(v=>({value:v,label:v}))];
   const toggle=(field,val)=>setLocal(p=>({...p,[field]:p[field]===val?"":val}));
-  const quickPicks=[
-    {id:"ready",label:"Ready now",on:local.readiness==="ready",action:()=>setLocal(p=>({...p,readiness:p.readiness==="ready"?"":"ready"}))},
-    {id:"notReady",label:"Not ready",on:local.readiness==="notReady",action:()=>setLocal(p=>({...p,readiness:p.readiness==="notReady"?"":"notReady"}))},
-    {id:"past",label:"Past peak",on:local.readiness==="past",action:()=>setLocal(p=>({...p,readiness:p.readiness==="past"?"":"past"}))},
-    {id:"added1",label:"Added 24h",on:local.addedRange==="1d",action:()=>setLocal(p=>({...p,addedRange:p.addedRange==="1d"?"":"1d"}))},
-    {id:"added30",label:"Added 30d",on:local.addedRange==="30d",action:()=>setLocal(p=>({...p,addedRange:p.addedRange==="30d"?"":"30d"}))},
-    {id:"updated7",label:"Updated 7d",on:local.updatedRange==="7d",action:()=>setLocal(p=>({...p,updatedRange:p.updatedRange==="7d"?"":"7d"}))},
-    {id:"recentSort",label:"Sort Added",on:local.sort==="recent",action:()=>setLocal(p=>({...p,sort:p.sort==="recent"?"name":"recent"}))},
-  ];
   return(
     <div>
       <ModalHeader title="Filter Studio" onClose={onClose}/>
       <div style={{fontSize:12,color:"var(--sub)",marginBottom:10,fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.45}}>
-        Quick picks for daily use plus detailed controls for precise filtering.
+        Timeline, sort and cellar filters in one minimal panel.
       </div>
       <div style={{display:"grid",gap:10,marginBottom:10}}>
-        <div style={sectionCard}>
-          <div style={sectionLabel}>Quick Picks</div>
-          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-            {quickPicks.map(item=>(
-              <button key={item.id} onClick={item.action} style={chip(item.on)}>{item.label}</button>
-            ))}
-          </div>
-        </div>
         <div style={sectionCard}>
           <div style={sectionLabel}>Sort & Order</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr",gap:8}}>
@@ -3695,27 +3681,6 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAdjustConsumption,onDup
   const sortDirectionLabelMobile=filters.sort==="vintage"
     ? (filters.sortDir==="asc"?"Oldest":"Newest")
     : (filters.sortDir==="asc"?"Fewest":"Most");
-  const quickChipStyle=activeChip=>({
-    padding:"7px 11px",
-    borderRadius:999,
-    border:activeChip?"1.5px solid rgba(var(--accentRgb),0.52)":"1.5px solid var(--border)",
-    background:activeChip?"linear-gradient(180deg,rgba(var(--accentRgb),0.16),rgba(var(--accentRgb),0.08))":"var(--card)",
-    color:activeChip?"var(--accent)":"var(--text)",
-    fontSize:12,
-    fontWeight:700,
-    fontFamily:"'Plus Jakarta Sans',sans-serif",
-    cursor:"pointer",
-    whiteSpace:"nowrap",
-    boxShadow:activeChip?"0 6px 14px rgba(var(--accentRgb),0.16)":"none",
-  });
-  const quickFilters=[
-    {id:"ready",label:"Ready now",active:filters.readiness==="ready",onClick:()=>setFilters(p=>({...p,readiness:p.readiness==="ready"?"":"ready"}))},
-    {id:"notReady",label:"Not ready",active:filters.readiness==="notReady",onClick:()=>setFilters(p=>({...p,readiness:p.readiness==="notReady"?"":"notReady"}))},
-    {id:"past",label:"Past peak",active:filters.readiness==="past",onClick:()=>setFilters(p=>({...p,readiness:p.readiness==="past"?"":"past"}))},
-    {id:"added1",label:"Added 24h",active:filters.addedRange==="1d",onClick:()=>setFilters(p=>({...p,addedRange:p.addedRange==="1d"?"":"1d"}))},
-    {id:"added30",label:"Added 30d",active:filters.addedRange==="30d",onClick:()=>setFilters(p=>({...p,addedRange:p.addedRange==="30d"?"":"30d"}))},
-    {id:"updated7",label:"Updated 7d",active:filters.updatedRange==="7d",onClick:()=>setFilters(p=>({...p,updatedRange:p.updatedRange==="7d"?"":"7d"}))},
-  ];
   useEffect(()=>{
     if(!recentDelete)return;
     const t=setTimeout(()=>setRecentDelete(null),10000);
@@ -3810,11 +3775,6 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAdjustConsumption,onDup
             </div>
           </>
         )}
-        <div style={{display:"flex",gap:6,overflowX:"auto",paddingTop:8,paddingBottom:2,scrollbarWidth:"thin"}}>
-          {quickFilters.map(item=>(
-            <button key={item.id} onClick={item.onClick} style={quickChipStyle(item.active)}>{item.label}</button>
-          ))}
-        </div>
       </div>
       {active&&(
         <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12,alignItems:"center"}}>
