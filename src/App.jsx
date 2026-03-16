@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { authApi, dbApi } from "./apiClient";
 import { wineHoldings2021 } from "./data/wineHoldings2021";
 
-const APP_VERSION = "8.11";
+const APP_VERSION = "8.12";
 const ADMIN_PIN_DIGITS = 8;
 const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
 const CHANGE_LOG_KEY = "vino_change_log_v1";
@@ -5953,6 +5953,7 @@ const BG_PRESETS = COLOR_THEMES.map(t=>({label:t.label,value:t.profileBg,accentI
 const SettingsPanel=({onBack,profile,setProfile,theme,setTheme,authRole,onSavePin})=>{
   const THEMES=[{id:"system",label:"System",ic:"monitor"},{id:"light",label:"Light",ic:"sun"},{id:"dark",label:"Dark",ic:"moon"}];
   const COUNTRIES=["Australia","New Zealand","France","Italy","Spain","USA","Argentina","Chile","South Africa","Germany","Portugal","Austria","Other"];
+  const [compact,setCompact]=useState(()=>window.innerWidth<920);
   const [form,setForm]=useState({
     name:profile.name||"",
     description:profile.description||"",
@@ -5974,10 +5975,15 @@ const SettingsPanel=({onBack,profile,setProfile,theme,setTheme,authRole,onSavePi
     error:"",
     success:"",
   });
+  useEffect(()=>{
+    const onResize=()=>setCompact(window.innerWidth<920);
+    window.addEventListener("resize",onResize);
+    return()=>window.removeEventListener("resize",onResize);
+  },[]);
   const set=(k,v)=>setForm(p=>({...p,[k]:v}));
   const setPin=(k,v)=>setPinForm(p=>({...p,[k]:v,error:k==="current"||k==="next"||k==="confirm"?"":p.error,success:k==="current"||k==="next"||k==="confirm"?"":p.success}));
   const setColorTheme=(accentId,profileBg)=>setForm(p=>({...p,accent:accentId,profileBg}));
-  const save=async()=>{if(form.name){await setProfile({...profile,...form});onBack();}};
+  const save=async()=>{if(form.name.trim()){await setProfile({...profile,...form});onBack();}};
   const savePin=async()=>{
     const digits=normalizePinDigits(pinForm.digits);
     const nextPin=normalizePinInput(pinForm.next,digits);
@@ -6007,140 +6013,245 @@ const SettingsPanel=({onBack,profile,setProfile,theme,setTheme,authRole,onSavePi
     }
     setPinForm(p=>({...p,saving:false,error:result?.error||"The PIN could not be saved.",success:""}));
   };
+  const previewName=[form.name,form.surname].filter(Boolean).join(" ")||"Winery owner";
+  const previewCellar=form.cellarName||"Your winery";
+  const selectedTheme=THEMES.find(t=>t.id===theme)||THEMES[0];
+  const saveDisabled=!form.name.trim();
+  const sectionCard={
+    background:"var(--card)",
+    border:"1px solid var(--border)",
+    borderRadius:22,
+    padding:compact?"16px":"18px",
+    boxShadow:"0 12px 28px var(--shadow)",
+  };
+  const sectionLabel={
+    fontSize:11,
+    fontWeight:800,
+    color:"var(--sub)",
+    letterSpacing:"0.9px",
+    textTransform:"uppercase",
+    fontFamily:"'Plus Jakarta Sans',sans-serif",
+    marginBottom:12,
+  };
+  const fieldLabel={
+    display:"block",
+    fontSize:11,
+    fontWeight:800,
+    color:"var(--sub)",
+    letterSpacing:"0.8px",
+    textTransform:"uppercase",
+    marginBottom:6,
+    fontFamily:"'Plus Jakarta Sans',sans-serif",
+  };
+  const infoChip={
+    display:"inline-flex",
+    alignItems:"center",
+    gap:6,
+    padding:"7px 10px",
+    borderRadius:999,
+    background:"rgba(var(--accentRgb),0.1)",
+    border:"1px solid rgba(var(--accentRgb),0.16)",
+    color:"var(--accent)",
+    fontSize:11,
+    fontWeight:800,
+    fontFamily:"'Plus Jakarta Sans',sans-serif",
+  };
   return(
     <div style={{animation:"fadeUp 0.2s ease"}}>
-      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:24}}>
-        <button onClick={onBack} style={{background:"var(--inputBg)",border:"none",borderRadius:10,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",color:"var(--sub)",cursor:"pointer",flexShrink:0,fontSize:20}}>←</button>
-        <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:22,fontWeight:800,color:"var(--text)"}}>Settings</div>
-      </div>
-      {/* Avatar */}
-      <div style={{display:"flex",justifyContent:"center",marginBottom:24}}>
-        <PhotoPicker value={form.avatar} onChange={v=>set("avatar",v)} size={90} round/>
-      </div>
-      {/* Name */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
-        <div>
-          <label style={{display:"block",fontSize:11,fontWeight:700,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:6,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>First Name</label>
-          <input value={form.name} onChange={e=>set("name",e.target.value)} placeholder="First name"/>
-        </div>
-        <div>
-          <label style={{display:"block",fontSize:11,fontWeight:700,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:6,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Surname</label>
-          <input value={form.surname} onChange={e=>set("surname",e.target.value)} placeholder="Surname"/>
+      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:18}}>
+        <button onClick={onBack} style={{background:"var(--inputBg)",border:"1px solid var(--border)",borderRadius:12,width:40,height:40,display:"flex",alignItems:"center",justifyContent:"center",color:"var(--sub)",cursor:"pointer",flexShrink:0,fontSize:20,boxShadow:"0 8px 18px rgba(0,0,0,0.05)"}}>←</button>
+        <div style={{minWidth:0}}>
+          <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:11,fontWeight:800,color:"var(--sub)",letterSpacing:"1px",textTransform:"uppercase",marginBottom:2}}>Settings</div>
+          <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:24,fontWeight:900,color:"var(--text)",lineHeight:1.05}}>Winery Profile & Access</div>
         </div>
       </div>
-      <div style={{marginBottom:14}}>
-        <label style={{display:"block",fontSize:11,fontWeight:700,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:6,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Title</label>
-        <input value={form.description} onChange={e=>set("description",e.target.value)} placeholder="e.g. Winemaker & Collector"/>
-      </div>
-      <div style={{marginBottom:14}}>
-        <label style={{display:"block",fontSize:11,fontWeight:700,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:6,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Cellar / Winery Name</label>
-        <input value={form.cellarName} onChange={e=>set("cellarName",e.target.value)} placeholder="e.g. Château Moi, The Neale Cellar"/>
-      </div>
-      <div style={{marginBottom:14}}>
-        <label style={{display:"block",fontSize:11,fontWeight:700,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:6,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Bio</label>
-        <textarea value={form.bio} onChange={e=>set("bio",e.target.value)} placeholder="Wine lover, collector, aspiring sommelier…" rows={3} style={{resize:"none"}}/>
-      </div>
-      <div style={{marginBottom:20}}>
-        <label style={{display:"block",fontSize:11,fontWeight:700,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:6,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Country</label>
-        <select value={form.country} onChange={e=>set("country",e.target.value)}>
-          {COUNTRIES.map(c=><option key={c} value={c}>{c}</option>)}
-        </select>
-      </div>
-      {/* Unified App Color */}
-      <div style={{marginBottom:20}}>
-        <div style={{fontSize:11,fontWeight:700,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:10,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>App Color</div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8}}>
-          {BG_PRESETS.map(bg=>(
-            <button key={bg.value} onClick={()=>setColorTheme(bg.accentId,bg.value)}
-              style={{
-                height:44,
-                borderRadius:12,
-                background:"var(--inputBg)",
-                border:form.profileBg===bg.value?"2px solid var(--accent)":"1.5px solid var(--border)",
-                cursor:"pointer",
-                position:"relative",
-                outline:"none",
-                boxShadow:"none",
-                overflow:"hidden",
-                padding:2,
-                display:"block",
-                appearance:"none",
-                WebkitAppearance:"none",
-                MozAppearance:"none"
-              }}>
-              <div style={{width:"100%",height:"100%",borderRadius:9,background:bg.value}}/>
-              {form.profileBg===bg.value&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{width:9,height:9,borderRadius:"50%",background:"#fff",boxShadow:"0 0 0 1.5px rgba(0,0,0,.22)"}}/></div>}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div style={{marginBottom:24}}>
-        <div style={{fontSize:11,fontWeight:700,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:10,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>App Theme</div>
-        <div style={{display:"flex",gap:8}}>
-          {THEMES.map(t=>{
-            const act=theme===t.id;
-            return(
-              <button key={t.id} onClick={()=>setTheme(t.id)} style={{flex:1,padding:"12px 8px",borderRadius:14,border:act?"2px solid var(--accent)":"1.5px solid var(--border)",background:act?"rgba(var(--accentRgb),0.08)":"var(--inputBg)",color:act?"var(--accent)":"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:700,fontSize:12,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:6,transition:"all 0.18s"}}>
-                <Icon n={t.ic} size={17} color={act?"var(--accent)":"var(--sub)"}/>
-                {t.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-      <div style={{marginBottom:24,padding:"16px",borderRadius:18,background:"linear-gradient(180deg,rgba(var(--accentRgb),0.11),rgba(var(--accentRgb),0.04))",border:"1px solid rgba(var(--accentRgb),0.18)",boxShadow:"0 12px 24px rgba(0,0,0,0.06)"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:14}}>
-          <div>
-            <div style={{fontSize:11,fontWeight:700,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:5,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Winery PIN</div>
-            <div style={{fontSize:16,fontWeight:800,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{hasPinConfigured(profile)?"Change the access PIN":"Set up the access PIN"}</div>
-            <div style={{fontSize:12,color:"var(--sub)",marginTop:4,fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.5}}>
-              {authRole==="admin"
-                ? "Admin session active. You can override the winery PIN from here."
-                : hasPinConfigured(profile)
-                  ? `This winery currently uses a ${normalizePinDigits(profile.pinDigits)}-digit PIN.`
-                  : "No winery PIN has been saved yet."}
+
+      <div style={{background:form.profileBg,borderRadius:28,padding:compact?"18px":"22px 24px",marginBottom:14,boxShadow:"0 20px 34px rgba(0,0,0,0.12)",position:"relative",overflow:"hidden"}}>
+        <div style={{position:"absolute",right:-28,top:-20,opacity:0.14,pointerEvents:"none"}}><BrandLogo size={150} variant="mono"/></div>
+        <div style={{position:"relative",zIndex:1,display:"grid",gridTemplateColumns:compact?"1fr":"minmax(0,1fr) auto",gap:14,alignItems:"center"}}>
+          <div style={{display:"flex",alignItems:"center",gap:14,minWidth:0}}>
+            <PhotoPicker value={form.avatar} onChange={v=>set("avatar",v)} size={92} round/>
+            <div style={{minWidth:0}}>
+              <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:11,fontWeight:800,letterSpacing:"1px",textTransform:"uppercase",color:"rgba(255,255,255,0.7)",marginBottom:4}}>Preview</div>
+              <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:24,fontWeight:900,color:"#fff",lineHeight:1.05,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{previewCellar}</div>
+              <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:14,fontWeight:700,color:"rgba(255,255,255,0.9)",marginTop:5,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{previewName}</div>
+              <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginTop:8}}>
+                {form.description&&<span style={{fontSize:11,color:"rgba(255,255,255,0.72)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{form.description}</span>}
+                {form.country&&<span style={{fontSize:11,color:"rgba(255,255,255,0.6)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{form.country}</span>}
+              </div>
             </div>
           </div>
-          <button type="button" onClick={()=>setPin("show",!pinForm.show)} style={{padding:"9px 12px",borderRadius:12,border:"1px solid rgba(var(--accentRgb),0.24)",background:"var(--surface)",color:"var(--accent)",fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.6px"}}>
-            {pinForm.show?"Hide":"Show"}
-          </button>
-        </div>
-        <div style={{marginBottom:12}}>
-          <SegmentedToggle
-            options={[{label:"4 Digits",value:4},{label:"6 Digits",value:6}]}
-            value={normalizePinDigits(pinForm.digits)}
-            onChange={value=>{
-              const digits=normalizePinDigits(value);
-              setPinForm(p=>({...p,digits,next:normalizePinInput(p.next,digits),confirm:normalizePinInput(p.confirm,digits),error:"",success:""}));
-            }}
-            minWidth={0}
-          />
-        </div>
-        {hasPinConfigured(profile) && authRole!=="admin" && (
-          <div style={{marginBottom:12}}>
-            <label style={{display:"block",fontSize:11,fontWeight:700,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:6,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Current PIN</label>
-            <input type={pinForm.show?"text":"password"} inputMode="numeric" value={pinForm.current} onChange={e=>setPin("current",normalizePinInput(e.target.value,normalizePinDigits(profile.pinDigits)))} placeholder={"•".repeat(normalizePinDigits(profile.pinDigits))} style={{letterSpacing:pinForm.show?"0.14em":"0.22em",textAlign:"center",fontWeight:800}}/>
-          </div>
-        )}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-          <div>
-            <label style={{display:"block",fontSize:11,fontWeight:700,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:6,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>New PIN</label>
-            <input type={pinForm.show?"text":"password"} inputMode="numeric" value={pinForm.next} onChange={e=>setPin("next",normalizePinInput(e.target.value,pinForm.digits))} placeholder={"•".repeat(normalizePinDigits(pinForm.digits))} style={{letterSpacing:pinForm.show?"0.14em":"0.22em",textAlign:"center",fontWeight:800}}/>
-          </div>
-          <div>
-            <label style={{display:"block",fontSize:11,fontWeight:700,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:6,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Confirm PIN</label>
-            <input type={pinForm.show?"text":"password"} inputMode="numeric" value={pinForm.confirm} onChange={e=>setPin("confirm",normalizePinInput(e.target.value,pinForm.digits))} placeholder={"•".repeat(normalizePinDigits(pinForm.digits))} style={{letterSpacing:pinForm.show?"0.14em":"0.22em",textAlign:"center",fontWeight:800}}/>
+          <div style={{display:"grid",gridTemplateColumns:compact?"repeat(3,minmax(0,1fr))":"repeat(3,minmax(110px,1fr))",gap:8}}>
+            {[
+              {label:"Theme",value:selectedTheme.label,icon:selectedTheme.ic},
+              {label:"Session",value:"15 min relock",icon:"lock"},
+              {label:"Access",value:authRole==="admin"?"Admin":"Winery",icon:authRole==="admin"?"shield":"user"},
+            ].map(item=>(
+              <div key={item.label} style={{padding:"10px 11px",borderRadius:16,background:"rgba(255,255,255,0.14)",border:"1px solid rgba(255,255,255,0.18)",backdropFilter:"blur(10px)"}}>
+                <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:5}}>
+                  <Icon n={item.icon} size={13} color="rgba(255,255,255,0.82)"/>
+                  <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.8px",textTransform:"uppercase",color:"rgba(255,255,255,0.68)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{item.label}</div>
+                </div>
+                <div style={{fontSize:12,fontWeight:800,color:"#fff",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{item.value}</div>
+              </div>
+            ))}
           </div>
         </div>
-        {pinForm.error&&<div style={{marginTop:12,padding:"11px 12px",borderRadius:12,background:"rgba(196,50,50,0.1)",border:"1px solid rgba(196,50,50,0.18)",color:"#B93F3F",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{pinForm.error}</div>}
-        {pinForm.success&&<div style={{marginTop:12,padding:"11px 12px",borderRadius:12,background:"rgba(32,130,88,0.1)",border:"1px solid rgba(32,130,88,0.18)",color:"#2F855A",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{pinForm.success}</div>}
-        <button type="button" onClick={savePin} disabled={pinForm.saving} style={{marginTop:14,width:"100%",padding:"13px 14px",borderRadius:14,border:"none",background:"var(--accent)",color:"#fff",fontSize:13,fontWeight:800,boxShadow:"0 10px 24px rgba(var(--accentRgb),0.22)",opacity:pinForm.saving?0.7:1}}>
-          {pinForm.saving?"Saving PIN…":"Save Winery PIN"}
-        </button>
       </div>
-      <div style={{display:"flex",gap:10}}>
-        <button onClick={onBack} style={{flex:1,padding:"14px",borderRadius:14,border:"1.5px solid var(--border)",background:"var(--inputBg)",color:"var(--text)",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Cancel</button>
-        <button onClick={save} disabled={!form.name} style={{flex:2,padding:"14px",borderRadius:14,border:"none",background:form.name?"var(--accent)":"var(--inputBg)",color:form.name?"white":"var(--sub)",fontSize:14,fontWeight:700,cursor:form.name?"pointer":"default",fontFamily:"'Plus Jakarta Sans',sans-serif",transition:"all 0.18s",boxShadow:form.name?"0 4px 16px rgba(var(--accentRgb),0.3)":"none"}}>Save Changes</button>
+
+      <div style={{display:"grid",gridTemplateColumns:compact?"1fr":"1.05fr 0.95fr",gap:12}}>
+        <div style={{display:"grid",gap:12}}>
+          <div style={sectionCard}>
+            <div style={sectionLabel}>Identity</div>
+            <div style={{display:"grid",gridTemplateColumns:compact?"1fr":"1fr 1fr",gap:10,marginBottom:12}}>
+              <div>
+                <label style={fieldLabel}>First Name</label>
+                <input value={form.name} onChange={e=>set("name",e.target.value)} placeholder="First name"/>
+              </div>
+              <div>
+                <label style={fieldLabel}>Surname</label>
+                <input value={form.surname} onChange={e=>set("surname",e.target.value)} placeholder="Surname"/>
+              </div>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:compact?"1fr":"1fr 0.9fr",gap:10}}>
+              <div>
+                <label style={fieldLabel}>Role / Title</label>
+                <input value={form.description} onChange={e=>set("description",e.target.value)} placeholder="e.g. Collector, Winemaker"/>
+              </div>
+              <div>
+                <label style={fieldLabel}>Country</label>
+                <select value={form.country} onChange={e=>set("country",e.target.value)}>
+                  {COUNTRIES.map(c=><option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div style={sectionCard}>
+            <div style={sectionLabel}>Winery Profile</div>
+            <div style={{marginBottom:12}}>
+              <label style={fieldLabel}>Cellar / Winery Name</label>
+              <input value={form.cellarName} onChange={e=>set("cellarName",e.target.value)} placeholder="e.g. The Neale Cellar"/>
+            </div>
+            <div>
+              <label style={fieldLabel}>About This Winery</label>
+              <textarea value={form.bio} onChange={e=>set("bio",e.target.value)} placeholder="Wine focus, storage notes, collecting style…" rows={4} style={{resize:"none"}}/>
+            </div>
+          </div>
+        </div>
+
+        <div style={{display:"grid",gap:12}}>
+          <div style={sectionCard}>
+            <div style={sectionLabel}>Appearance</div>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:10}}>
+              <div style={{fontSize:13,fontWeight:800,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>App color</div>
+              <span style={infoChip}>{BG_PRESETS.find(bg=>bg.value===form.profileBg)?.label||"Custom"}</span>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(5,minmax(0,1fr))",gap:8,marginBottom:14}}>
+              {BG_PRESETS.map(bg=>(
+                <button key={bg.value} onClick={()=>setColorTheme(bg.accentId,bg.value)}
+                  style={{
+                    height:52,
+                    borderRadius:15,
+                    background:"var(--inputBg)",
+                    border:form.profileBg===bg.value?"2px solid var(--accent)":"1.5px solid var(--border)",
+                    cursor:"pointer",
+                    position:"relative",
+                    overflow:"hidden",
+                    padding:3,
+                    display:"block",
+                    appearance:"none",
+                    WebkitAppearance:"none",
+                    boxShadow:form.profileBg===bg.value?"0 12px 24px rgba(var(--accentRgb),0.18)":"0 6px 14px rgba(0,0,0,0.05)"
+                  }}>
+                  <div style={{width:"100%",height:"100%",borderRadius:11,background:bg.value}}/>
+                  {form.profileBg===bg.value&&<div style={{position:"absolute",right:8,top:8,width:18,height:18,borderRadius:"50%",background:"#fff",display:"grid",placeItems:"center",boxShadow:"0 4px 10px rgba(0,0,0,0.18)"}}><Icon n="check" size={10} color="var(--accent)"/></div>}
+                </button>
+              ))}
+            </div>
+            <div style={{fontSize:13,fontWeight:800,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:10}}>Theme</div>
+            <div style={{display:"flex",gap:8}}>
+              {THEMES.map(t=>{
+                const act=theme===t.id;
+                return(
+                  <button key={t.id} onClick={()=>setTheme(t.id)} style={{flex:1,padding:"13px 9px",borderRadius:16,border:act?"1.5px solid rgba(var(--accentRgb),0.46)":"1.5px solid var(--border)",background:act?"rgba(var(--accentRgb),0.12)":"var(--inputBg)",color:act?"var(--accent)":"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:800,fontSize:12,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:7,transition:"all 0.18s",boxShadow:act?"0 10px 22px rgba(var(--accentRgb),0.12)":"none"}}>
+                    <Icon n={t.ic} size={17} color={act?"var(--accent)":"var(--sub)"}/>
+                    {t.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div style={{...sectionCard,background:"linear-gradient(180deg,rgba(var(--accentRgb),0.09),rgba(var(--accentRgb),0.03))"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:12}}>
+              <div>
+                <div style={sectionLabel}>Security</div>
+                <div style={{fontSize:18,fontWeight:900,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.05}}>{hasPinConfigured(profile)?"Change Winery PIN":"Create Winery PIN"}</div>
+                <div style={{fontSize:12,color:"var(--sub)",marginTop:6,fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.55}}>
+                  {authRole==="admin"
+                    ? "Admin session active. This can override the winery PIN."
+                    : hasPinConfigured(profile)
+                      ? `This winery currently uses a ${normalizePinDigits(profile.pinDigits)}-digit PIN and relocks after 15 minutes of inactivity.`
+                      : "Protect the cellar with a winery PIN. The app will relock after 15 minutes of inactivity."}
+                </div>
+              </div>
+              <button type="button" onClick={()=>setPin("show",!pinForm.show)} style={{padding:"9px 12px",borderRadius:12,border:"1px solid rgba(var(--accentRgb),0.24)",background:"var(--surface)",color:"var(--accent)",fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.6px"}}>
+                {pinForm.show?"Hide":"Show"}
+              </button>
+            </div>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}}>
+              <span style={infoChip}><Icon n="lock" size={12} color="var(--accent)"/>{normalizePinDigits(pinForm.digits)} digits</span>
+              <span style={infoChip}><Icon n="shield" size={12} color="var(--accent)"/>{authRole==="admin"?"Admin access":"Winery access"}</span>
+              <span style={infoChip}><Icon n="timer" size={12} color="var(--accent)"/>Auto relock</span>
+            </div>
+            <div style={{marginBottom:12}}>
+              <SegmentedToggle
+                options={[{label:"4 Digits",value:4},{label:"6 Digits",value:6}]}
+                value={normalizePinDigits(pinForm.digits)}
+                onChange={value=>{
+                  const digits=normalizePinDigits(value);
+                  setPinForm(p=>({...p,digits,next:normalizePinInput(p.next,digits),confirm:normalizePinInput(p.confirm,digits),error:"",success:""}));
+                }}
+                minWidth={0}
+              />
+            </div>
+            {hasPinConfigured(profile) && authRole!=="admin" && (
+              <div style={{marginBottom:12}}>
+                <label style={fieldLabel}>Current PIN</label>
+                <input type={pinForm.show?"text":"password"} inputMode="numeric" value={pinForm.current} onChange={e=>setPin("current",normalizePinInput(e.target.value,normalizePinDigits(profile.pinDigits)))} placeholder={"•".repeat(normalizePinDigits(profile.pinDigits))} style={{letterSpacing:pinForm.show?"0.14em":"0.22em",textAlign:"center",fontWeight:800}}/>
+              </div>
+            )}
+            <div style={{display:"grid",gridTemplateColumns:compact?"1fr":"1fr 1fr",gap:10}}>
+              <div>
+                <label style={fieldLabel}>New PIN</label>
+                <input type={pinForm.show?"text":"password"} inputMode="numeric" value={pinForm.next} onChange={e=>setPin("next",normalizePinInput(e.target.value,pinForm.digits))} placeholder={"•".repeat(normalizePinDigits(pinForm.digits))} style={{letterSpacing:pinForm.show?"0.14em":"0.22em",textAlign:"center",fontWeight:800}}/>
+              </div>
+              <div>
+                <label style={fieldLabel}>Confirm PIN</label>
+                <input type={pinForm.show?"text":"password"} inputMode="numeric" value={pinForm.confirm} onChange={e=>setPin("confirm",normalizePinInput(e.target.value,pinForm.digits))} placeholder={"•".repeat(normalizePinDigits(pinForm.digits))} style={{letterSpacing:pinForm.show?"0.14em":"0.22em",textAlign:"center",fontWeight:800}}/>
+              </div>
+            </div>
+            {pinForm.error&&<div style={{marginTop:12,padding:"11px 12px",borderRadius:12,background:"rgba(196,50,50,0.1)",border:"1px solid rgba(196,50,50,0.18)",color:"#B93F3F",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{pinForm.error}</div>}
+            {pinForm.success&&<div style={{marginTop:12,padding:"11px 12px",borderRadius:12,background:"rgba(32,130,88,0.1)",border:"1px solid rgba(32,130,88,0.18)",color:"#2F855A",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{pinForm.success}</div>}
+            <button type="button" onClick={savePin} disabled={pinForm.saving} style={{marginTop:14,width:"100%",padding:"13px 14px",borderRadius:14,border:"none",background:"var(--accent)",color:"#fff",fontSize:13,fontWeight:800,boxShadow:"0 12px 24px rgba(var(--accentRgb),0.22)",opacity:pinForm.saving?0.7:1}}>
+              {pinForm.saving?"Saving PIN…":"Save Winery PIN"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div style={{position:"sticky",bottom:12,marginTop:16,zIndex:2}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",padding:"12px 14px",borderRadius:18,background:"rgba(255,255,255,0.78)",border:"1px solid var(--border)",backdropFilter:"blur(14px)",boxShadow:"0 18px 34px rgba(0,0,0,0.08)"}}>
+          <div style={{minWidth:0}}>
+            <div style={{fontSize:11,fontWeight:800,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Ready to save</div>
+            <div style={{fontSize:13,color:"var(--text)",fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{previewCellar} · {previewName}</div>
+          </div>
+          <div style={{display:"flex",gap:10,marginLeft:"auto"}}>
+            <button onClick={onBack} style={{minWidth:112,padding:"13px 16px",borderRadius:14,border:"1.5px solid var(--border)",background:"var(--inputBg)",color:"var(--text)",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Cancel</button>
+            <button onClick={save} disabled={saveDisabled} style={{minWidth:148,padding:"13px 18px",borderRadius:14,border:"none",background:saveDisabled?"var(--inputBg)":"var(--accent)",color:saveDisabled?"var(--sub)":"white",fontSize:14,fontWeight:800,cursor:saveDisabled?"default":"pointer",fontFamily:"'Plus Jakarta Sans',sans-serif",transition:"all 0.18s",boxShadow:saveDisabled?"none":"0 12px 24px rgba(var(--accentRgb),0.24)"}}>Save Changes</button>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -6228,17 +6339,13 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile,onNavigateTa
   };
   const audits=readAudits();
   const localEvents=readLocalChangeLog();
-  const activity=[];
-  const pushActivity=(ts,title,detail)=>{
-    if(!ts||!Number.isFinite(ts)) return;
-    activity.push({ts,title,detail});
-  };
   const semanticEvents=(localEvents||[])
     .filter(ev=>["wine_added","wine_updated","journal_updated","consumption_updated","wine_duplicated","inventory_recounted","audit_reverted","profile_updated"].includes((ev?.action||"").toString()))
     .map(ev=>{
       const action=(ev?.action||"").toString();
       const payload=ev?.payload||{};
       const name=(payload?.name||payload?.auditName||"Activity").toString();
+      const wineId=(payload?.wineId||payload?.sourceWineId||"").toString();
       const ts=tsFromRaw(ev?.created_at||ev?.createdAt||"");
       let type="inventory";
       let title="Wine updated";
@@ -6272,16 +6379,38 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile,onNavigateTa
         title="Winery settings updated";
         detail=name;
       }
-      return {ts,title,detail,type};
+      return {ts,title,detail,type,action,wineId,key:`semantic:${action}:${wineId||name}:${ts}`};
     });
-  semanticEvents.forEach(ev=>pushActivity(ev.ts,ev.title,ev.detail));
-  audits.forEach(a=>{
-    const ts=tsFromRaw(a?.updatedAt||a?.completedAt||a?.createdAt);
-    pushActivity(ts,a?.status==="completed"?"Audit completed":"Audit saved",a?.name||"Audit");
+  const semanticAddIds=new Set(semanticEvents.filter(ev=>ev.action==="wine_added"&&ev.wineId).map(ev=>ev.wineId));
+  const semanticUpdateIds=new Set(semanticEvents.filter(ev=>["wine_updated","journal_updated","consumption_updated","wine_duplicated","inventory_recounted"].includes(ev.action)&&ev.wineId).map(ev=>ev.wineId));
+  const cellarFallbackActivity=col.flatMap(w=>{
+    const createdTs=wineCreatedTimestamp(w);
+    const updatedTs=wineUpdatedTimestamp(w);
+    const left=Math.max(0,Math.round(safeNum(w?.bottles)||0));
+    const detail=[w.name||"Unnamed wine",formatWineLocation(w),`${left} left`].filter(Boolean).join(" · ");
+    const rows=[];
+    if(createdTs && !semanticAddIds.has(w.id)){
+      rows.push({ts:createdTs,title:"Wine added",detail,type:"inventory",action:"fallback_added",wineId:w.id,key:`fallback:add:${w.id}:${createdTs}`});
+    }
+    if(updatedTs && updatedTs>createdTs+60000 && !semanticUpdateIds.has(w.id)){
+      rows.push({ts:updatedTs,title:"Cellar updated",detail,type:"inventory",action:"fallback_updated",wineId:w.id,key:`fallback:update:${w.id}:${updatedTs}`});
+    }
+    return rows;
   });
-  const rangedActivity=activity
-    .sort((a,b)=>b.ts-a.ts)
-    .filter((item,idx,arr)=>arr.findIndex(x=>x.title===item.title&&x.detail===item.detail&&x.ts===item.ts)===idx);
+  const auditActivity=(audits||[]).map(a=>{
+    const ts=tsFromRaw(a?.updatedAt||a?.completedAt||a?.createdAt);
+    return {ts,title:a?.status==="completed"?"Audit completed":"Audit saved",detail:a?.name||"Audit",type:"audit",action:"audit",key:`audit:${a?.id||a?.name||"audit"}:${ts}`};
+  });
+  const activitySeen=new Set();
+  const rangedActivity=[...semanticEvents,...cellarFallbackActivity,...auditActivity]
+    .filter(item=>item?.ts&&Number.isFinite(item.ts))
+    .filter(item=>{
+      const key=item.key||`${item.title}|${item.detail}|${item.ts}`;
+      if(activitySeen.has(key)) return false;
+      activitySeen.add(key);
+      return true;
+    })
+    .sort((a,b)=>b.ts-a.ts);
   const withinRange=(ts,range)=>{
     if(range==="all") return true;
     const diffDays=Math.max(0,Math.floor((Date.now()-ts)/86400000));
@@ -6290,12 +6419,7 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile,onNavigateTa
     if(range==="30d") return diffDays<=30;
     return true;
   };
-  const inferActivityType=item=>{
-    if(/Journal/i.test(item.title)) return "journal";
-    if(/Audit/i.test(item.title)) return "audit";
-    if(/settings/i.test(item.title)) return "settings";
-    return "inventory";
-  };
+  const inferActivityType=item=>item?.type||(/Journal/i.test(item?.title||"")?"journal":/Audit/i.test(item?.title||"")?"audit":/settings/i.test(item?.title||"")?"settings":"inventory");
   const recentActivity=rangedActivity
     .filter(item=>withinRange(item.ts,activityRange))
     .filter(item=>activityType==="all"||inferActivityType(item)===activityType)
@@ -6364,7 +6488,7 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile,onNavigateTa
 
       <div style={{...panel,background:profileBg,color:"#fff",padding:compact?"16px":"18px 20px",marginBottom:12,position:"relative",overflow:"hidden"}}>
         <div style={{position:"absolute",right:-20,top:-18,opacity:0.14,pointerEvents:"none"}}><BrandLogo size={140} variant="mono"/></div>
-        <div style={{position:"relative",zIndex:1,display:"grid",gridTemplateColumns:compact?"1fr":"minmax(0,1fr) auto",gap:14,alignItems:"center"}}>
+        <div style={{position:"relative",zIndex:1,display:"grid",gridTemplateColumns:compact?"1fr":"minmax(0,1fr) minmax(300px,0.92fr)",gap:14,alignItems:"center"}}>
           <div style={{display:"flex",alignItems:"center",gap:12,minWidth:0}}>
             <div style={{width:64,height:64,borderRadius:"50%",background:"rgba(255,255,255,0.15)",overflow:"hidden",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",border:"2px solid rgba(255,255,255,0.3)"}}>
               {profile.avatar?<img src={profile.avatar} alt="avatar" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<Icon n="user" size={28} color="rgba(255,255,255,0.8)"/>}
@@ -6379,25 +6503,41 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile,onNavigateTa
               </div>
             </div>
           </div>
-          <div style={{background:"rgba(255,255,255,0.16)",border:"1px solid rgba(255,255,255,0.24)",borderRadius:14,padding:"10px 12px",minWidth:compact?0:210}}>
-            <div style={{fontSize:10,letterSpacing:"0.7px",textTransform:"uppercase",fontWeight:700,color:"rgba(255,255,255,0.75)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Cellar RRP Value</div>
-            <div style={{fontSize:compact?24:28,fontWeight:900,color:"#fff",lineHeight:1.1,fontFamily:"'Plus Jakarta Sans',sans-serif",marginTop:3}}>${rrpValue.toLocaleString(undefined,{maximumFractionDigits:2})}</div>
-            <div style={{fontSize:11,color:"rgba(255,255,255,0.68)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginTop:4}}>
-              {bottlesLeft} left · {purchasedBottles} purchased · {consumedBottles} consumed
+          <div style={{display:"grid",gap:10}}>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:8}}>
+              <div style={{background:"rgba(255,255,255,0.16)",border:"1px solid rgba(255,255,255,0.24)",borderRadius:16,padding:"11px 12px"}}>
+                <div style={{fontSize:10,letterSpacing:"0.7px",textTransform:"uppercase",fontWeight:700,color:"rgba(255,255,255,0.75)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Total RRP</div>
+                <div style={{fontSize:compact?22:26,fontWeight:900,color:"#fff",lineHeight:1.1,fontFamily:"'Plus Jakarta Sans',sans-serif",marginTop:4}}>${rrpValue.toLocaleString(undefined,{maximumFractionDigits:2})}</div>
+                <div style={{fontSize:11,color:"rgba(255,255,255,0.62)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginTop:4}}>Across all purchased bottles</div>
+              </div>
+              <div style={{background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.2)",borderRadius:16,padding:"11px 12px"}}>
+                <div style={{fontSize:10,letterSpacing:"0.7px",textTransform:"uppercase",fontWeight:700,color:"rgba(255,255,255,0.75)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>On-Hand Value</div>
+                <div style={{fontSize:compact?22:26,fontWeight:900,color:"#fff",lineHeight:1.1,fontFamily:"'Plus Jakarta Sans',sans-serif",marginTop:4}}>${unconsumedRrpValue.toLocaleString(undefined,{maximumFractionDigits:2})}</div>
+                <div style={{fontSize:11,color:"rgba(255,255,255,0.62)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginTop:4}}>RRP of bottles still in cellar</div>
+              </div>
             </div>
-            <div style={{fontSize:11,color:"rgba(255,255,255,0.62)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginTop:3}}>
-              Left-stock RRP: ${unconsumedRrpValue.toLocaleString(undefined,{maximumFractionDigits:2})}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:8}}>
+              {[
+                {label:"On hand",value:bottlesLeft},
+                {label:"Purchased",value:purchasedBottles},
+                {label:"Consumed",value:consumedBottles},
+              ].map(item=>(
+                <div key={item.label} style={{padding:"9px 10px",borderRadius:14,background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.16)"}}>
+                  <div style={{fontSize:10,letterSpacing:"0.7px",textTransform:"uppercase",fontWeight:700,color:"rgba(255,255,255,0.66)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{item.label}</div>
+                  <div style={{fontSize:19,fontWeight:900,color:"#fff",fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.05,marginTop:2}}>{item.value}</div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
       </div>
 
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:10,marginBottom:12}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:10,marginBottom:12}}>
         {[
-          {label:"Unconsumed RRP",value:`$${unconsumedRrpValue.toLocaleString(undefined,{maximumFractionDigits:0})}`,meta:"Bottles currently left"},
           {label:"Ready to Drink",value:`${readyCount}`,meta:`${Math.round((readyCount/Math.max(1,col.length))*100)}% of cellar`,onClick:()=>setKpiListOpen({title:"Ready to Drink",rows:readyWines,subtitle:"Wines currently in drinking window."})},
           {label:"Past Peak Risk (12m)",value:`${pastPeakSoonCount}`,meta:"Ends this/next year",onClick:()=>setKpiListOpen({title:"Past Peak Risk (12 Months)",rows:pastPeakSoonWines,subtitle:"Wines whose drink window ends this year or next year."})},
           {label:"Low Stock Wines",value:`${lowStockCount}`,meta:"1-2 bottles left",onClick:()=>setKpiListOpen({title:"Low Stock Wines",rows:lowStockWines,subtitle:"Wines with one or two bottles left."})},
+          {label:"Average Bottle RRP",value:`$${avgBottle.toLocaleString(undefined,{maximumFractionDigits:0})}`,meta:"Across purchased stock"},
         ].map(card=>(
           <button
             key={card.label}
@@ -6486,23 +6626,23 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile,onNavigateTa
         </div>
 
         <div style={{...panel,padding:"14px 14px"}}>
-          <div style={{...tinyLabel,marginBottom:10}}>Value Intelligence</div>
+          <div style={{...tinyLabel,marginBottom:10}}>Cellar Intelligence</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
             <div style={{background:"var(--inputBg)",border:"1px solid var(--border)",borderRadius:11,padding:"9px 10px"}}>
-              <div style={{fontSize:10,color:"var(--sub)",textTransform:"uppercase",letterSpacing:"0.7px",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>RRP Total</div>
-              <div style={{fontSize:15,color:"var(--text)",fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>${rrpValue.toLocaleString(undefined,{maximumFractionDigits:2})}</div>
-            </div>
-            <div style={{background:"var(--inputBg)",border:"1px solid var(--border)",borderRadius:11,padding:"9px 10px"}}>
-              <div style={{fontSize:10,color:"var(--sub)",textTransform:"uppercase",letterSpacing:"0.7px",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Left-Stock RRP</div>
-              <div style={{fontSize:15,color:"var(--text)",fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>${unconsumedRrpValue.toLocaleString(undefined,{maximumFractionDigits:2})}</div>
-            </div>
-            <div style={{background:"var(--inputBg)",border:"1px solid var(--border)",borderRadius:11,padding:"9px 10px"}}>
-              <div style={{fontSize:10,color:"var(--sub)",textTransform:"uppercase",letterSpacing:"0.7px",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Avg Bottle RRP</div>
+              <div style={{fontSize:10,color:"var(--sub)",textTransform:"uppercase",letterSpacing:"0.7px",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Average Bottle RRP</div>
               <div style={{fontSize:15,color:"var(--text)",fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>${avgBottle.toLocaleString(undefined,{maximumFractionDigits:2})}</div>
+            </div>
+            <div style={{background:"var(--inputBg)",border:"1px solid var(--border)",borderRadius:11,padding:"9px 10px"}}>
+              <div style={{fontSize:10,color:"var(--sub)",textTransform:"uppercase",letterSpacing:"0.7px",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Stock Still On Hand</div>
+              <div style={{fontSize:15,color:"var(--text)",fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{purchasedBottles?Math.round((bottlesLeft/purchasedBottles)*100):0}%</div>
             </div>
             <div style={{background:"var(--inputBg)",border:"1px solid var(--border)",borderRadius:11,padding:"9px 10px"}}>
               <div style={{fontSize:10,color:"var(--sub)",textTransform:"uppercase",letterSpacing:"0.7px",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Most Common Origin</div>
               <div style={{fontSize:15,color:"var(--text)",fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{topRegion}</div>
+            </div>
+            <div style={{background:"var(--inputBg)",border:"1px solid var(--border)",borderRadius:11,padding:"9px 10px"}}>
+              <div style={{fontSize:10,color:"var(--sub)",textTransform:"uppercase",letterSpacing:"0.7px",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Top Varietal</div>
+              <div style={{fontSize:15,color:"var(--text)",fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{topVarietals[0]?.[0]||"—"}</div>
             </div>
           </div>
         </div>
