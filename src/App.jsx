@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { authApi, dbApi } from "./apiClient";
 import { wineHoldings2021 } from "./data/wineHoldings2021";
 
-const APP_VERSION = "8.12";
+const APP_VERSION = "8.13";
 const ADMIN_PIN_DIGITS = 8;
 const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
 const CHANGE_LOG_KEY = "vino_change_log_v1";
@@ -2268,7 +2268,7 @@ const BottleGlyph=({color="#8B1A1A"})=>{
 const WineThumbVisual=({wine,tc})=>{
   const bottleRgb=hexToRgb(tc.dot)||"139,26,26";
   return(
-    <div style={{width:60,height:76,borderRadius:14,background:`linear-gradient(170deg,${tc.bg} 0%,rgba(${bottleRgb},0.28) 100%)`,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",border:"1px solid rgba(18,18,22,0.2)",boxShadow:"inset 0 1px 5px rgba(255,255,255,0.22)",alignSelf:"center",position:"relative"}}>
+    <div style={{width:68,height:88,borderRadius:18,background:`linear-gradient(170deg,${tc.bg} 0%,rgba(${bottleRgb},0.28) 100%)`,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",border:"1px solid rgba(18,18,22,0.12)",boxShadow:"0 10px 20px rgba(0,0,0,0.08), inset 0 1px 6px rgba(255,255,255,0.24)",alignSelf:"center",position:"relative"}}>
       {wine.photo?(
         <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(180deg,rgba(255,255,255,0.22),rgba(255,255,255,0.06) 46%,rgba(0,0,0,0.08))",isolation:"isolate"}}>
           <WinePhotoImage src={wine.photo} alt={wine.name} style={{width:"100%",height:"100%",objectFit:"contain",objectPosition:"center",padding:"3px",filter:"drop-shadow(0 2px 6px rgba(0,0,0,0.22))"}}/>
@@ -2293,21 +2293,26 @@ const WineCard=({wine,onClick})=>{
   const readinessTag=!wine.wishlist&&ready.key!=="none"?ready.label:null;
   const rrpText=!wine.wishlist&&rrpPerBottle!=null&&rrpPerBottle>0?`RRP $${rrpPerBottle.toFixed(2)}`:null;
   const paidText=!wine.wishlist&&paidPerBottle!=null&&paidPerBottle>0?`Paid $${paidPerBottle.toFixed(2)}`:null;
-  const footerText=[locationTag||geo.country,addedTag].filter(Boolean).join(" · ");
-  const quickTagStyle={padding:"3px 8px",borderRadius:20,fontSize:11,fontWeight:700,color:"var(--text)",background:"var(--inputBg)",fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap"};
+  const footerTags=[locationTag,addedTag].filter(Boolean);
+  const quickTagStyle={padding:"4px 8px",borderRadius:999,fontSize:10.5,fontWeight:800,color:"var(--text)",background:"var(--inputBg)",fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap",border:"1px solid var(--border)"};
   return(
-    <div onClick={onClick} style={{background:"linear-gradient(180deg,var(--card),var(--inputBg))",borderRadius:20,padding:"16px",cursor:"pointer",border:"1px solid var(--border)",marginBottom:10,display:"grid",gridTemplateColumns:"60px 1fr",gap:14,alignItems:"start",transition:"transform 0.15s,box-shadow 0.15s",boxShadow:"0 2px 10px var(--shadow)",minHeight:112}}
-      onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 8px 28px var(--shadow)";}}
-      onMouseLeave={e=>{e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="0 2px 8px var(--shadow)";}}>
+    <div onClick={onClick} style={{background:"linear-gradient(180deg,var(--card),rgba(var(--accentRgb),0.05) 160%)",borderRadius:24,padding:"15px",cursor:"pointer",border:"1px solid rgba(var(--accentRgb),0.12)",marginBottom:0,display:"grid",gridTemplateColumns:"68px 1fr",gap:14,alignItems:"center",transition:"transform 0.18s, box-shadow 0.18s, border-color 0.18s",boxShadow:"0 10px 24px var(--shadow)",minHeight:126,position:"relative",overflow:"hidden"}}
+      onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow="0 18px 34px var(--shadow)";e.currentTarget.style.borderColor="rgba(var(--accentRgb),0.26)";}}
+      onMouseLeave={e=>{e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="0 10px 24px var(--shadow)";e.currentTarget.style.borderColor="rgba(var(--accentRgb),0.12)";}}>
+      <div style={{position:"absolute",left:0,top:0,bottom:0,width:4,background:ready.key==="ready"?"#2F855A":ready.key==="late"?"#B83232":ready.key==="early"?"#2A5AB8":"rgba(var(--accentRgb),0.28)"}}/>
       <WineThumbVisual wine={wine} tc={tc}/>
       <div style={{minWidth:0,display:"flex",flexDirection:"column",gap:6}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,minWidth:0}}>
           <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:15,fontWeight:700,color:"var(--text)",lineHeight:1.25,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden",minWidth:0}}>{wine.name}</div>
-          {!wine.wishlist&&wine.bottles>0&&<div style={{fontSize:12,color:"var(--sub)",fontWeight:600,flexShrink:0,fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap"}}>{wine.bottles} {wine.bottles===1?"btl":"btls"}</div>}
+          {!wine.wishlist&&(
+            <div style={{padding:"5px 9px",borderRadius:999,background:"rgba(var(--accentRgb),0.1)",border:"1px solid rgba(var(--accentRgb),0.16)",fontSize:10.5,color:"var(--accent)",fontWeight:800,flexShrink:0,fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap",letterSpacing:"0.5px",textTransform:"uppercase"}}>
+              {wine.bottles} {wine.bottles===1?"btl":"btls"}
+            </div>
+          )}
         </div>
         {(geo.region||geo.country)&&(
           <div style={{fontSize:13,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
-            {geo.region||geo.country}
+            {[geo.region||geo.country,geo.country&&geo.region?geo.country:null].filter(Boolean).join(" · ")}
           </div>
         )}
         <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
@@ -2317,9 +2322,13 @@ const WineCard=({wine,onClick})=>{
           {paidText&&<span style={{...quickTagStyle,background:"var(--card)",border:"1px solid var(--border)"}}>{paidText}</span>}
           {readinessTag&&<span style={{...quickTagStyle,color:"#fff",background:ready.color}}>{ready.key==="ready"?"Ready":ready.label}</span>}
         </div>
-        {footerText&&(
-          <div style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
-            {footerText}
+        {footerTags.length>0&&(
+          <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginTop:1}}>
+            {footerTags.map(tag=>(
+              <span key={tag} style={{padding:"4px 8px",borderRadius:999,background:"rgba(0,0,0,0.02)",border:"1px solid var(--border)",fontSize:10.5,color:"var(--sub)",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap",maxWidth:"100%",overflow:"hidden",textOverflow:"ellipsis"}}>
+                {tag}
+              </span>
+            ))}
           </div>
         )}
       </div>
@@ -3681,6 +3690,20 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAdjustConsumption,onDup
   const sortDirectionLabelMobile=filters.sort==="vintage"
     ? (filters.sortDir==="asc"?"Oldest":"Newest")
     : (filters.sortDir==="asc"?"Fewest":"Most");
+  const visibleCount=filt.length;
+  const toolbarIconButton=activeState=>({
+    height:46,
+    borderRadius:14,
+    background:activeState?"rgba(var(--accentRgb),0.14)":"var(--surface)",
+    border:activeState?"1.5px solid rgba(var(--accentRgb),0.34)":"1.5px solid var(--border)",
+    display:"flex",
+    alignItems:"center",
+    justifyContent:"center",
+    color:activeState?"var(--accent)":"var(--sub)",
+    position:"relative",
+    cursor:"pointer",
+    boxShadow:activeState?"0 10px 22px rgba(var(--accentRgb),0.14)":"0 8px 18px rgba(0,0,0,0.06)"
+  });
   useEffect(()=>{
     if(!recentDelete)return;
     const t=setTimeout(()=>setRecentDelete(null),10000);
@@ -3688,96 +3711,123 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAdjustConsumption,onDup
   },[recentDelete]);
   return(
     <div>
-      <div style={{marginBottom:24}}>
-        <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"2px",textTransform:"uppercase",marginBottom:4}}>My Cellar</div>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end"}}>
-          <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:34,fontWeight:800,color:"var(--text)",lineHeight:1,letterSpacing:"-1px"}}>
-            {col.length} <span style={{fontSize:18,color:"var(--sub)",fontWeight:400}}>wines</span>
+      <div style={{marginBottom:14}}>
+        <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:11,fontWeight:700,color:"var(--sub)",letterSpacing:"2px",textTransform:"uppercase",marginBottom:5}}>My Cellar</div>
+        <div style={{display:"grid",gridTemplateColumns:desktop?"minmax(0,1.05fr) minmax(290px,0.95fr)":"1fr",gap:12}}>
+          <div style={{background:"linear-gradient(180deg,rgba(var(--accentRgb),0.14),var(--card) 62%)",border:"1px solid rgba(var(--accentRgb),0.22)",borderRadius:22,padding:desktop?"18px 18px 16px":"16px",boxShadow:"0 14px 28px rgba(0,0,0,0.08)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:10}}>
+              <div>
+                <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:34,fontWeight:900,color:"var(--text)",lineHeight:0.98,letterSpacing:"-1px"}}>
+                  {col.length} <span style={{fontSize:18,color:"var(--sub)",fontWeight:500}}>wines</span>
+                </div>
+                <div style={{fontSize:13,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginTop:8,lineHeight:1.5,maxWidth:460}}>
+                  {stockView==="unconsumed"
+                    ? (hiddenConsumedCount>0?`${hiddenConsumedCount} fully consumed cards are tucked away in this view.`:"Showing wines with bottles still left to drink.")
+                    : "Your full cellar stays visible here, including wines already consumed."}
+                </div>
+              </div>
+              <button onClick={()=>setAdding(true)} style={{padding:"10px 14px",borderRadius:14,border:"none",background:"var(--accent)",color:"#fff",fontSize:12,fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif",boxShadow:"0 12px 24px rgba(var(--accentRgb),0.28)",cursor:"pointer",whiteSpace:"nowrap"}}>
+                Add Wine
+              </button>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:8}}>
+              {[
+                {label:"Visible",value:visibleCount},
+                {label:"Bottles Left",value:bottles},
+                {label:stockView==="unconsumed"?"Hidden":"Filters",value:stockView==="unconsumed"?hiddenConsumedCount:filterCount},
+              ].map(item=>(
+                <div key={item.label} style={{padding:"10px 11px",borderRadius:16,background:"rgba(var(--accentRgb),0.08)",border:"1px solid rgba(var(--accentRgb),0.14)",boxShadow:"inset 0 1px 0 rgba(255,255,255,0.3)"}}>
+                  <div style={{fontSize:10,fontWeight:800,color:"var(--sub)",letterSpacing:"0.7px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{item.label}</div>
+                  <div style={{fontSize:20,fontWeight:900,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.05,marginTop:3}}>{item.value}</div>
+                </div>
+              ))}
+            </div>
           </div>
-          <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:13,color:"var(--sub)"}}>{bottles} bottles</div>
+          <div style={{background:"linear-gradient(180deg,var(--card),rgba(var(--accentRgb),0.05))",border:"1px solid var(--border)",borderRadius:22,padding:desktop?"16px":"14px",boxShadow:"0 14px 28px rgba(0,0,0,0.07)"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap",marginBottom:10}}>
+              <div>
+                <div style={{fontSize:11,fontWeight:800,color:"var(--sub)",letterSpacing:"1px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:3}}>View Mode</div>
+                <div style={{fontSize:14,fontWeight:800,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{stockView==="unconsumed"?"Unconsumed only":"Full cellar"}</div>
+              </div>
+              <button onClick={()=>setRewindOpen(true)} style={{...toolbarIconButton(deletedWines.length>0),width:46}} title="Rewind deleted wines">
+                <Icon n="rewind" size={17}/>
+                {deletedWines.length>0&&<div style={{position:"absolute",top:-4,right:-4,minWidth:17,height:17,padding:"0 4px",borderRadius:999,background:"var(--accent)",color:"#fff",fontSize:10,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",border:"2px solid var(--bg)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{Math.min(99,deletedWines.length)}</div>}
+              </button>
+            </div>
+            <SegmentedToggle
+              options={[
+                {value:"all",label:"Full Cellar"},
+                {value:"unconsumed",label:"Unconsumed"},
+              ]}
+              value={stockView}
+              onChange={setStockView}
+              minWidth={0}
+            />
+            <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginTop:10}}>
+              <span style={{padding:"6px 10px",borderRadius:999,background:"var(--inputBg)",border:"1px solid var(--border)",fontSize:11,fontWeight:800,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+                Sort: {SORTS.find(o=>o.value===filters.sort)?.label||"Name A–Z"}
+              </span>
+              {active&&<span style={{padding:"6px 10px",borderRadius:999,background:"rgba(var(--accentRgb),0.1)",border:"1px solid rgba(var(--accentRgb),0.16)",fontSize:11,fontWeight:800,color:"var(--accent)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{filterCount} active</span>}
+            </div>
+          </div>
         </div>
       </div>
-      <div style={{background:"linear-gradient(180deg,rgba(var(--accentRgb),0.08),var(--card))",border:"1px solid rgba(var(--accentRgb),0.2)",borderRadius:16,padding:desktop?"10px":"10px 10px 8px",marginBottom:12,boxShadow:"0 10px 22px rgba(0,0,0,0.08)"}}>
-        <div style={{display:"flex",alignItems:desktop?"center":"flex-start",justifyContent:"space-between",gap:10,flexDirection:desktop?"row":"column",marginBottom:10}}>
-          <SegmentedToggle
-            options={[
-              {value:"all",label:"Full Cellar"},
-              {value:"unconsumed",label:"Unconsumed"},
-            ]}
-            value={stockView}
-            onChange={setStockView}
-            minWidth={desktop?250:220}
-          />
-          <div style={{fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontWeight:700,whiteSpace:"nowrap"}}>
-            {stockView==="unconsumed"
-              ? (hiddenConsumedCount>0?`${hiddenConsumedCount} consumed hidden`:"Showing wines with stock left")
-              : "Showing full cellar"}
-          </div>
-        </div>
+      <div style={{background:"linear-gradient(180deg,rgba(var(--accentRgb),0.08),var(--card))",border:"1px solid rgba(var(--accentRgb),0.16)",borderRadius:18,padding:desktop?"12px":"12px 12px 10px",marginBottom:12,boxShadow:"0 12px 24px rgba(0,0,0,0.08)"}}>
         {desktop?(
-          <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) 174px 96px 58px 46px 46px",gap:8,alignItems:"center"}}>
+          <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) 180px 106px 48px",gap:8,alignItems:"center"}}>
             <div style={{position:"relative",minWidth:0}}>
-              <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search wines, regions, countries…" style={{paddingLeft:38,borderRadius:13}}/>
-              <div style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"var(--sub)",pointerEvents:"none"}}><Icon n="search" size={16}/></div>
+              <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search wines, varietals, regions, countries or locations…" style={{paddingLeft:40,borderRadius:14,height:46,background:"var(--surface)"}}/>
+              <div style={{position:"absolute",left:13,top:"50%",transform:"translateY(-50%)",color:"var(--sub)",pointerEvents:"none"}}><Icon n="search" size={16}/></div>
             </div>
-            <select value={filters.sort} onChange={e=>setFilters(p=>({...p,sort:e.target.value,sortDir:(e.target.value==="vintage"||e.target.value==="bottles")?(p.sort===e.target.value?p.sortDir:"desc"):p.sortDir}))} style={{background:"var(--surface)",fontSize:12,fontWeight:700,padding:"9px 30px 9px 10px",borderRadius:11}}>
+            <select value={filters.sort} onChange={e=>setFilters(p=>({...p,sort:e.target.value,sortDir:(e.target.value==="vintage"||e.target.value==="bottles")?(p.sort===e.target.value?p.sortDir:"desc"):p.sortDir}))} style={{background:"var(--surface)",fontSize:12,fontWeight:800,padding:"10px 30px 10px 12px",borderRadius:14,height:46}}>
               {SORTS.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
             <button
               onClick={()=>sortDirectionSupported&&setFilters(p=>({...p,sortDir:p.sortDir==="asc"?"desc":"asc"}))}
               disabled={!sortDirectionSupported}
               title="Sort direction"
-              style={{height:42,borderRadius:11,border:sortDirectionSupported?"1.5px solid var(--border)":"1.5px solid var(--border)",background:sortDirectionSupported?"var(--surface)":"var(--inputBg)",color:sortDirectionSupported?"var(--text)":"var(--sub)",fontSize:12,fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:sortDirectionSupported?"pointer":"default",opacity:sortDirectionSupported?1:0.55}}
+              style={{height:46,borderRadius:14,border:"1.5px solid var(--border)",background:sortDirectionSupported?"var(--surface)":"var(--inputBg)",color:sortDirectionSupported?"var(--text)":"var(--sub)",fontSize:12,fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:sortDirectionSupported?"pointer":"default",opacity:sortDirectionSupported?1:0.55,boxShadow:"0 8px 18px rgba(0,0,0,0.05)"}}
             >
               {sortDirectionSupported?sortDirectionLabelDesktop:"—"}
             </button>
-            <button onClick={()=>setFilterOpen(true)} style={{height:42,borderRadius:12,background:active?"rgba(var(--accentRgb),0.14)":"var(--surface)",border:active?"1.5px solid var(--accent)":"1.5px solid var(--border)",display:"flex",alignItems:"center",justifyContent:"center",color:active?"var(--accent)":"var(--sub)",position:"relative",cursor:"pointer"}}>
+            <button onClick={()=>setFilterOpen(true)} style={{...toolbarIconButton(active),width:46}}>
               <Icon n="filter" size={17}/>
-              {filterCount>0&&<div style={{position:"absolute",top:-6,right:-6,minWidth:18,height:18,padding:"0 4px",borderRadius:999,background:"var(--accent)",color:"#fff",fontSize:10,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",border:"2px solid var(--bg)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{filterCount}</div>}
-            </button>
-            <button onClick={()=>setRewindOpen(true)} style={{height:42,borderRadius:12,background:deletedWines.length?"rgba(var(--accentRgb),0.12)":"var(--surface)",border:deletedWines.length?"1.5px solid rgba(var(--accentRgb),0.4)":"1.5px solid var(--border)",display:"flex",alignItems:"center",justifyContent:"center",color:deletedWines.length?"var(--accent)":"var(--sub)",position:"relative",cursor:"pointer"}} title="Rewind deleted wines">
-              <Icon n="rewind" size={17}/>
-              {deletedWines.length>0&&<div style={{position:"absolute",top:-3,right:-3,minWidth:16,height:16,padding:"0 4px",borderRadius:999,background:"var(--accent)",color:"#fff",fontSize:10,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",border:"2px solid var(--bg)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{Math.min(99,deletedWines.length)}</div>}
-            </button>
-            <button onClick={()=>setAdding(true)} style={{height:42,borderRadius:12,background:"var(--accent)",border:"none",display:"flex",alignItems:"center",justifyContent:"center",color:"white",boxShadow:"0 4px 16px rgba(var(--accentRgb),0.35)",cursor:"pointer"}}>
-              <Icon n="plus" size={20}/>
+              {filterCount>0&&<div style={{position:"absolute",top:-5,right:-5,minWidth:18,height:18,padding:"0 4px",borderRadius:999,background:"var(--accent)",color:"#fff",fontSize:10,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",border:"2px solid var(--bg)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{filterCount}</div>}
             </button>
           </div>
         ):(
           <>
             <div style={{position:"relative",marginBottom:8}}>
-              <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search wines, regions, countries…" style={{paddingLeft:38,borderRadius:13}}/>
-              <div style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"var(--sub)",pointerEvents:"none"}}><Icon n="search" size={16}/></div>
+              <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search wines, varietals, regions, countries or locations…" style={{paddingLeft:40,borderRadius:14,height:46,background:"var(--surface)"}}/>
+              <div style={{position:"absolute",left:13,top:"50%",transform:"translateY(-50%)",color:"var(--sub)",pointerEvents:"none"}}><Icon n="search" size={16}/></div>
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr auto auto auto auto",gap:8,alignItems:"center"}}>
-              <select value={filters.sort} onChange={e=>setFilters(p=>({...p,sort:e.target.value,sortDir:(e.target.value==="vintage"||e.target.value==="bottles")?(p.sort===e.target.value?p.sortDir:"desc"):p.sortDir}))} style={{background:"var(--surface)",fontSize:12,fontWeight:700,padding:"9px 30px 9px 10px",borderRadius:11}}>
+            <div style={{display:"grid",gridTemplateColumns:"1fr auto auto",gap:8,alignItems:"center"}}>
+              <select value={filters.sort} onChange={e=>setFilters(p=>({...p,sort:e.target.value,sortDir:(e.target.value==="vintage"||e.target.value==="bottles")?(p.sort===e.target.value?p.sortDir:"desc"):p.sortDir}))} style={{background:"var(--surface)",fontSize:12,fontWeight:800,padding:"10px 30px 10px 12px",borderRadius:14,height:46}}>
                 {SORTS.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
               <button
                 onClick={()=>sortDirectionSupported&&setFilters(p=>({...p,sortDir:p.sortDir==="asc"?"desc":"asc"}))}
                 disabled={!sortDirectionSupported}
                 title="Sort direction"
-                style={{width:46,height:42,borderRadius:11,border:"1.5px solid var(--border)",background:sortDirectionSupported?"var(--surface)":"var(--inputBg)",color:sortDirectionSupported?"var(--text)":"var(--sub)",fontSize:11,fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:sortDirectionSupported?"pointer":"default",opacity:sortDirectionSupported?1:0.55}}
+                style={{width:54,height:46,borderRadius:14,border:"1.5px solid var(--border)",background:sortDirectionSupported?"var(--surface)":"var(--inputBg)",color:sortDirectionSupported?"var(--text)":"var(--sub)",fontSize:11,fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:sortDirectionSupported?"pointer":"default",opacity:sortDirectionSupported?1:0.55,boxShadow:"0 8px 18px rgba(0,0,0,0.05)"}}
               >
                 {sortDirectionSupported?sortDirectionLabelMobile:"—"}
               </button>
-              <button onClick={()=>setFilterOpen(true)} style={{width:46,height:42,borderRadius:12,background:active?"rgba(var(--accentRgb),0.14)":"var(--surface)",border:active?"1.5px solid var(--accent)":"1.5px solid var(--border)",display:"flex",alignItems:"center",justifyContent:"center",color:active?"var(--accent)":"var(--sub)",position:"relative",cursor:"pointer"}}>
+              <button onClick={()=>setFilterOpen(true)} style={{...toolbarIconButton(active),width:46}}>
                 <Icon n="filter" size={17}/>
-                {filterCount>0&&<div style={{position:"absolute",top:-6,right:-6,minWidth:18,height:18,padding:"0 4px",borderRadius:999,background:"var(--accent)",color:"#fff",fontSize:10,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",border:"2px solid var(--bg)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{filterCount}</div>}
-              </button>
-              <button onClick={()=>setRewindOpen(true)} style={{width:46,height:42,borderRadius:12,background:deletedWines.length?"rgba(var(--accentRgb),0.12)":"var(--surface)",border:deletedWines.length?"1.5px solid rgba(var(--accentRgb),0.4)":"1.5px solid var(--border)",display:"flex",alignItems:"center",justifyContent:"center",color:deletedWines.length?"var(--accent)":"var(--sub)",position:"relative",cursor:"pointer"}} title="Rewind deleted wines">
-                <Icon n="rewind" size={17}/>
-                {deletedWines.length>0&&<div style={{position:"absolute",top:-3,right:-3,minWidth:16,height:16,padding:"0 4px",borderRadius:999,background:"var(--accent)",color:"#fff",fontSize:10,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",border:"2px solid var(--bg)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{Math.min(99,deletedWines.length)}</div>}
-              </button>
-              <button onClick={()=>setAdding(true)} style={{width:46,height:42,borderRadius:12,background:"var(--accent)",border:"none",display:"flex",alignItems:"center",justifyContent:"center",color:"white",boxShadow:"0 4px 16px rgba(var(--accentRgb),0.35)",cursor:"pointer"}}>
-                <Icon n="plus" size={20}/>
+                {filterCount>0&&<div style={{position:"absolute",top:-5,right:-5,minWidth:18,height:18,padding:"0 4px",borderRadius:999,background:"var(--accent)",color:"#fff",fontSize:10,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",border:"2px solid var(--bg)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{filterCount}</div>}
               </button>
             </div>
           </>
         )}
       </div>
       {active&&(
-        <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12,alignItems:"center"}}>
+        <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:16,padding:"10px 12px",marginBottom:12,boxShadow:"0 8px 18px rgba(0,0,0,0.05)"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap",marginBottom:8}}>
+            <div style={{fontSize:10,fontWeight:800,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Active Filters</div>
+            <button onClick={()=>setFilters(DEFAULT_FILTERS)} style={{padding:0,border:"none",background:"none",color:"var(--sub)",fontSize:12,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',sans-serif",textDecoration:"underline"}}>Clear all</button>
+          </div>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
           {filters.sort!=="name"&&<Chip label={SORTS.find(o=>o.value===filters.sort)?.label} onX={()=>setFilters(p=>({...p,sort:"name"}))}/>}
           {sortDirectionSupported&&(
             <button
@@ -3800,7 +3850,7 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAdjustConsumption,onDup
           {filters.section&&<Chip label={`Kennards: ${filters.section}`} onX={()=>setFilters(p=>({...p,section:""}))}/>}
           {filters.addedRange&&<Chip label={{"1d":"Added 24h","7d":"Added 7d","30d":"Added 30d"}[filters.addedRange]||filters.addedRange} onX={()=>setFilters(p=>({...p,addedRange:""}))}/>}
           {filters.updatedRange&&<Chip label={{"1d":"Updated 24h","7d":"Updated 7d","30d":"Updated 30d"}[filters.updatedRange]||filters.updatedRange} onX={()=>setFilters(p=>({...p,updatedRange:""}))}/>}
-          <button onClick={()=>setFilters(DEFAULT_FILTERS)} style={{padding:"4px 10px",borderRadius:20,border:"none",background:"none",color:"var(--sub)",fontSize:12,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',sans-serif",textDecoration:"underline"}}>Clear all</button>
+          </div>
         </div>
       )}
       {recentDelete&&(
@@ -3820,17 +3870,20 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAdjustConsumption,onDup
           ? <div style={{display:"grid",gap:14}}>
               {recentGrouped.map(group=>(
                 <section key={group.key}>
-                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8,padding:"0 2px"}}>
-                    <div style={{fontSize:12,fontWeight:800,color:"var(--text)",letterSpacing:"0.6px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{group.label}</div>
-                    <div style={{padding:"2px 8px",borderRadius:999,background:"var(--inputBg)",border:"1px solid var(--border)",fontSize:11,fontWeight:700,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{group.wines.length}</div>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10,padding:"0 2px"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{width:8,height:8,borderRadius:"50%",background:"var(--accent)",boxShadow:"0 0 0 5px rgba(var(--accentRgb),0.12)"}}/>
+                      <div style={{fontSize:12,fontWeight:900,color:"var(--text)",letterSpacing:"0.7px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{group.label}</div>
+                    </div>
+                    <div style={{padding:"3px 9px",borderRadius:999,background:"var(--inputBg)",border:"1px solid var(--border)",fontSize:11,fontWeight:800,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{group.wines.length}</div>
                   </div>
-                  <div style={{display:desktop?"grid":"block",gridTemplateColumns:desktop?"repeat(auto-fill,minmax(290px,1fr))":"none",gap:desktop?12:0}}>
+                  <div style={{display:"grid",gridTemplateColumns:desktop?"repeat(auto-fill,minmax(300px,1fr))":"1fr",gap:12}}>
                     {group.wines.map(w=><WineCard key={w.id} wine={w} onClick={()=>{setSel(w);setEditing(false);}}/>)}
                   </div>
                 </section>
               ))}
             </div>
-          : <div style={{display:desktop?"grid":"block",gridTemplateColumns:desktop?"repeat(auto-fill,minmax(290px,1fr))":"none",gap:desktop?12:0}}>
+          : <div style={{display:"grid",gridTemplateColumns:desktop?"repeat(auto-fill,minmax(300px,1fr))":"1fr",gap:12}}>
               {filt.map(w=><WineCard key={w.id} wine={w} onClick={()=>{setSel(w);setEditing(false);}}/>)}
             </div>
       }
