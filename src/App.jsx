@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { authApi, dbApi } from "./apiClient";
 import { wineHoldings2021 } from "./data/wineHoldings2021";
 
-const APP_VERSION = "8.16";
+const APP_VERSION = "8.17";
 const ADMIN_PIN_DIGITS = 8;
 const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
 const CHANGE_LOG_KEY = "vino_change_log_v1";
@@ -35,8 +35,113 @@ const writeLSJson = (key,value) => {
   }
 };
 const LOGO_COLOR_SRC = "/icons/logo-vinology-2026-512.png";
+let LOGO_COLOR_PROMISE = null;
+let LOGO_COLOR_CACHE = null;
 let LOGO_MARK_PROMISE = null;
 let LOGO_MARK_CACHE = null;
+const getPreparedLogoColorSrc = () => {
+  if(LOGO_COLOR_CACHE) return Promise.resolve(LOGO_COLOR_CACHE);
+  if(LOGO_COLOR_PROMISE) return LOGO_COLOR_PROMISE;
+  LOGO_COLOR_PROMISE = new Promise(resolve=>{
+    try{
+      const img = new Image();
+      img.onload = () => {
+        try{
+          const canvas = document.createElement("canvas");
+          canvas.width = img.naturalWidth || img.width;
+          canvas.height = img.naturalHeight || img.height;
+          const ctx = canvas.getContext("2d",{willReadFrequently:true});
+          if(!ctx){
+            LOGO_COLOR_CACHE = LOGO_COLOR_SRC;
+            LOGO_COLOR_PROMISE = null;
+            return resolve(LOGO_COLOR_CACHE);
+          }
+          ctx.drawImage(img,0,0);
+          const frame = ctx.getImageData(0,0,canvas.width,canvas.height);
+          const data = frame.data;
+          const idx=(x,y)=>(y*canvas.width+x);
+          const bgMask=new Uint8Array(canvas.width*canvas.height);
+          const qx=new Int32Array(canvas.width*canvas.height);
+          const qy=new Int32Array(canvas.width*canvas.height);
+          let head=0,tail=0;
+          const push=(x,y)=>{
+            const p=idx(x,y);
+            if(bgMask[p]) return;
+            const i=p*4;
+            const a=data[i+3];
+            const r=data[i],g=data[i+1],b=data[i+2];
+            const neutral=a<16 || (r>214&&g>214&&b>214&&(Math.max(r,g,b)-Math.min(r,g,b))<38);
+            if(!neutral) return;
+            bgMask[p]=1;
+            qx[tail]=x;
+            qy[tail]=y;
+            tail++;
+          };
+          for(let x=0;x<canvas.width;x++){push(x,0);push(x,canvas.height-1);}
+          for(let y=1;y<canvas.height-1;y++){push(0,y);push(canvas.width-1,y);}
+          while(head<tail){
+            const x=qx[head],y=qy[head];head++;
+            if(x>0) push(x-1,y);
+            if(x<canvas.width-1) push(x+1,y);
+            if(y>0) push(x,y-1);
+            if(y<canvas.height-1) push(x,y+1);
+          }
+          let minX=canvas.width,minY=canvas.height,maxX=0,maxY=0,found=false;
+          for(let p=0;p<bgMask.length;p++){
+            const i=p*4;
+            const x=p%canvas.width;
+            const y=Math.floor(p/canvas.width);
+            if(bgMask[p]){
+              data[i+3]=0;
+              continue;
+            }
+            if(data[i+3]>18){
+              found=true;
+              if(x<minX) minX=x;
+              if(y<minY) minY=y;
+              if(x>maxX) maxX=x;
+              if(y>maxY) maxY=y;
+            }
+          }
+          ctx.putImageData(frame,0,0);
+          if(!found){
+            LOGO_COLOR_CACHE = LOGO_COLOR_SRC;
+            LOGO_COLOR_PROMISE = null;
+            return resolve(LOGO_COLOR_CACHE);
+          }
+          const pad=8;
+          minX=Math.max(0,minX-pad);
+          minY=Math.max(0,minY-pad);
+          maxX=Math.min(canvas.width-1,maxX+pad);
+          maxY=Math.min(canvas.height-1,maxY+pad);
+          const out=document.createElement("canvas");
+          out.width=maxX-minX+1;
+          out.height=maxY-minY+1;
+          const outCtx=out.getContext("2d");
+          outCtx.putImageData(ctx.getImageData(minX,minY,out.width,out.height),0,0);
+          LOGO_COLOR_CACHE = out.toDataURL("image/png");
+          LOGO_COLOR_PROMISE = null;
+          resolve(LOGO_COLOR_CACHE);
+        }catch{
+          LOGO_COLOR_CACHE = LOGO_COLOR_SRC;
+          LOGO_COLOR_PROMISE = null;
+          resolve(LOGO_COLOR_CACHE);
+        }
+      };
+      img.onerror = () => {
+        LOGO_COLOR_CACHE = LOGO_COLOR_SRC;
+        LOGO_COLOR_PROMISE = null;
+        resolve(LOGO_COLOR_CACHE);
+      };
+      img.src = LOGO_COLOR_SRC;
+    }catch{
+      LOGO_COLOR_CACHE = LOGO_COLOR_SRC;
+      LOGO_COLOR_PROMISE = null;
+      resolve(LOGO_COLOR_CACHE);
+    }
+  });
+  return LOGO_COLOR_PROMISE;
+};
 const getPreparedLogoMarkSrc = () => {
   if(LOGO_MARK_CACHE) return Promise.resolve(LOGO_MARK_CACHE);
   if(LOGO_MARK_PROMISE) return LOGO_MARK_PROMISE;
@@ -388,6 +493,11 @@ const performProfileWrite = async p => {
   }});
   return full.ok ? {ok:true,profile:full.data?.profile||null} : {ok:false,error:full.error||"profile write failed"};
 };
+let remoteEventLoggingDisabled = false;
+const isCellarEventsPermissionIssue = errorText => {
+  const txt=(errorText||"").toString();
+  return txt.includes("42501") || /permission denied for table cellar_events/i.test(txt);
+};
 
 const db = {
   _flushing:false,
@@ -463,9 +573,15 @@ const db = {
         return snapRes.ok||snapRes.permanent ? {ok:true} : {ok:true,followUps:[{kind:"snapshot",snapshot}]};
       }
       if(op?.kind==="event"){
+        if(remoteEventLoggingDisabled) return {ok:true};
         const res=await dbApi.call("upsert",{table:"cellar_events",row:op.event||{}});
         if(!res.ok){
-          return {ok:false,error:res.error||`HTTP ${res.status}`,permanent:res.status===404};
+          const err=res.error||`HTTP ${res.status}`;
+          if(res.status===404 || isCellarEventsPermissionIssue(err)){
+            remoteEventLoggingDisabled = true;
+            return {ok:true};
+          }
+          return {ok:false,error:err,permanent:false};
         }
         return {ok:true};
       }
@@ -534,6 +650,7 @@ const db = {
       created_at:new Date().toISOString(),
     };
     appendLocalChangeLog({...event,payload:sanitizeLogPayload(rawPayload)});
+    if(remoteEventLoggingDisabled) return;
     this.queue({kind:"event",event});
   },
   async get(t) {
@@ -1840,7 +1957,14 @@ const BrandLogo=({size=42,variant="color"})=>{
   const isMono=variant==="mono";
   const src=LOGO_COLOR_SRC;
   const radius=Math.max(10,Math.round(size*0.26));
+  const [colorSrc,setColorSrc]=useState(()=>LOGO_COLOR_CACHE||src);
   const [markSrc,setMarkSrc]=useState(()=>LOGO_MARK_CACHE);
+  useEffect(()=>{
+    if(isMono) return;
+    let alive=true;
+    getPreparedLogoColorSrc().then(next=>{if(alive&&next)setColorSrc(next);});
+    return()=>{alive=false;};
+  },[isMono]);
   useEffect(()=>{
     if(!isMono) return;
     let alive=true;
@@ -1889,22 +2013,21 @@ const BrandLogo=({size=42,variant="color"})=>{
         alignItems:"center",
         justifyContent:"center",
         overflow:"hidden",
-        boxShadow:isMono?"none":"0 10px 24px rgba(0,0,0,0.16)",
+        boxShadow:"0 10px 24px rgba(0,0,0,0.16)",
       }}
     >
-        <img
-        src={src}
+      <img
+        src={colorSrc||src}
         alt=""
         width={size}
         height={size}
         draggable="false"
         style={{
           display:"block",
-          width:size*1.12,
-          height:size*1.12,
-          objectFit:"cover",
-          objectPosition:"50% 43%",
-          borderRadius:radius,
+          width:size,
+          height:size,
+          objectFit:"contain",
+          objectPosition:"center",
           opacity:1,
         }}
       />
@@ -2438,12 +2561,8 @@ const BottleGlyph=({color="#8B1A1A"})=>{
         fill={`url(#${shineId})`}
         opacity="0.9"
       />
-      <rect x="16.6" y="34.4" width="24.8" height="16.5" rx="4.8" fill={`url(#${labelId})`} stroke="rgba(24,24,28,0.08)" strokeWidth="0.8"/>
-      <rect x="16.6" y="34.4" width="24.8" height="3.8" rx="3.6" fill={`rgba(${accentRgb},0.9)`}/>
-      <ellipse cx="29" cy="42.8" rx="5.1" ry="5.1" fill="rgba(255,255,255,0.42)"/>
-      <path d="M26.1 42.8l2 2.1 3.9-4.2" stroke={`rgba(${accentRgb},0.62)`} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
-      <rect x="17.6" y="54.6" width="22.8" height="8" rx="2.8" fill="rgba(252,247,240,0.92)" stroke="rgba(24,24,28,0.08)" strokeWidth="0.7"/>
-      <path d="M21.5 58.7h14.8" stroke={`rgba(${accentRgb},0.4)`} strokeWidth="1.3" strokeLinecap="round"/>
+      <rect x="17.5" y="35.4" width="23" height="24" rx="7.8" fill={`url(#${labelId})`} opacity="0.2"/>
+      <path d="M21.2 35.9h15.6" stroke="rgba(255,255,255,0.12)" strokeWidth="0.8" strokeLinecap="round"/>
       <ellipse cx="29" cy="63.3" rx="10.8" ry="2.5" fill={`url(#${puntId})`} opacity="0.3"/>
     </svg>
   );
@@ -6531,6 +6650,8 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile,onNavigateTa
   const [compact,setCompact]=useState(()=>window.innerWidth<920);
   const [activityRange,setActivityRange]=useState("7d");
   const [activityType,setActivityType]=useState("all");
+  const [retryingSync,setRetryingSync]=useState(false);
+  const [retryFeedback,setRetryFeedback]=useState("");
   useEffect(()=>{
     const onResize=()=>setCompact(window.innerWidth<920);
     window.addEventListener("resize",onResize);
@@ -6706,6 +6827,7 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile,onNavigateTa
   const syncStatusLabel=pendingSync>0?"Pending retries":"All changes synced";
   const syncStatusTone=pendingSync>0?"#D68A16":"#2F855A";
   const syncErrorText=(safeSync.lastError||"").toString().trim();
+  const visibleSyncError=isCellarEventsPermissionIssue(syncErrorText)?"":syncErrorText;
 
   const healthTotal=Math.max(1,readyCount+notReadyCount+pastPeakCount+noWindowCount);
   const readyPct=(readyCount/healthTotal)*100;
@@ -6832,10 +6954,27 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile,onNavigateTa
               <div style={{fontSize:13,fontWeight:800,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{syncStatusLabel}</div>
             </div>
           </div>
-          <button onClick={async()=>{await onRetrySync?.();}} style={{padding:"8px 10px",borderRadius:10,border:"1px solid rgba(var(--accentRgb),0.28)",background:"rgba(var(--accentRgb),0.1)",color:"var(--accent)",fontSize:11.5,fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6}}>
-            <Icon n="sync" size={13} color="var(--accent)"/> Retry Sync
+          <button onClick={async()=>{
+            setRetryingSync(true);
+            setRetryFeedback("");
+            try{
+              const res=await onRetrySync?.();
+              const pending=Math.max(0,Math.round(Number(res?.pending ?? readSyncHealth().pending)||0));
+              setRetryFeedback(pending>0?`${pending} changes still queued`:"Sync refreshed");
+            }catch{
+              setRetryFeedback("Retry failed");
+            }finally{
+              setRetryingSync(false);
+            }
+          }} style={{padding:"8px 10px",borderRadius:10,border:"1px solid rgba(var(--accentRgb),0.28)",background:"rgba(var(--accentRgb),0.1)",color:"var(--accent)",fontSize:11.5,fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:retryingSync?"default":"pointer",display:"inline-flex",alignItems:"center",gap:6,opacity:retryingSync?0.72:1}} disabled={retryingSync}>
+            <Icon n="sync" size={13} color="var(--accent)"/> {retryingSync?"Retrying…":"Retry Sync"}
           </button>
         </div>
+        {retryFeedback&&(
+          <div style={{marginTop:8,fontSize:11.5,color:"var(--sub)",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+            {retryFeedback}
+          </div>
+        )}
         <div style={{display:"grid",gridTemplateColumns:compact?"1fr":"repeat(4,minmax(0,1fr))",gap:8,marginTop:10}}>
           <div style={{background:"var(--inputBg)",border:"1px solid var(--border)",borderRadius:10,padding:"8px 9px"}}>
             <div style={tinyLabel}>Pending</div>
@@ -6854,9 +6993,9 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile,onNavigateTa
             <div style={{fontSize:12,fontWeight:700,color:syncStatusTone,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{(safeSync.status||"idle").replace(/_/g," ")}</div>
           </div>
         </div>
-        {syncErrorText&&(
+        {visibleSyncError&&(
           <div style={{marginTop:8,padding:"8px 10px",borderRadius:10,border:"1px solid rgba(184,50,50,0.22)",background:"rgba(184,50,50,0.08)",fontSize:11,color:"#7B1C1C",fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
-            Last error: {syncErrorText}
+            Last error: {visibleSyncError}
           </div>
         )}
       </div>
@@ -7105,7 +7244,7 @@ export default function App(){
   const [savedLocations,setSavedLocations]=useState(()=>readSavedLocations());
   const [ready,setReady]=useState(false);
   const [syncHealth,setSyncHealth]=useState(()=>readSyncHealth());
-  const [splashPhase,setSplashPhase]=useState("loading"); // loading | setup | unlock | done
+  const [splashPhase,setSplashPhase]=useState("loading"); // loading | setup | setupPin | unlock | entering | done
   const [isDesktop,setIsDesktop]=useState(()=>window.innerWidth>=768);
   const [isNewUser,setIsNewUser]=useState(false);
   const [isAuthenticated,setIsAuthenticated]=useState(false);
@@ -7805,7 +7944,10 @@ export default function App(){
     if(nextTab) setTab(nextTab);
     setSplashPhase("done");
   };
-  const reloadAfterAuth=()=>window.location.reload();
+  const reloadAfterAuth=()=>{
+    setSplashPhase("entering");
+    window.setTimeout(()=>window.location.reload(),420);
+  };
   const finishProfileSetup=async()=>{
     const owner=(oName||"").trim();
     const cellar=(oCellar||"").trim();
@@ -8034,7 +8176,7 @@ export default function App(){
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:16,marginBottom:22}}>
         <div style={{display:"flex",alignItems:"center",gap:14}}>
           <div style={{width:isDesktop?76:68,height:isDesktop?76:68,borderRadius:22,background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.14)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"inset 0 1px 0 rgba(255,255,255,0.08)"}}>
-            <BrandLogo size={isDesktop?50:44}/>
+            <BrandLogo size={isDesktop?58:50}/>
           </div>
           <div>
             <div style={{fontSize:12,color:"rgba(246,238,233,0.5)",letterSpacing:"3px",textTransform:"uppercase",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Vinology</div>
@@ -8211,6 +8353,30 @@ export default function App(){
         </>
       );
     }
+    if(splashPhase==="entering"){
+      return renderEntryShell(
+        <>
+          {renderHero(
+            <div style={{marginTop:22,display:"flex",alignItems:"center",gap:10}}>
+              {[0,1,2].map(i=><div key={i} style={{width:8,height:8,borderRadius:"50%",background:"rgba(var(--accentRgb),0.82)",animation:`blink 1.2s ${i*0.18}s ease infinite`}}/>)}
+              <span style={{fontSize:12,color:"rgba(246,238,233,0.5)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Session verified. Entering the live cellar…</span>
+            </div>
+          )}
+          <div style={{...actionCard,display:"flex",flexDirection:"column",justifyContent:"center",alignItems:"center",minHeight:isDesktop?360:280,animation:isDesktop?"floatUp 0.55s ease both":"fadeUp 0.4s ease both",textAlign:"center"}}>
+            <div style={{width:isDesktop?132:112,height:isDesktop?132:112,borderRadius:32,background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.12)",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:18,boxShadow:"inset 0 1px 0 rgba(255,255,255,0.08)"}}>
+              <BrandLogo size={isDesktop?96:82}/>
+            </div>
+            <div style={{fontSize:12,color:"rgba(246,238,233,0.56)",letterSpacing:"1.6px",textTransform:"uppercase",fontWeight:700,marginBottom:10,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Welcome Back</div>
+            <div style={{fontSize:30,fontWeight:900,color:"#fff",lineHeight:1.05,letterSpacing:"-1.2px",fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:10}}>
+              {splashGreetingLine}
+            </div>
+            <div style={{fontSize:14,color:"rgba(246,238,233,0.66)",lineHeight:1.6,fontFamily:"'Plus Jakarta Sans',sans-serif",maxWidth:360}}>
+              Opening {splashWineryName} and taking you straight into the cellar.
+            </div>
+          </div>
+        </>
+      );
+    }
     return renderEntryShell(
       <>
         {renderHero()}
@@ -8225,7 +8391,7 @@ export default function App(){
       {tab==="audit"&&<AuditScreen wines={wines} desktop={isDesktop} onSetWineBottles={setWineBottleCount} onRemoveWine={delWine} onRevokeAudit={revokeAuditSnapshot}/>}
       {tab==="ai"&&<AIScreen wines={wines} profile={profile} setProfile={setProfile}/>}
       {tab==="notes"&&<JournalScreen wines={wines} onUpdate={updWine} desktop={isDesktop}/>}
-      {tab==="profile"&&<ProfileScreen wines={wines} notes={notes} theme={themeMode} setTheme={setThemeMode} profile={profile} setProfile={setProfile} onNavigateTab={setTab} syncHealth={syncHealth} onRetrySync={async()=>{await db.flushOutbox();setSyncHealth(readSyncHealth());}} authRole={authRole} onSavePin={updateWineryPin}/>}
+      {tab==="profile"&&<ProfileScreen wines={wines} notes={notes} theme={themeMode} setTheme={setThemeMode} profile={profile} setProfile={setProfile} onNavigateTab={setTab} syncHealth={syncHealth} onRetrySync={async()=>{const res=await db.flushOutbox();setSyncHealth(readSyncHealth());return res;}} authRole={authRole} onSavePin={updateWineryPin}/>}
     </>
   );
 
@@ -8236,7 +8402,7 @@ export default function App(){
       <style>{CSS}</style>
       <div style={{width:246,flexShrink:0,background:`linear-gradient(180deg,${navSolid} 0%,${darkenHex(navSolid,0.05)} 100%)`,display:"flex",flexDirection:"column",padding:"24px 14px 18px",borderRight:"1px solid rgba(255,255,255,.09)",boxShadow:"inset -1px 0 0 rgba(255,255,255,0.03)"}}>
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6,paddingLeft:8}}>
-          <BrandLogo size={28}/>
+          <BrandLogo size={32}/>
           <span style={{fontSize:20,fontWeight:800,color:"#EDE6E0",letterSpacing:"-0.5px"}}>Vinology</span>
         </div>
         <div style={{paddingLeft:8,fontSize:10,color:"rgba(255,255,255,0.5)",fontWeight:700,letterSpacing:"1.2px",textTransform:"uppercase",marginBottom:14}}>Workspace</div>
