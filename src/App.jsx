@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { authApi, dbApi } from "./apiClient";
 import { wineHoldings2021 } from "./data/wineHoldings2021";
 
-const APP_VERSION = "8.15";
+const APP_VERSION = "8.16";
 const ADMIN_PIN_DIGITS = 8;
 const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
 const CHANGE_LOG_KEY = "vino_change_log_v1";
@@ -33,6 +33,93 @@ const writeLSJson = (key,value) => {
   }catch{
     return false;
   }
+};
+const LOGO_COLOR_SRC = "/icons/logo-vinology-2026-512.png";
+let LOGO_MARK_PROMISE = null;
+let LOGO_MARK_CACHE = null;
+const getPreparedLogoMarkSrc = () => {
+  if(LOGO_MARK_CACHE) return Promise.resolve(LOGO_MARK_CACHE);
+  if(LOGO_MARK_PROMISE) return LOGO_MARK_PROMISE;
+  LOGO_MARK_PROMISE = new Promise(resolve=>{
+    try{
+      const img = new Image();
+      img.onload = () => {
+        try{
+          const canvas = document.createElement("canvas");
+          canvas.width = img.naturalWidth || img.width;
+          canvas.height = img.naturalHeight || img.height;
+          const ctx = canvas.getContext("2d",{willReadFrequently:true});
+          if(!ctx){
+            LOGO_MARK_CACHE = LOGO_COLOR_SRC;
+            LOGO_MARK_PROMISE = null;
+            return resolve(LOGO_MARK_CACHE);
+          }
+          ctx.drawImage(img,0,0);
+          const frame = ctx.getImageData(0,0,canvas.width,canvas.height);
+          const data = frame.data;
+          let minX = canvas.width;
+          let minY = canvas.height;
+          let maxX = 0;
+          let maxY = 0;
+          let found = false;
+          for(let i=0;i<data.length;i+=4){
+            const r=data[i];
+            const g=data[i+1];
+            const b=data[i+2];
+            const a=data[i+3];
+            const idx=i/4;
+            const x=idx%canvas.width;
+            const y=Math.floor(idx/canvas.width);
+            const keep=a>24 && r>220 && g>220 && b>220;
+            if(keep){
+              data[i]=255;data[i+1]=255;data[i+2]=255;data[i+3]=255;
+              found = true;
+              if(x<minX) minX=x;
+              if(y<minY) minY=y;
+              if(x>maxX) maxX=x;
+              if(y>maxY) maxY=y;
+            }else{
+              data[i]=255;data[i+1]=255;data[i+2]=255;data[i+3]=0;
+            }
+          }
+          ctx.putImageData(frame,0,0);
+          if(!found){
+            LOGO_MARK_CACHE = LOGO_COLOR_SRC;
+            LOGO_MARK_PROMISE = null;
+            return resolve(LOGO_MARK_CACHE);
+          }
+          const pad = 12;
+          minX=Math.max(0,minX-pad);
+          minY=Math.max(0,minY-pad);
+          maxX=Math.min(canvas.width-1,maxX+pad);
+          maxY=Math.min(canvas.height-1,maxY+pad);
+          const out=document.createElement("canvas");
+          out.width=maxX-minX+1;
+          out.height=maxY-minY+1;
+          const outCtx=out.getContext("2d");
+          outCtx.putImageData(ctx.getImageData(minX,minY,out.width,out.height),0,0);
+          LOGO_MARK_CACHE = out.toDataURL("image/png");
+          LOGO_MARK_PROMISE = null;
+          resolve(LOGO_MARK_CACHE);
+        }catch{
+          LOGO_MARK_CACHE = LOGO_COLOR_SRC;
+          LOGO_MARK_PROMISE = null;
+          resolve(LOGO_MARK_CACHE);
+        }
+      };
+      img.onerror = () => {
+        LOGO_MARK_CACHE = LOGO_COLOR_SRC;
+        LOGO_MARK_PROMISE = null;
+        resolve(LOGO_MARK_CACHE);
+      };
+      img.src = LOGO_COLOR_SRC;
+    }catch{
+      LOGO_MARK_CACHE = LOGO_COLOR_SRC;
+      LOGO_MARK_PROMISE = null;
+      resolve(LOGO_MARK_CACHE);
+    }
+  });
+  return LOGO_MARK_PROMISE;
 };
 const defaultSyncHealth = () => ({
   status:"idle",
@@ -1749,35 +1836,17 @@ const Icon=({n,size=20,color="currentColor",fill="none",sw=1.5})=>{
   return(<svg width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><path d={IC[n]}/></svg>);
 };
 
-const BrandMarkGlyph=({size=42,color="currentColor"})=>(
-  <svg width={size} height={size} viewBox="0 0 64 64" fill="none" stroke={color} strokeWidth="3.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M28.8 7.5h6.4v10.9c0 4.6 1.7 7.8 5.1 10.8 3.1 2.8 4.7 6.5 4.7 11.3v11.7c0 3.3-2.2 5-6.6 5H25.6c-4.4 0-6.6-1.7-6.6-5V40.5c0-4.8 1.6-8.5 4.7-11.3 3.4-3 5.1-6.2 5.1-10.8V7.5z"/>
-    <path d="M28.8 11h6.4"/>
-    <path d="M23.2 29.8h17.6"/>
-    <path d="M23.2 40.7h17.6"/>
-    <path d="M23.2 51.6h17.6"/>
-    <path d="M27.1 25.1v4.7"/>
-    <path d="M32 25.1v4.7"/>
-    <path d="M36.9 25.1v4.7"/>
-    <path d="M27.1 36v4.7"/>
-    <path d="M32 36v4.7"/>
-    <path d="M36.9 36v4.7"/>
-    <path d="M27.1 46.9v4.7"/>
-    <path d="M32 46.9v4.7"/>
-    <path d="M36.9 46.9v4.7"/>
-    <path d="M23.9 35.4c0-2.4 1.8-4.2 4.1-4.2s4.1 1.8 4.1 4.2"/>
-    <path d="M31.1 35.4c0-2.4 1.8-4.2 4.1-4.2s4.1 1.8 4.1 4.2"/>
-    <path d="M23.9 46.3c0-2.4 1.8-4.2 4.1-4.2s4.1 1.8 4.1 4.2"/>
-    <path d="M31.1 46.3c0-2.4 1.8-4.2 4.1-4.2s4.1 1.8 4.1 4.2"/>
-    <path d="M23.9 57.2c0-2.4 1.8-4.2 4.1-4.2s4.1 1.8 4.1 4.2"/>
-    <path d="M31.1 57.2c0-2.4 1.8-4.2 4.1-4.2s4.1 1.8 4.1 4.2"/>
-  </svg>
-);
-
 const BrandLogo=({size=42,variant="color"})=>{
   const isMono=variant==="mono";
-  const src="/icons/logo-vinology-2026-512.png";
+  const src=LOGO_COLOR_SRC;
   const radius=Math.max(10,Math.round(size*0.26));
+  const [markSrc,setMarkSrc]=useState(()=>LOGO_MARK_CACHE);
+  useEffect(()=>{
+    if(!isMono) return;
+    let alive=true;
+    getPreparedLogoMarkSrc().then(next=>{if(alive&&next)setMarkSrc(next);});
+    return()=>{alive=false;};
+  },[isMono]);
   if(isMono){
     return(
       <div
@@ -1790,7 +1859,22 @@ const BrandLogo=({size=42,variant="color"})=>{
           justifyContent:"center",
         }}
       >
-        <BrandMarkGlyph size={size} color="rgba(255,255,255,0.95)"/>
+        {markSrc?(
+          <img
+            src={markSrc}
+            alt=""
+            width={size}
+            height={size}
+            draggable="false"
+            style={{
+              display:"block",
+              width:size,
+              height:size,
+              objectFit:"contain",
+              objectPosition:"center",
+            }}
+          />
+        ):null}
       </div>
     );
   }
@@ -1816,10 +1900,10 @@ const BrandLogo=({size=42,variant="color"})=>{
         draggable="false"
         style={{
           display:"block",
-          width:size,
-          height:size,
+          width:size*1.12,
+          height:size*1.12,
           objectFit:"cover",
-          objectPosition:"center",
+          objectPosition:"50% 43%",
           borderRadius:radius,
           opacity:1,
         }}
