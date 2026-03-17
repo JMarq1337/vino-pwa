@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { authApi, dbApi } from "./apiClient";
 import { wineHoldings2021 } from "./data/wineHoldings2021";
 
-const APP_VERSION = "8.17";
+const APP_VERSION = "8.18";
 const ADMIN_PIN_DIGITS = 8;
 const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
 const CHANGE_LOG_KEY = "vino_change_log_v1";
@@ -2086,6 +2086,7 @@ const callAI=async(msg,wines,history=[],memory=[],profile={})=>{
     .map(w=>({
       name:w.name||"",
       varietal:resolveVarietal(w),
+      wineType:resolveWineType(w),
       vintage:w.vintage||null,
       origin:w.origin||"",
       location:normalizeLocation(w.location||""),
@@ -2096,6 +2097,9 @@ const callAI=async(msg,wines,history=[],memory=[],profile={})=>{
       bottlesConsumed:getConsumedBottles(w),
       datePurchased:w.datePurchased||"",
       addedDate:w.cellarMeta?.addedDate||"",
+      createdAt:w.createdAt||"",
+      updatedAt:w.cellarMeta?.updatedAt||"",
+      journalUpdatedAt:w.cellarMeta?.journalUpdatedAt||"",
       drinkFrom:w.cellarMeta?.drinkStart||null,
       drinkBy:w.cellarMeta?.drinkEnd||null,
       rrpPerBottle:safeNum(w.cellarMeta?.rrp),
@@ -5074,7 +5078,7 @@ const AIScreen=({wines,profile,setProfile})=>{
     title:"New Chat",
     createdAt:new Date().toISOString(),
     updatedAt:new Date().toISOString(),
-    messages:seed||[{r:"a",t:"Hello. I'm Vinology — your personal sommelier.\n\nI use live cellar, journal, audit and summary data.\n\nTry:\n• What should I open next?\n• Which wines are not ready yet?\n• Which wines may pass peak soon?\n\nMemory commands:\n• remember I prefer dry Riesling\n• forget dry Riesling\n• clear memories"}]
+    messages:seed||[{r:"a",t:"Hello. I'm Vinology — your personal sommelier.\n\nAsk naturally. I use live cellar, journal, audit, and summary data, and I keep track of follow-up questions in the conversation.\n\nTry:\n• What should I open next?\n• Which wines are not ready yet?\n• Where is the latest wine I added?\n• Are any wines past peak?\n\nMemory commands:\n• remember I prefer dry Riesling\n• forget dry Riesling\n• clear memories"}]
   });
   const [sessions,setSessions]=useState(()=>{
     try{
@@ -5248,7 +5252,7 @@ const AIScreen=({wines,profile,setProfile})=>{
         </div>
       )}
       <div style={{display:"flex",gap:8,paddingTop:8}}>
-        <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&send()} placeholder="Ask anything about wine…" style={{borderRadius:14}}/>
+        <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&send()} placeholder="Ask naturally about your cellar…" style={{borderRadius:14}}/>
         <button onClick={()=>send()} disabled={!input.trim()||loading}
           style={{width:44,height:44,flexShrink:0,borderRadius:12,background:input.trim()&&!loading?"var(--accent)":"var(--inputBg)",border:"none",cursor:input.trim()&&!loading?"pointer":"default",display:"flex",alignItems:"center",justifyContent:"center",color:input.trim()&&!loading?"white":"var(--sub)",transition:"all 0.18s"}}>
           <Icon n="send" size={17}/>

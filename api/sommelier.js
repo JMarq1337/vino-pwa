@@ -1,24 +1,29 @@
 const DEFAULT_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
-const MAX_HISTORY = 18;
+const MAX_HISTORY = 24;
 const { requireSession } = require("./_lib/auth");
 
-const SYSTEM_PROMPT = `You are Vinology Sommelier, a practical assistant for one private cellar.
+const SYSTEM_PROMPT = `You are Vinology Sommelier, the cellar copilot for one private winery app.
+You should feel like a real conversational assistant, but you must stay grounded in the supplied live data.
 Rules:
-- Use ONLY the provided cellar + audit data for facts.
-- Never invent wines, locations, dates, prices, or bottle counts.
-- Treat user memory as personalization only, never as a source of cellar facts.
-- If data is missing, say exactly that.
-- Follow conversation context: if user says "it/that one", resolve from recent chat context.
-- Keep answers concise and structured.
-- For location answers include location + section + slot when available.
-- For date questions, return one exact date first, then short context if needed.
-- If a question is ambiguous, ask one short clarifying question.`;
+- Use the provided cellar, audit, profile, and memory context as the factual source of truth.
+- Never invent wines, locations, dates, bottle counts, prices, audits, or reviews.
+- Treat memory as preference context only, never as proof of cellar facts.
+- Use conversation history to resolve follow-up references like "it", "that one", "the second one", or small misspellings.
+- Prefer answering directly when the likely meaning is clear. Do not ask for clarification unless multiple plausible answers remain and the supplied data cannot narrow it down.
+- If you make a reasonable assumption from conversation context, state it briefly only when helpful.
+- For yes/no questions, answer yes or no first.
+- For list requests, return up to the requested count with exact cellar wine names.
+- For location answers include location, section, and slot when available.
+- For date answers give one exact date first, then short context.
+- Keep the tone natural, precise, and helpful.
+- Never say robotic phrases like "I can answer that from your live cellar data".`;
 const RETRY_APPEND_PROMPT = `
 Additional strict output requirements:
 - If you provide a wine list, every numbered line must include an exact wine name from the provided cellar JSON.
 - Do not output truncated lines.
 - Prefer plain text (no markdown tables).
-- If data is insufficient, say that clearly instead of guessing.`;
+- If data is insufficient, say that clearly instead of guessing.
+- Resolve follow-up references from conversation context instead of falling back to a generic clarification.`;
 const INTENT_ROUTER_PROMPT = `You are an intent router for a wine cellar assistant.
 Return ONLY compact JSON with:
 {
@@ -147,6 +152,26 @@ const parseFutureYearFromQuery = q => {
   return null;
 };
 
+const parseOrdinalRef = q => {
+  const txt = low(q);
+  const ordinals = {
+    first: 1, "1st": 1,
+    second: 2, "2nd": 2,
+    third: 3, "3rd": 3,
+    fourth: 4, "4th": 4,
+    fifth: 5, "5th": 5,
+    sixth: 6, "6th": 6,
+    seventh: 7, "7th": 7,
+    eighth: 8, "8th": 8,
+    ninth: 9, "9th": 9,
+    tenth: 10, "10th": 10,
+  };
+  for (const [label, value] of Object.entries(ordinals)) {
+    if (new RegExp(`\\b${label}\\b`).test(txt)) return value;
+  }
+  return null;
+};
+
 const readyToDrinkIntent = q => {
   const txt = low(q);
   const hasWineRef = /\bwines?\b|\bbottles?\b/.test(txt);
@@ -237,6 +262,25 @@ const pickExplicitWine = (message, cellar) => {
   return best;
 };
 
+const listMentionsFromText = (text, cellar) => {
+  const out = [];
+  const seen = new Set();
+  clean(text)
+    .split(/\r?\n/)
+    .map(l => l.trim())
+    .filter(Boolean)
+    .forEach(line => {
+      const numbered = line.replace(/^\d+\.\s+/, "");
+      const found = pickExplicitWine(numbered, cellar);
+      const key = clean(found?.name);
+      if (found && key && !seen.has(key)) {
+        seen.add(key);
+        out.push(found);
+      }
+    });
+  return out;
+};
+
 const pickFromHistory = (history, cellar) => {
   const msgs = safeArr(history).slice(-10).reverse();
   for (const h of msgs) {
@@ -248,10 +292,23 @@ const pickFromHistory = (history, cellar) => {
   return null;
 };
 
+const pickOrdinalFromHistory = (message, history, cellar) => {
+  const ordinal = parseOrdinalRef(message);
+  if (!ordinal) return null;
+  const msgs = safeArr(history).slice(-8).reverse();
+  for (const h of msgs) {
+    const refs = listMentionsFromText(h?.text || "", cellar);
+    if (refs[ordinal - 1]) return refs[ordinal - 1];
+  }
+  return null;
+};
+
 const resolveWine = (message, cellar, history) => {
   const explicit = pickExplicitWine(message, cellar);
   if (explicit) return explicit;
   const q = low(message);
+  const ordinal = pickOrdinalFromHistory(message, history, cellar);
+  if (ordinal) return ordinal;
   if (/(latest|last|newest)\s+(wine|bottle|one)/.test(q)) return latestWine(cellar);
   if (/\b(it|that|this|the one|that wine|this wine)\b/.test(q)) return pickFromHistory(history, cellar);
   const words = clean(message).split(/\s+/).filter(Boolean).length;
@@ -359,6 +416,232 @@ const canonicalQuestionFromIntent = hint => {
   }
 };
 
+const timestampMs = raw => parseDate(raw)?.getTime() || -1;
+
+const updatedWineTimestamp = wine => {
+  const created = timestampMs(wine?.createdAt);
+  const updated = timestampMs(wine?.updatedAt);
+  const journal = timestampMs(wine?.journalUpdatedAt);
+  const added = timestampMs(wine?.addedDate);
+  return Math.max(created, updated, journal, added, sortableTimestamp(wine));
+};
+
+const summarizeWine = wine => {
+  if (!wine) return null;
+  return {
+    name: clean(wine?.name),
+    varietal: clean(wine?.varietal),
+    wineType: clean(wine?.wineType),
+    vintage: wine?.vintage ?? null,
+    origin: clean(wine?.origin),
+    location: clean(wine?.location),
+    locationSection: clean(wine?.locationSection),
+    locationSlot: clean(wine?.locationSlot),
+    bottlesLeft: Math.max(0, Math.round(num(wine?.bottlesLeft) || 0)),
+    bottlesPurchased: Math.max(0, Math.round(num(wine?.bottlesPurchased) || 0)),
+    bottlesConsumed: Math.max(0, Math.round(num(wine?.bottlesConsumed) || 0)),
+    datePurchased: clean(wine?.datePurchased),
+    addedDate: clean(wine?.addedDate),
+    createdAt: clean(wine?.createdAt),
+    updatedAt: clean(wine?.updatedAt),
+    journalUpdatedAt: clean(wine?.journalUpdatedAt),
+    drinkFrom: clean(wine?.drinkFrom),
+    drinkBy: clean(wine?.drinkBy),
+    rrpPerBottle: num(wine?.rrpPerBottle),
+    paidPerBottle: num(wine?.paidPerBottle),
+    reviewPrimaryReviewer: clean(wine?.reviewPrimaryReviewer),
+    reviewPrimaryRating: clean(wine?.reviewPrimaryRating),
+    review: clean(wine?.review).slice(0, 280),
+    personalNotes: clean(wine?.personalNotes).slice(0, 280),
+    hasJournalContent: journalHasContent(wine),
+  };
+};
+
+const cellarSummary = cellar => {
+  const wines = safeArr(cellar);
+  const totalWines = wines.length;
+  const totalLeft = wines.reduce((s, w) => s + Math.max(0, Math.round(num(w?.bottlesLeft) || 0)), 0);
+  const totalPurchased = wines.reduce((s, w) => s + Math.max(0, Math.round(num(w?.bottlesPurchased) || 0)), 0);
+  const totalConsumed = wines.reduce((s, w) => s + Math.max(0, Math.round(num(w?.bottlesConsumed) || 0)), 0);
+  const totalRrp = wines.reduce((s, w) => s + rrpValueForWine(w), 0);
+  const onHandRrp = wines.reduce((s, w) => s + ((num(w?.rrpPerBottle) || 0) * Math.max(0, Math.round(num(w?.bottlesLeft) || 0))), 0);
+  const readiness = wines.reduce((acc, w) => {
+    const key = readinessState(w);
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, { ready: 0, early: 0, late: 0, none: 0 });
+  const locationCounts = wines.reduce((acc, w) => {
+    const key = clean(w?.location) || "Unknown";
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+  const varietalCounts = wines.reduce((acc, w) => {
+    const key = clean(w?.varietal) || "Unknown";
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+  const topLocations = Object.entries(locationCounts).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name, count]) => ({ name, count }));
+  const topVarietals = Object.entries(varietalCounts).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name, count]) => ({ name, count }));
+  return {
+    totalWines,
+    totalLeft,
+    totalPurchased,
+    totalConsumed,
+    totalRrp: Number(totalRrp.toFixed(2)),
+    onHandRrp: Number(onHandRrp.toFixed(2)),
+    readiness,
+    topLocations,
+    topVarietals,
+  };
+};
+
+const relevantTokens = text =>
+  Array.from(
+    new Set(
+      normName(text)
+        .split(" ")
+        .filter(t => t && t.length > 2 && !["wine", "wines", "bottle", "bottles", "cellar", "inventory", "collection", "show", "list", "give", "ready", "drink", "drinking"].includes(t))
+    )
+  );
+
+const scoreWineAgainstQuery = (wine, message, tokens) => {
+  const q = normName(message);
+  const name = normName(wine?.name);
+  const varietal = normName(wine?.varietal);
+  const type = normName(wine?.wineType);
+  const origin = normName(wine?.origin);
+  const location = normName([wine?.location, wine?.locationSection, wine?.locationSlot].filter(Boolean).join(" "));
+  let score = 0;
+  if (name && q.includes(name)) score += 220;
+  if (varietal && q.includes(varietal)) score += 120;
+  if (type && q.includes(type)) score += 80;
+  if (origin && q.includes(origin)) score += 80;
+  if (location && q.includes(location)) score += 120;
+  tokens.forEach(token => {
+    if (name.includes(token)) score += 24;
+    if (varietal.includes(token)) score += 18;
+    if (type.includes(token)) score += 14;
+    if (origin.includes(token)) score += 16;
+    if (location.includes(token)) score += 18;
+    if (String(wine?.vintage || "").includes(token)) score += 10;
+  });
+  return score;
+};
+
+const collectFocusWines = ({ message, cellar, history, hint }) => {
+  const wines = safeArr(cellar);
+  const q = low(message);
+  const tokens = relevantTokens(message);
+  const resolved = resolveWine(message, wines, history);
+  const recent = pickFromHistory(history, wines);
+  const focus = new Map();
+  const add = (wine, reason, score = 0) => {
+    if (!wine) return;
+    const key = clean(wine?.name) || `wine-${focus.size}`;
+    const existing = focus.get(key) || { wine, score: 0, reasons: [] };
+    existing.score += score;
+    if (reason && !existing.reasons.includes(reason)) existing.reasons.push(reason);
+    existing.wine = wine;
+    focus.set(key, existing);
+  };
+
+  if (resolved) add(resolved, "resolved from question or follow-up", 1000);
+  if (recent && (!resolved || clean(recent?.name) !== clean(resolved?.name))) add(recent, "recent conversation subject", 700);
+
+  wines.forEach(w => {
+    const score = scoreWineAgainstQuery(w, message, tokens);
+    if (score > 0) add(w, "query match", score);
+  });
+
+  const want = Math.min(18, parsePositiveCount(message, 10));
+  const readyState = classifyReadinessQuery(message);
+  if (readyState) {
+    wines
+      .filter(w => readinessState(w) === readyState)
+      .sort((a, b) => {
+        const endA = num(a?.drinkBy) || 9999;
+        const endB = num(b?.drinkBy) || 9999;
+        if (endA !== endB) return endA - endB;
+        return clean(a?.name).localeCompare(clean(b?.name));
+      })
+      .slice(0, want)
+      .forEach(w => add(w, `${readyState} candidate`, 90));
+  }
+
+  if (hint?.intent === "latest_added" || (/\b(latest|newest|recent)\b/.test(q) && /\b(add|added|inventory)\b/.test(q))) {
+    wines
+      .slice()
+      .sort((a, b) => sortableTimestamp(b) - sortableTimestamp(a))
+      .slice(0, 12)
+      .forEach(w => add(w, "recently added", 60));
+  }
+
+  if (/\b(updated|edited|changed|journal)\b/.test(q)) {
+    wines
+      .slice()
+      .sort((a, b) => updatedWineTimestamp(b) - updatedWineTimestamp(a))
+      .slice(0, 12)
+      .forEach(w => add(w, "recently updated", 55));
+  }
+
+  if (/\blow stock|nearly out|almost out|run out|depletion\b/.test(q)) {
+    wines
+      .filter(w => {
+        const left = Math.max(0, Math.round(num(w?.bottlesLeft) || 0));
+        return left > 0 && left <= 2;
+      })
+      .sort((a, b) => (num(a?.bottlesLeft) || 0) - (num(b?.bottlesLeft) || 0))
+      .slice(0, want)
+      .forEach(w => add(w, "low stock", 70));
+  }
+
+  return [...focus.values()]
+    .sort((a, b) => b.score - a.score || clean(a.wine?.name).localeCompare(clean(b.wine?.name)))
+    .slice(0, 24)
+    .map(entry => ({ ...summarizeWine(entry.wine), relevance: entry.reasons }));
+};
+
+const buildContextPayload = ({ message, cellar, audits, history, memory, profile, hint }) => {
+  const wines = safeArr(cellar);
+  const latest = latestWine(wines);
+  const latestUpdated = wines.slice().sort((a, b) => updatedWineTimestamp(b) - updatedWineTimestamp(a))[0] || null;
+  const resolved = resolveWine(message, wines, history);
+  const recentSubject = pickFromHistory(history, wines);
+  const latestAudit = safeArr(audits)
+    .slice()
+    .sort((a, b) => clean(b?.updatedAt || b?.completedAt || b?.createdAt).localeCompare(clean(a?.updatedAt || a?.completedAt || a?.createdAt)))[0] || null;
+  return {
+    now: new Date().toISOString(),
+    query: {
+      text: clean(message),
+      requestedCount: parsePositiveCount(message, 10),
+      readinessMode: classifyReadinessQuery(message) || null,
+      targetYear: parseFutureYearFromQuery(message),
+      deterministicHint: hint || null,
+    },
+    summary: cellarSummary(wines),
+    resolvedWine: summarizeWine(resolved),
+    recentConversationWine: summarizeWine(recentSubject),
+    latestWine: summarizeWine(latest),
+    latestUpdatedWine: summarizeWine(latestUpdated),
+    focusedWines: collectFocusWines({ message, cellar: wines, history, hint }),
+    latestAudit: latestAudit || null,
+    profile,
+    memory,
+    cellar: wines,
+    audits,
+  };
+};
+
+const buildModelUserText = ({ message, contextPayload }) => [
+  `User question: ${clean(message)}`,
+  ``,
+  `Grounding context JSON:`,
+  JSON.stringify(contextPayload),
+  ``,
+  `Answer directly from the grounding context. Resolve follow-up references from the conversation when possible. If the question is yes/no, answer that first.`,
+].join("\n");
+
 const classifyDeterministicIntent = async ({ message, history, runModel }) => {
   const text = clean(message);
   if (!text) return null;
@@ -384,7 +667,7 @@ const classifyDeterministicIntent = async ({ message, history, runModel }) => {
   const intent = clean(parsed.intent);
   if (!intent || intent === "unknown") return null;
   const confidence = clamp01(parsed.confidence);
-  if (confidence < 0.55) return null;
+  if (confidence < 0.4) return null;
   return {
     intent,
     wineName: clean(parsed.wineName),
@@ -698,6 +981,7 @@ const compactCellar = cellar =>
   safeArr(cellar).map(w => ({
     name: clean(w?.name),
     varietal: clean(w?.varietal),
+    wineType: clean(w?.wineType),
     vintage: w?.vintage ?? null,
     origin: clean(w?.origin),
     location: clean(w?.location),
@@ -708,6 +992,9 @@ const compactCellar = cellar =>
     bottlesConsumed: Math.max(0, Math.round(num(w?.bottlesConsumed) || 0)),
     datePurchased: clean(w?.datePurchased),
     addedDate: clean(w?.addedDate),
+    createdAt: clean(w?.createdAt),
+    updatedAt: clean(w?.updatedAt),
+    journalUpdatedAt: clean(w?.journalUpdatedAt),
     drinkFrom: clean(w?.drinkFrom),
     drinkBy: clean(w?.drinkBy),
     rrpPerBottle: num(w?.rrpPerBottle),
@@ -787,17 +1074,7 @@ module.exports = async (req, res) => {
     const history = clampHistory(body.history);
     if (!message) return res.status(400).json({ error: "Message is required." });
 
-    const direct = deterministicAnswer({ message, cellar, audits, history, memory, profile });
-    if (direct) return res.status(200).json({ text: direct });
-
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(DEFAULT_MODEL)}:generateContent?key=${encodeURIComponent(apiKey)}`;
-    const contextPayload = {
-      cellar,
-      audits,
-      memory,
-      profile,
-      now: new Date().toISOString(),
-    };
 
     const runModel = async ({ systemText, userText, temperature = 0.2, maxOutputTokens = 900 }) => {
       const reqContents = [
@@ -827,24 +1104,26 @@ module.exports = async (req, res) => {
       return { aiRes, data, text: extractGeminiText(data) };
     };
 
+    const direct = deterministicAnswer({ message, cellar, audits, history, memory, profile });
+    if (direct) return res.status(200).json({ text: direct });
+
+    let hint = null;
     if (isDeterministicDataQuery(message)) {
-      const hint = await classifyDeterministicIntent({ message, history, runModel });
+      hint = await classifyDeterministicIntent({ message, history, runModel });
       const canonical = canonicalQuestionFromIntent(hint);
       if (canonical) {
         const rerouted = deterministicAnswer({ message: canonical, cellar, audits, history, memory, profile });
         if (rerouted) return res.status(200).json({ text: rerouted });
       }
-      return res.status(200).json({
-        text: "I can answer that from your live cellar data, but I need one clearer detail (wine name, date type, or location scope).",
-      });
     }
 
-    const baseUserText = `Context JSON:\n${JSON.stringify(contextPayload)}\n\nUser question: ${message}`;
+    const contextPayload = buildContextPayload({ message, cellar, audits, history, memory, profile, hint });
+    const baseUserText = buildModelUserText({ message, contextPayload });
     const first = await runModel({
       systemText: SYSTEM_PROMPT,
       userText: baseUserText,
-      temperature: 0.2,
-      maxOutputTokens: 900,
+      temperature: isDeterministicDataQuery(message) ? 0.08 : 0.22,
+      maxOutputTokens: 1100,
     });
     if (!first.aiRes.ok) {
       const err = first.data?.error?.message || "Gemini request failed.";
@@ -859,7 +1138,7 @@ module.exports = async (req, res) => {
         systemText: `${SYSTEM_PROMPT}\n${RETRY_APPEND_PROMPT}`,
         userText: `${baseUserText}\n\nPrevious draft failed validation: ${validation.reason}. Rewrite from scratch.`,
         temperature: 0.1,
-        maxOutputTokens: 1000,
+        maxOutputTokens: 1200,
       });
       if (retry.aiRes.ok) {
         const retryValidation = validateModelAnswer({ message, text: retry.text || "", cellar });
@@ -872,7 +1151,7 @@ module.exports = async (req, res) => {
 
     if (!finalText || !validation.ok) {
       return res.status(200).json({
-        text: "I couldn’t verify a reliable answer from the current cellar data for that request. Please ask a narrower question (wine name, location, date, or bottle count).",
+        text: "I couldn’t verify a reliable answer from the current cellar data for that request. Ask it again in a slightly simpler way and I’ll answer from the live cellar, journal, audit, and profile context.",
       });
     }
 
