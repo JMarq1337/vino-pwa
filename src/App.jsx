@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { authApi, dbApi } from "./apiClient";
 import { wineHoldings2021 } from "./data/wineHoldings2021";
 
-const APP_VERSION = "8.14";
+const APP_VERSION = "8.15";
 const ADMIN_PIN_DIGITS = 8;
 const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
 const CHANGE_LOG_KEY = "vino_change_log_v1";
@@ -1751,20 +1751,7 @@ const Icon=({n,size=20,color="currentColor",fill="none",sw=1.5})=>{
 
 const BrandLogo=({size=42,variant="color"})=>{
   const isMono=variant==="mono";
-  const src=isMono?"/icons/logo-mark-mono.svg":"/icons/logo-user-tight-512.png";
-  if(isMono){
-    return(
-      <img
-        src={src}
-        alt=""
-        aria-hidden="true"
-        width={size}
-        height={size}
-        draggable="false"
-        style={{display:"block",width:size,height:size,objectFit:"contain",objectPosition:"center"}}
-      />
-    );
-  }
+  const src="/icons/logo-vinology-2026-512.png";
   const radius=Math.max(10,Math.round(size*0.26));
   return(
     <div
@@ -1773,13 +1760,11 @@ const BrandLogo=({size=42,variant="color"})=>{
         width:size,
         height:size,
         borderRadius:radius,
-        background:"#fff",
-        border:"1px solid rgba(0,0,0,0.06)",
-        boxShadow:"0 8px 18px rgba(0,0,0,0.14)",
         display:"flex",
         alignItems:"center",
         justifyContent:"center",
         overflow:"hidden",
+        boxShadow:isMono?"none":"0 10px 24px rgba(0,0,0,0.16)",
       }}
     >
       <img
@@ -1788,7 +1773,16 @@ const BrandLogo=({size=42,variant="color"})=>{
         width={size}
         height={size}
         draggable="false"
-        style={{display:"block",width:size,height:size,objectFit:"contain",objectPosition:"center"}}
+        style={{
+          display:"block",
+          width:size,
+          height:size,
+          objectFit:"cover",
+          objectPosition:"center",
+          borderRadius:radius,
+          filter:isMono?"grayscale(1) contrast(1.08) brightness(0.86)":"none",
+          opacity:isMono?0.92:1,
+        }}
       />
     </div>
   );
@@ -2322,10 +2316,10 @@ const BottleGlyph=({color="#8B1A1A"})=>{
       />
       <rect x="16.6" y="34.4" width="24.8" height="16.5" rx="4.8" fill={`url(#${labelId})`} stroke="rgba(24,24,28,0.08)" strokeWidth="0.8"/>
       <rect x="16.6" y="34.4" width="24.8" height="3.8" rx="3.6" fill={`rgba(${accentRgb},0.9)`}/>
-      <path d="M20.8 42.2h16.4" stroke="rgba(24,24,28,0.18)" strokeWidth="0.9" strokeLinecap="round"/>
-      <path d="M20.8 45.1h11.4" stroke="rgba(24,24,28,0.15)" strokeWidth="0.9" strokeLinecap="round"/>
+      <ellipse cx="29" cy="42.8" rx="5.1" ry="5.1" fill="rgba(255,255,255,0.42)"/>
+      <path d="M26.1 42.8l2 2.1 3.9-4.2" stroke={`rgba(${accentRgb},0.62)`} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
       <rect x="17.6" y="54.6" width="22.8" height="8" rx="2.8" fill="rgba(252,247,240,0.92)" stroke="rgba(24,24,28,0.08)" strokeWidth="0.7"/>
-      <path d="M22.3 58.6h12.8" stroke={`rgba(${accentRgb},0.46)`} strokeWidth="1.2" strokeLinecap="round"/>
+      <path d="M21.5 58.7h14.8" stroke={`rgba(${accentRgb},0.4)`} strokeWidth="1.3" strokeLinecap="round"/>
       <ellipse cx="29" cy="63.3" rx="10.8" ry="2.5" fill={`url(#${puntId})`} opacity="0.3"/>
     </svg>
   );
@@ -2362,8 +2356,19 @@ const WineCard=({wine,onClick})=>{
   const readinessTag=!wine.wishlist&&ready.key!=="none"?ready.label:null;
   const rrpText=!wine.wishlist&&rrpPerBottle!=null&&rrpPerBottle>0?`RRP $${rrpPerBottle.toFixed(2)}`:null;
   const paidText=!wine.wishlist&&paidPerBottle!=null&&paidPerBottle>0?`Paid $${paidPerBottle.toFixed(2)}`:null;
-  const footerTags=[locationTag,addedTag].filter(Boolean);
   const quickTagStyle={padding:"4px 8px",borderRadius:999,fontSize:10.5,fontWeight:800,color:"var(--text)",background:"var(--inputBg)",fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap",border:"1px solid var(--border)"};
+  const metaLabelStyle={fontSize:9.5,fontWeight:800,letterSpacing:"0.75px",textTransform:"uppercase",color:"rgba(var(--accentRgb),0.58)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:2};
+  const detailTextStyle={fontSize:11.5,color:"var(--sub)",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"};
+  const primaryTags=[
+    <WineTypePill key="type" type={type} label={varietal}/>,
+    yearTag?<span key="year" style={quickTagStyle}>{yearTag}</span>:null,
+    readinessTag?<span key="readiness" style={{...quickTagStyle,color:"#fff",background:ready.color}}>{ready.key==="ready"?"Ready":ready.label}</span>:null,
+  ].filter(Boolean);
+  const priceTags=[
+    rrpText?<span key="rrp" style={{...quickTagStyle,background:"rgba(var(--accentRgb),0.13)",color:"var(--accent)",fontWeight:800}}>{rrpText}</span>:null,
+    paidText?<span key="paid" style={{...quickTagStyle,background:"var(--card)",border:"1px solid var(--border)"}}>{paidText}</span>:null,
+  ].filter(Boolean);
+  const addedText=addedTag?addedTag.replace(/^Added\s+/,""):null;
   return(
     <div onClick={onClick} style={{background:"linear-gradient(180deg,var(--card),rgba(var(--accentRgb),0.05) 160%)",borderRadius:24,padding:"15px",cursor:"pointer",border:"1px solid rgba(var(--accentRgb),0.12)",marginBottom:0,display:"grid",gridTemplateColumns:"68px 1fr",gap:14,alignItems:"center",transition:"transform 0.18s, box-shadow 0.18s, border-color 0.18s",boxShadow:"0 10px 24px var(--shadow)",minHeight:126,position:"relative",overflow:"hidden"}}
       onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow="0 18px 34px var(--shadow)";e.currentTarget.style.borderColor="rgba(var(--accentRgb),0.26)";}}
@@ -2385,20 +2390,35 @@ const WineCard=({wine,onClick})=>{
           </div>
         )}
         <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-          <WineTypePill type={type} label={varietal}/>
-          {yearTag&&<span style={quickTagStyle}>{yearTag}</span>}
-          {rrpText&&<span style={{...quickTagStyle,background:"rgba(var(--accentRgb),0.13)",color:"var(--accent)",fontWeight:800}}>{rrpText}</span>}
-          {paidText&&<span style={{...quickTagStyle,background:"var(--card)",border:"1px solid var(--border)"}}>{paidText}</span>}
-          {readinessTag&&<span style={{...quickTagStyle,color:"#fff",background:ready.color}}>{ready.key==="ready"?"Ready":ready.label}</span>}
+          {primaryTags}
         </div>
-        {footerTags.length>0&&(
-          <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginTop:1}}>
-            {footerTags.map(tag=>(
-              <span key={tag} style={{padding:"4px 8px",borderRadius:999,background:"rgba(0,0,0,0.02)",border:"1px solid var(--border)",fontSize:10.5,color:"var(--sub)",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap",maxWidth:"100%",overflow:"hidden",textOverflow:"ellipsis"}}>
-                {tag}
-              </span>
-            ))}
+        {priceTags.length>0&&(
+          <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+            {priceTags}
           </div>
+        )}
+        {(locationTag||addedTag)&&(
+          <div style={{display:"grid",gridTemplateColumns:locationTag&&addedTag?"minmax(0,1fr) auto":"1fr",gap:12,alignItems:"center",marginTop:2,paddingTop:8,borderTop:"1px solid rgba(var(--accentRgb),0.12)"}}>
+            {locationTag&&(
+              <div style={{minWidth:0}}>
+                <div style={metaLabelStyle}>Storage</div>
+                <div style={detailTextStyle} title={locationTag}>
+                  {locationTag}
+                </div>
+              </div>
+            )}
+            {addedText&&(
+              <div style={{minWidth:0,textAlign:locationTag?"right":"left"}}>
+                <div style={{...metaLabelStyle,textAlign:locationTag?"right":"left"}}>Inventory</div>
+                <div style={{...detailTextStyle,textAlign:locationTag?"right":"left"}} title={addedText}>
+                  {addedText}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+        {!(locationTag||addedTag)&&priceTags.length===0&&(
+          <div style={{height:4}}/>
         )}
       </div>
     </div>
