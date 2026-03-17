@@ -1749,10 +1749,51 @@ const Icon=({n,size=20,color="currentColor",fill="none",sw=1.5})=>{
   return(<svg width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><path d={IC[n]}/></svg>);
 };
 
+const BrandMarkGlyph=({size=42,color="currentColor"})=>(
+  <svg width={size} height={size} viewBox="0 0 64 64" fill="none" stroke={color} strokeWidth="3.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M28.8 7.5h6.4v10.9c0 4.6 1.7 7.8 5.1 10.8 3.1 2.8 4.7 6.5 4.7 11.3v11.7c0 3.3-2.2 5-6.6 5H25.6c-4.4 0-6.6-1.7-6.6-5V40.5c0-4.8 1.6-8.5 4.7-11.3 3.4-3 5.1-6.2 5.1-10.8V7.5z"/>
+    <path d="M28.8 11h6.4"/>
+    <path d="M23.2 29.8h17.6"/>
+    <path d="M23.2 40.7h17.6"/>
+    <path d="M23.2 51.6h17.6"/>
+    <path d="M27.1 25.1v4.7"/>
+    <path d="M32 25.1v4.7"/>
+    <path d="M36.9 25.1v4.7"/>
+    <path d="M27.1 36v4.7"/>
+    <path d="M32 36v4.7"/>
+    <path d="M36.9 36v4.7"/>
+    <path d="M27.1 46.9v4.7"/>
+    <path d="M32 46.9v4.7"/>
+    <path d="M36.9 46.9v4.7"/>
+    <path d="M23.9 35.4c0-2.4 1.8-4.2 4.1-4.2s4.1 1.8 4.1 4.2"/>
+    <path d="M31.1 35.4c0-2.4 1.8-4.2 4.1-4.2s4.1 1.8 4.1 4.2"/>
+    <path d="M23.9 46.3c0-2.4 1.8-4.2 4.1-4.2s4.1 1.8 4.1 4.2"/>
+    <path d="M31.1 46.3c0-2.4 1.8-4.2 4.1-4.2s4.1 1.8 4.1 4.2"/>
+    <path d="M23.9 57.2c0-2.4 1.8-4.2 4.1-4.2s4.1 1.8 4.1 4.2"/>
+    <path d="M31.1 57.2c0-2.4 1.8-4.2 4.1-4.2s4.1 1.8 4.1 4.2"/>
+  </svg>
+);
+
 const BrandLogo=({size=42,variant="color"})=>{
   const isMono=variant==="mono";
   const src="/icons/logo-vinology-2026-512.png";
   const radius=Math.max(10,Math.round(size*0.26));
+  if(isMono){
+    return(
+      <div
+        aria-hidden="true"
+        style={{
+          width:size,
+          height:size,
+          display:"flex",
+          alignItems:"center",
+          justifyContent:"center",
+        }}
+      >
+        <BrandMarkGlyph size={size} color="rgba(255,255,255,0.95)"/>
+      </div>
+    );
+  }
   return(
     <div
       aria-hidden="true"
@@ -1767,7 +1808,7 @@ const BrandLogo=({size=42,variant="color"})=>{
         boxShadow:isMono?"none":"0 10px 24px rgba(0,0,0,0.16)",
       }}
     >
-      <img
+        <img
         src={src}
         alt=""
         width={size}
@@ -1780,8 +1821,7 @@ const BrandLogo=({size=42,variant="color"})=>{
           objectFit:"cover",
           objectPosition:"center",
           borderRadius:radius,
-          filter:isMono?"grayscale(1) contrast(1.08) brightness(0.86)":"none",
-          opacity:isMono?0.92:1,
+          opacity:1,
         }}
       />
     </div>
