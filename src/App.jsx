@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { authApi, dbApi } from "./apiClient";
 import { wineHoldings2021 } from "./data/wineHoldings2021";
+import * as ExcelJSImport from "exceljs";
 
-const APP_VERSION = "8.20";
+const APP_VERSION = "8.21";
 const ADMIN_PIN_DIGITS = 8;
 const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
 const CHANGE_LOG_KEY = "vino_change_log_v1";
@@ -5705,22 +5706,7 @@ const TYPE_STYLES={
 };
 const TYPE_EMOJI={Red:"🍷",White:"🥂",Rosé:"🌸",Sparkling:"✨",Dessert:"🍯",Fortified:"🏰",Other:"🍾"};
 const EXCEL_MIME="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-let excelJsLibPromise=null;
-const loadExcelJsLib=async()=>{
-  if(!excelJsLibPromise){
-    excelJsLibPromise=import("exceljs")
-      .then(mod=>mod?.default||mod)
-      .then(lib=>{
-        if(!lib?.Workbook) throw new Error("exceljs-unavailable");
-        return lib;
-      })
-      .catch(err=>{
-        excelJsLibPromise=null;
-        throw err;
-      });
-  }
-  return excelJsLibPromise;
-};
+const ExcelJS=ExcelJSImport?.default||ExcelJSImport;
 const downloadArrayBufferAsFile=(buffer,fileName)=>{
   const blob=new Blob([buffer],{type:EXCEL_MIME});
   const url=URL.createObjectURL(blob);
@@ -5798,8 +5784,8 @@ const styleExcelJsCell=(cell,{bg="FFFFFFFF",fg="FF2A1A14",bold=false,italic=fals
 };
 
 const exportToExcel=async(wines,wishlist,notes,profile={}, {includeWishlist=true,includeNotes=true,includePhotos=true}={})=>{
-  const exceljs=await loadExcelJsLib();
-  const wb=new exceljs.Workbook();
+  if(!ExcelJS?.Workbook) throw new Error("exceljs-unavailable");
+  const wb=new ExcelJS.Workbook();
   wb.creator="Vinology";
   wb.company="Vinology";
   wb.subject="Cellar export";
@@ -6000,7 +5986,7 @@ const exportToExcel=async(wines,wishlist,notes,profile={}, {includeWishlist=true
       styleExcelJsCell(ws.getCell(`F${row}`),{bg:"FFFFFFFF",fg:"FF2A1A14",size:10});
     });
     ws.mergeCells("A18:F19");
-    ws.getCell("A18").value=excelSafeText("Missing values are exported as nill. Wine photos are embedded directly into this workbook where available, and a dedicated photo gallery sheet is included for cleaner review.");
+    ws.getCell("A18").value=excelSafeText("Missing values are exported as nill. Wine photos are embedded once in the dedicated photo gallery sheet to keep the workbook reliable and easier to open.");
     styleExcelJsCell(ws.getCell("A18"),{bg:"FFFFFDFC",fg:"FF8A7267",size:10,wrap:true});
     ["B18","C18","D18","E18","F18","B19","C19","D19","E19","F19"].forEach(ref=>styleExcelJsCell(ws.getCell(ref),{bg:"FFFFFDFC",fg:"FF8A7267",size:10,wrap:true}));
     ws.views=[{state:"frozen",ySplit:3}];
@@ -6151,7 +6137,7 @@ const exportToExcel=async(wines,wishlist,notes,profile={}, {includeWishlist=true
         textOrNil(w.reviewPrimaryReviewer),textOrNil(w.reviewPrimaryRating),textOrNil((journal.primary?.text||w.review||"").trim()),
         combineReviews(w.otherReviews||journal.otherReviews||[]),textOrNil(journal.personalNotes||w.notes||""),dateOrNil(m.journalUpdatedAt),textOrNil(w.tastingNotes||""),
       ];
-      return {wine:w,row:includePhotos?[w.photo?"Embedded":NIL,...baseRow]:baseRow};
+      return {wine:w,row:includePhotos?[w.photo?"See gallery":NIL,...baseRow]:baseRow};
     });
   const cellarHeaders=includePhotos
     ? ["Photo","Wine Name","Varietal","Wine Type","Vintage","Origin (Raw)","Region","Country","Readiness",
@@ -6175,7 +6161,7 @@ const exportToExcel=async(wines,wishlist,notes,profile={}, {includeWishlist=true
   const cellarWs=appendTableSheet({
     name:"Cellar",
     title:`Cellar Inventory (${cellarExportRows.length} wines)`,
-    subtitle:"User-facing wine fields only, with embedded thumbnails where photos are available.",
+    subtitle:"User-facing wine fields only, with photo references pointing to the dedicated photo gallery sheet.",
     headers:[
       ...cellarHeaders
     ],
@@ -6185,20 +6171,9 @@ const exportToExcel=async(wines,wishlist,notes,profile={}, {includeWishlist=true
     accent:"6E1212"
   });
   if(includePhotos){
-    let photoColEmbedded=0;
-    for(let idx=0;idx<cellarExportRows.length;idx++){
-      const rowNumber=idx+5;
-      const entry=cellarExportRows[idx];
-      cellarWs.getRow(rowNumber).height=entry.wine.photo?62:24;
-      if(!entry.wine.photo) continue;
-      const payload=await toExcelImagePayload(entry.wine.photo);
-      if(!payload) continue;
-      const imageId=wb.addImage(payload);
-      cellarWs.addImage(imageId,{tl:{col:0.18,row:rowNumber-1+0.14},ext:{width:40,height:58},editAs:"oneCell"});
-      photoColEmbedded++;
-    }
-    if(photoColEmbedded){
-      cellarWs.getCell("A3").value=excelSafeText(`${photoColEmbedded} cellar thumbnails embedded`);
+    const photoRefs=cellarExportRows.filter(entry=>entry.wine.photo).length;
+    if(photoRefs){
+      cellarWs.getCell("A3").value=excelSafeText(`${photoRefs} wines include a photo in the Wine Photos sheet`);
       styleExcelJsCell(cellarWs.getCell("A3"),{bg:"FFFFFDFC",fg:"FF8A7267",size:8,italic:true});
     }
   }
@@ -6912,6 +6887,8 @@ const SettingsPanel=({onBack,profile,setProfile,theme,setTheme,authRole,onSavePi
 const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile,onNavigateTab,syncHealth,onRetrySync,authRole,onSavePin})=>{
   const [view,setView]=useState("main"); // main | settings | explore
   const [exportOpen,setExportOpen]=useState(false);
+  const [exportBusy,setExportBusy]=useState(false);
+  const [exportError,setExportError]=useState("");
   const [kpiListOpen,setKpiListOpen]=useState(null);
   const [compact,setCompact]=useState(()=>window.innerWidth<920);
   const [activityRange,setActivityRange]=useState("7d");
@@ -7474,23 +7451,34 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile,onNavigateTa
           <div style={{fontSize:12,color:"var(--sub)",lineHeight:1.6,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
             Missing values are exported as <b style={{color:"var(--text)"}}>nill</b> for consistency and easier client reporting.
           </div>
+          {exportError&&(
+            <div style={{padding:"10px 12px",borderRadius:12,border:"1px solid rgba(184,50,50,0.24)",background:"rgba(184,50,50,0.08)",fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:12,color:"#7B1C1C",lineHeight:1.6}}>
+              {exportError}
+            </div>
+          )}
         </div>
         <div style={{display:"flex",gap:8}}>
-          <Btn variant="secondary" onClick={()=>setExportOpen(false)} full>Cancel</Btn>
+          <Btn variant="secondary" onClick={()=>{setExportError("");setExportOpen(false);}} full>Cancel</Btn>
           <Btn
             onClick={async()=>{
+              setExportBusy(true);
+              setExportError("");
               try{
                 await exportToExcel(wines,[],notes,profile,{includeWishlist:false,includeNotes:true,includePhotos:true});
                 setExportOpen(false);
               }catch(e){
-                window.alert("Export failed. Please try again. If it keeps failing, refresh and retry.");
+                const message=(e?.message||"Export failed.").toString();
+                setExportError(`Export failed: ${message}`);
                 console.error("Export failed",e);
+              }finally{
+                setExportBusy(false);
               }
             }}
             full
             icon="export"
+            disabled={exportBusy}
           >
-            Export
+            {exportBusy?"Exporting…":"Export"}
           </Btn>
         </div>
       </Modal>
