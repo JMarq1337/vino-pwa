@@ -3,7 +3,7 @@ import { authApi, dbApi } from "./apiClient";
 import { wineHoldings2021 } from "./data/wineHoldings2021";
 import * as ExcelJSImport from "exceljs";
 
-const APP_VERSION = "8.21";
+const APP_VERSION = "8.22";
 const ADMIN_PIN_DIGITS = 8;
 const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
 const CHANGE_LOG_KEY = "vino_change_log_v1";
@@ -5939,37 +5939,42 @@ const exportToExcel=async(wines,wishlist,notes,profile={}, {includeWishlist=true
   const addOverviewSheet=({metrics,sections})=>{
     const ws=wb.addWorksheet(makeSheetName("Overview"));
     ws.columns=[{width:20},{width:20},{width:20},{width:20},{width:20},{width:20}];
-    ws.mergeCells("A1:F2");
-    ws.mergeCells("A3:F3");
+    ws.mergeCells("A1:F1");
+    ws.mergeCells("A2:F2");
     ws.getCell("A1").value=excelSafeText("Vinology Cellar Export");
-    ws.getCell("A3").value=excelSafeText(`Prepared ${exportedAt}`);
+    ws.getCell("A2").value=excelSafeText(`Prepared ${exportedAt}`);
     styleExcelJsCell(ws.getCell("A1"),{bg:"FF6E1212",fg:"FFFFFFFF",bold:true,size:22,align:"left",wrap:true});
-    styleExcelJsCell(ws.getCell("A3"),{bg:"FFF4E7E1",fg:"FF7A3A2A",size:10,align:"left"});
-    ["B1","C1","D1","E1","F1","B3","C3","D3","E3","F3"].forEach(ref=>{
-      styleExcelJsCell(ws.getCell(ref),{bg:ref.endsWith("1")?"FF6E1212":"FFF4E7E1",fg:ref.endsWith("1")?"FFFFFFFF":"FF7A3A2A",bold:ref.endsWith("1"),size:ref.endsWith("1")?22:10,align:"left"});
+    styleExcelJsCell(ws.getCell("A2"),{bg:"FFF4E7E1",fg:"FF7A3A2A",size:10,align:"left"});
+    ["B1","C1","D1","E1","F1"].forEach(ref=>{
+      styleExcelJsCell(ws.getCell(ref),{bg:"FF6E1212",fg:"FFFFFFFF",bold:true,size:22,align:"left"});
     });
-    drawMetricCard(ws,{label:"Total RRP Value",value:formatCurrency(metrics.totalRrpValue),note:`${metrics.totalPurchased} bottles purchased`,range:["A5","B7"],accent:"6E1212"});
-    drawMetricCard(ws,{label:"On-Hand RRP Value",value:formatCurrency(metrics.onHandRrpValue),note:`${metrics.totalLeft} bottles currently left`,range:["C5","D7"],accent:"7A3A2A"});
-    drawMetricCard(ws,{label:"Paid Value",value:formatCurrency(metrics.totalPaidValue),note:"Based on entered purchase prices",range:["E5","F7"],accent:"5B1F2B"});
-    drawMetricCard(ws,{label:"Readiness",value:`${metrics.readyCount} ready`,note:`${metrics.notReadyCount} not ready · ${metrics.pastCount} past peak`,range:["A8","B10"],accent:"3A4D63",valueSize:17});
-    drawMetricCard(ws,{label:"Collection Size",value:`${metrics.totalWines} wines`,note:`${metrics.totalPurchased} purchased · ${metrics.totalConsumed} consumed`,range:["C8","D10"],accent:"254A7D",valueSize:17});
-    drawMetricCard(ws,{label:"Most Common Origin",value:metrics.mostCommonOrigin||NIL,note:`${metrics.mostCommonLocation||NIL} is the most common location`,range:["E8","F10"],accent:"7A6520",valueSize:16});
+    ["B2","C2","D2","E2","F2"].forEach(ref=>{
+      styleExcelJsCell(ws.getCell(ref),{bg:"FFF4E7E1",fg:"FF7A3A2A",size:10,align:"left"});
+    });
+    drawMetricCard(ws,{label:"Total RRP Value",value:formatCurrency(metrics.totalRrpValue),note:`${metrics.totalPurchased} bottles purchased`,range:["A4","B6"],accent:"6E1212"});
+    drawMetricCard(ws,{label:"On-Hand RRP Value",value:formatCurrency(metrics.onHandRrpValue),note:`${metrics.totalLeft} bottles currently left`,range:["C4","D6"],accent:"7A3A2A"});
+    drawMetricCard(ws,{label:"Paid Value",value:formatCurrency(metrics.totalPaidValue),note:"Based on entered purchase prices",range:["E4","F6"],accent:"5B1F2B"});
+    drawMetricCard(ws,{label:"Readiness",value:`${metrics.readyCount} ready`,note:`${metrics.notReadyCount} not ready · ${metrics.pastCount} past peak`,range:["A7","B9"],accent:"3A4D63",valueSize:17});
+    drawMetricCard(ws,{label:"Collection Size",value:`${metrics.totalWines} wines`,note:`${metrics.totalPurchased} purchased · ${metrics.totalConsumed} consumed`,range:["C7","D9"],accent:"254A7D",valueSize:17});
+    drawMetricCard(ws,{label:"Most Common Origin",value:metrics.mostCommonOrigin||NIL,note:`${metrics.mostCommonLocation||NIL} is the most common location`,range:["E7","F9"],accent:"7A6520",valueSize:16});
 
-    ws.mergeCells("A12:C12");
-    ws.mergeCells("D12:F12");
-    ws.getCell("A12").value=excelSafeText("Winery Profile");
-    ws.getCell("D12").value=excelSafeText("Included Sections");
-    styleExcelJsCell(ws.getCell("A12"),{bg:"FFF0E3DC",fg:"FF642718",bold:true,size:11});
-    styleExcelJsCell(ws.getCell("D12"),{bg:"FFF0E3DC",fg:"FF642718",bold:true,size:11});
-    ["B12","C12","E12","F12"].forEach(ref=>styleExcelJsCell(ws.getCell(ref),{bg:"FFF0E3DC",fg:"FF642718",bold:true,size:11}));
+    const sectionHeaderRow=11;
+    ws.mergeCells(`A${sectionHeaderRow}:C${sectionHeaderRow}`);
+    ws.mergeCells(`D${sectionHeaderRow}:F${sectionHeaderRow}`);
+    ws.getCell(`A${sectionHeaderRow}`).value=excelSafeText("Winery Profile");
+    ws.getCell(`D${sectionHeaderRow}`).value=excelSafeText("Included Sections");
+    styleExcelJsCell(ws.getCell(`A${sectionHeaderRow}`),{bg:"FFF0E3DC",fg:"FF642718",bold:true,size:11});
+    styleExcelJsCell(ws.getCell(`D${sectionHeaderRow}`),{bg:"FFF0E3DC",fg:"FF642718",bold:true,size:11});
+    [`B${sectionHeaderRow}`,`C${sectionHeaderRow}`,`E${sectionHeaderRow}`,`F${sectionHeaderRow}`].forEach(ref=>styleExcelJsCell(ws.getCell(ref),{bg:"FFF0E3DC",fg:"FF642718",bold:true,size:11}));
     const profileLines=[
       ["Cellar",safeProfile.cellarName||NIL],
       ["Owner",([safeProfile.name,safeProfile.surname].filter(Boolean).join(" ")||NIL)],
       ["Profile",safeProfile.description||NIL],
       ["Country",safeProfile.country||NIL],
     ];
+    const profileStartRow=sectionHeaderRow+1;
     profileLines.forEach((pair,idx)=>{
-      const row=13+idx;
+      const row=profileStartRow+idx;
       ws.getCell(`A${row}`).value=excelSafeText(pair[0]);
       ws.mergeCells(`B${row}:C${row}`);
       ws.getCell(`B${row}`).value=excelSafeText(pair[1]);
@@ -5977,18 +5982,26 @@ const exportToExcel=async(wines,wishlist,notes,profile={}, {includeWishlist=true
       styleExcelJsCell(ws.getCell(`B${row}`),{bg:"FFFFFFFF",fg:"FF2A1A14",size:10});
       styleExcelJsCell(ws.getCell(`C${row}`),{bg:"FFFFFFFF",fg:"FF2A1A14",size:10});
     });
+    const sectionsStartRow=sectionHeaderRow+1;
     sections.forEach((label,idx)=>{
-      const row=13+idx;
+      const row=sectionsStartRow+idx;
       ws.mergeCells(`D${row}:F${row}`);
       ws.getCell(`D${row}`).value=excelSafeText(`• ${label}`);
       styleExcelJsCell(ws.getCell(`D${row}`),{bg:"FFFFFFFF",fg:"FF2A1A14",size:10});
       styleExcelJsCell(ws.getCell(`E${row}`),{bg:"FFFFFFFF",fg:"FF2A1A14",size:10});
       styleExcelJsCell(ws.getCell(`F${row}`),{bg:"FFFFFFFF",fg:"FF2A1A14",size:10});
     });
-    ws.mergeCells("A18:F19");
-    ws.getCell("A18").value=excelSafeText("Missing values are exported as nill. Wine photos are embedded once in the dedicated photo gallery sheet to keep the workbook reliable and easier to open.");
-    styleExcelJsCell(ws.getCell("A18"),{bg:"FFFFFDFC",fg:"FF8A7267",size:10,wrap:true});
-    ["B18","C18","D18","E18","F18","B19","C19","D19","E19","F19"].forEach(ref=>styleExcelJsCell(ws.getCell(ref),{bg:"FFFFFDFC",fg:"FF8A7267",size:10,wrap:true}));
+    const contentEndRow=Math.max(profileStartRow+profileLines.length-1,sectionsStartRow+sections.length-1);
+    const noteStartRow=contentEndRow+2;
+    const noteEndRow=noteStartRow+1;
+    ws.mergeCells(`A${noteStartRow}:F${noteEndRow}`);
+    ws.getCell(`A${noteStartRow}`).value=excelSafeText("Missing values are exported as nill. Wine photos are embedded once in the dedicated photo gallery sheet to keep the workbook reliable and easier to open.");
+    styleExcelJsCell(ws.getCell(`A${noteStartRow}`),{bg:"FFFFFDFC",fg:"FF8A7267",size:10,wrap:true});
+    for(let row=noteStartRow;row<=noteEndRow;row+=1){
+      ["B","C","D","E","F"].forEach(col=>{
+        styleExcelJsCell(ws.getCell(`${col}${row}`),{bg:"FFFFFDFC",fg:"FF8A7267",size:10,wrap:true});
+      });
+    }
     ws.views=[{state:"frozen",ySplit:3}];
     return ws;
   };
