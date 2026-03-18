@@ -3,7 +3,7 @@ import { authApi, dbApi } from "./apiClient";
 import { wineHoldings2021 } from "./data/wineHoldings2021";
 import * as ExcelJSImport from "exceljs";
 
-const APP_VERSION = "8.22";
+const APP_VERSION = "8.23";
 const ADMIN_PIN_DIGITS = 8;
 const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
 const CHANGE_LOG_KEY = "vino_change_log_v1";
@@ -2512,7 +2512,7 @@ const BottleGlyph=({color="#8B1A1A"})=>{
   const labelId=`${ids.current.root}-label`;
   const puntId=`${ids.current.root}-punt`;
   return(
-    <svg width="58" height="74" viewBox="0 0 58 74" aria-hidden="true">
+    <svg width="58" height="74" viewBox="0 0 58 74" aria-hidden="true" style={{display:"block",transform:"translateZ(0)"}}>
       <defs>
         <linearGradient id={bodyId} x1="29" y1="5" x2="29" y2="69" gradientUnits="userSpaceOnUse">
           <stop offset="0%" stopColor="#3B353B"/>
@@ -2584,7 +2584,7 @@ const BottleGlyph=({color="#8B1A1A"})=>{
 const WineThumbVisual=({wine,tc})=>{
   const bottleRgb=hexToRgb(tc.dot)||"139,26,26";
   return(
-    <div style={{width:68,height:88,borderRadius:18,background:`radial-gradient(circle at 30% 22%, rgba(255,255,255,0.82), transparent 34%), linear-gradient(180deg, rgba(${bottleRgb},0.15), rgba(255,255,255,0.9) 58%, rgba(15,16,20,0.03) 100%)`,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",border:"1px solid rgba(18,18,22,0.08)",boxShadow:"0 10px 20px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.72)",alignSelf:"center",position:"relative"}}>
+    <div style={{width:68,height:88,borderRadius:18,background:`radial-gradient(circle at 30% 22%, rgba(255,255,255,0.82), transparent 34%), linear-gradient(180deg, rgba(${bottleRgb},0.15), rgba(255,255,255,0.9) 58%, rgba(15,16,20,0.03) 100%)`,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",border:"1px solid rgba(18,18,22,0.08)",boxShadow:"0 10px 20px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.72)",alignSelf:"center",position:"relative",transform:"translateZ(0)",willChange:"transform"}}>
       {!wine.photo&&(
         <div style={{position:"absolute",inset:10,borderRadius:14,background:`radial-gradient(circle at 50% 44%, rgba(${bottleRgb},0.18), rgba(${bottleRgb},0.03) 48%, transparent 72%)`,pointerEvents:"none"}}/>
       )}
@@ -2615,10 +2615,38 @@ const WineCard=({wine,onClick})=>{
   const quickTagStyle={padding:"4px 8px",borderRadius:999,fontSize:10.5,fontWeight:800,color:"var(--text)",background:"var(--inputBg)",fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap",border:"1px solid var(--border)"};
   const metaLabelStyle={fontSize:9.5,fontWeight:800,letterSpacing:"0.75px",textTransform:"uppercase",color:"rgba(var(--accentRgb),0.58)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:2};
   const detailTextStyle={fontSize:11.5,color:"var(--sub)",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"};
+  const readinessTint=ready.key==="ready"
+    ?"rgba(47,133,90,0.12)"
+    : ready.key==="late"
+      ?"rgba(184,50,50,0.12)"
+      : ready.key==="early"
+        ?"rgba(42,90,184,0.12)"
+        :"rgba(var(--accentRgb),0.08)";
+  const readinessBorder=ready.key==="ready"
+    ?"rgba(47,133,90,0.22)"
+    : ready.key==="late"
+      ?"rgba(184,50,50,0.22)"
+      : ready.key==="early"
+        ?"rgba(42,90,184,0.22)"
+        :"rgba(var(--accentRgb),0.16)";
+  const readinessPillStyle={
+    ...quickTagStyle,
+    display:"inline-flex",
+    alignItems:"center",
+    gap:6,
+    color:ready.key==="none"?"var(--sub)":ready.color,
+    background:readinessTint,
+    border:`1px solid ${readinessBorder}`,
+  };
   const primaryTags=[
     <WineTypePill key="type" type={type} label={varietal}/>,
     yearTag?<span key="year" style={quickTagStyle}>{yearTag}</span>:null,
-    readinessTag?<span key="readiness" style={{...quickTagStyle,color:"#fff",background:ready.color}}>{ready.key==="ready"?"Ready":ready.label}</span>:null,
+    readinessTag?(
+      <span key="readiness" style={readinessPillStyle}>
+        <span style={{width:7,height:7,borderRadius:"50%",background:ready.key==="none"?"rgba(var(--accentRgb),0.48)":ready.color,display:"inline-block",flexShrink:0}}/>
+        {ready.key==="ready"?"Ready":ready.label}
+      </span>
+    ):null,
   ].filter(Boolean);
   const priceTags=[
     rrpText?<span key="rrp" style={{...quickTagStyle,background:"rgba(var(--accentRgb),0.13)",color:"var(--accent)",fontWeight:800}}>{rrpText}</span>:null,
@@ -2626,10 +2654,10 @@ const WineCard=({wine,onClick})=>{
   ].filter(Boolean);
   const addedText=addedTag?addedTag.replace(/^Added\s+/,""):null;
   return(
-    <div onClick={onClick} style={{background:"linear-gradient(180deg,var(--card),rgba(var(--accentRgb),0.05) 160%)",borderRadius:24,padding:"15px",cursor:"pointer",border:"1px solid rgba(var(--accentRgb),0.12)",marginBottom:0,display:"grid",gridTemplateColumns:"68px 1fr",gap:14,alignItems:"center",transition:"transform 0.18s, box-shadow 0.18s, border-color 0.18s",boxShadow:"0 10px 24px var(--shadow)",minHeight:126,position:"relative",overflow:"hidden"}}
+    <div onClick={onClick} style={{background:"linear-gradient(180deg,var(--card),rgba(var(--accentRgb),0.05) 160%)",borderRadius:24,padding:"15px",cursor:"pointer",border:"1px solid rgba(var(--accentRgb),0.12)",marginBottom:0,display:"grid",gridTemplateColumns:"68px 1fr",gap:14,alignItems:"center",transition:"transform 0.18s, box-shadow 0.18s, border-color 0.18s",boxShadow:"0 10px 24px var(--shadow)",minHeight:126,position:"relative",overflow:"hidden",contain:"layout paint",willChange:"transform, box-shadow",backfaceVisibility:"hidden",transform:"translateZ(0)"}}
       onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow="0 18px 34px var(--shadow)";e.currentTarget.style.borderColor="rgba(var(--accentRgb),0.26)";}}
       onMouseLeave={e=>{e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="0 10px 24px var(--shadow)";e.currentTarget.style.borderColor="rgba(var(--accentRgb),0.12)";}}>
-      <div style={{position:"absolute",left:0,top:0,bottom:0,width:4,background:ready.key==="ready"?"#2F855A":ready.key==="late"?"#B83232":ready.key==="early"?"#2A5AB8":"rgba(var(--accentRgb),0.28)"}}/>
+      <div style={{position:"absolute",inset:"0 0 auto 0",height:2,background:ready.key==="ready"?"rgba(47,133,90,0.58)":ready.key==="late"?"rgba(184,50,50,0.58)":ready.key==="early"?"rgba(42,90,184,0.58)":"rgba(var(--accentRgb),0.22)",pointerEvents:"none"}}/>
       <WineThumbVisual wine={wine} tc={tc}/>
       <div style={{minWidth:0,display:"flex",flexDirection:"column",gap:6}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,minWidth:0}}>
@@ -3481,7 +3509,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
                   ? "Create a second cellar card from this wine. Journal notes stay shared while location, quantities, dates and pricing can change here."
                   : isWishlist
                   ? "Capture key details quickly and keep notes clean."
-                  : "Structured entry with synced inventory, pricing, dates and journal notes."
+                  : "Inventory, pricing, dates, and notes in one place."
                 }
               </div>
             </div>
@@ -3492,7 +3520,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
         <div style={{...sectionCardStyle,marginBottom:14,position:"relative"}}>
           {sectionTitle("Search Wine Database")}
           <div style={{fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.55,marginBottom:10}}>
-            Search the cellar and the built-in library. Wines added to the cellar are suggested here too.
+            Search the cellar and library. Added wines appear here too.
           </div>
           <div style={{position:"relative"}}>
             <input value={q} onChange={e=>handleQ(e.target.value)} placeholder="Wine name, grape, or region…" style={{paddingLeft:38}} onBlur={()=>setTimeout(()=>setSugs([]),160)}/>
@@ -7517,7 +7545,7 @@ export default function App(){
   const [savedLocations,setSavedLocations]=useState(()=>readSavedLocations());
   const [ready,setReady]=useState(false);
   const [syncHealth,setSyncHealth]=useState(()=>readSyncHealth());
-  const [splashPhase,setSplashPhase]=useState("loading"); // loading | setup | setupPin | unlock | entering | done
+  const [splashPhase,setSplashPhase]=useState("boot"); // boot | setup | setupPin | unlock | entering | done
   const [isDesktop,setIsDesktop]=useState(()=>window.innerWidth>=768);
   const [isNewUser,setIsNewUser]=useState(false);
   const [isAuthenticated,setIsAuthenticated]=useState(false);
@@ -8471,7 +8499,7 @@ export default function App(){
     <div style={SPLASH_BG}>
       <style>{CSS}</style>
       <Bubbles/>
-      {splashPhase!=="loading"&&(adminEnabled||authRole==="admin")&&(
+      {splashPhase!=="boot"&&(adminEnabled||authRole==="admin")&&(
         <button
           type="button"
           onClick={authRole==="admin"?returnToWineryAccess:openAdminAccess}
@@ -8542,6 +8570,67 @@ export default function App(){
         </div>
       </div>
       {extra}
+    </div>
+  );
+  const renderBootSplash=()=>(
+    <div
+      style={{
+        gridColumn:"1 / -1",
+        minHeight:isDesktop?"72vh":"66vh",
+        display:"flex",
+        alignItems:"center",
+        justifyContent:"center",
+        padding:isDesktop?"12px 0":"6px 0",
+        animation:isDesktop?"fadeUp 0.7s ease both":"fadeUp 0.5s ease both",
+      }}
+    >
+      <div
+        style={{
+          width:"100%",
+          maxWidth:isDesktop?560:420,
+          borderRadius:34,
+          padding:isDesktop?"42px 38px 36px":"34px 26px 28px",
+          background:"linear-gradient(180deg,rgba(18,12,14,0.82),rgba(12,9,10,0.72))",
+          border:"1px solid rgba(255,255,255,0.12)",
+          boxShadow:"0 34px 90px rgba(0,0,0,0.36), inset 0 1px 0 rgba(255,255,255,0.06)",
+          backdropFilter:"blur(18px)",
+          WebkitBackdropFilter:"blur(18px)",
+          textAlign:"center",
+        }}
+      >
+        <div style={{display:"flex",justifyContent:"center",marginBottom:18}}>
+          <div style={{width:isDesktop?118:96,height:isDesktop?118:96,borderRadius:30,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",boxShadow:"inset 0 1px 0 rgba(255,255,255,0.06), 0 18px 36px rgba(0,0,0,0.22)"}}>
+            <BrandLogo size={isDesktop?84:68}/>
+          </div>
+        </div>
+        <div style={{fontSize:12,color:"rgba(246,238,233,0.5)",letterSpacing:"2.4px",textTransform:"uppercase",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:10}}>
+          Vinology
+        </div>
+        <div style={{fontSize:isDesktop?34:28,fontWeight:900,color:"#fff",lineHeight:1.05,letterSpacing:"-1.2px",fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:10}}>
+          {splashGreetingLine}
+        </div>
+        <div style={{fontSize:15,color:"rgba(246,238,233,0.68)",fontWeight:600,fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:18}}>
+          {splashWineryName}
+        </div>
+        <div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:9,marginBottom:12}}>
+          {[0,1,2].map(i=>(
+            <div
+              key={i}
+              style={{
+                width:9,
+                height:9,
+                borderRadius:"50%",
+                background:"rgba(var(--accentRgb),0.86)",
+                boxShadow:"0 0 0 6px rgba(var(--accentRgb),0.11)",
+                animation:`blink 1.15s ${i*0.16}s ease infinite`,
+              }}
+            />
+          ))}
+        </div>
+        <div style={{fontSize:12.5,color:"rgba(246,238,233,0.5)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+          {ready?"Ready to unlock":"Loading the cellar"}
+        </div>
+      </div>
     </div>
   );
   const renderSetupCard=()=>(
@@ -8638,35 +8727,7 @@ export default function App(){
     </div>
   );
   if(splashPhase!=="done"){
-    if(splashPhase==="loading"){
-      return renderEntryShell(
-        <>
-          {renderHero(
-            <div style={{marginTop:22,display:"flex",alignItems:"center",gap:10}}>
-              {[0,1,2].map(i=><div key={i} style={{width:8,height:8,borderRadius:"50%",background:"rgba(var(--accentRgb),0.82)",animation:`blink 1.2s ${i*0.18}s ease infinite`}}/>)}
-              <span style={{fontSize:12,color:"rgba(246,238,233,0.44)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{ready?"Preparing secure entry…":"Loading the winery…"}</span>
-            </div>
-          )}
-          <div style={{...actionCard,display:"flex",flexDirection:"column",justifyContent:"center",minHeight:isDesktop?360:260,animation:isDesktop?"floatUp 0.9s 0.06s ease both":"fadeUp 0.55s ease both"}}>
-            <div style={{fontSize:12,color:"rgba(246,238,233,0.56)",letterSpacing:"1.6px",textTransform:"uppercase",fontWeight:700,marginBottom:12,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Welcome</div>
-            <div style={{fontSize:30,fontWeight:900,color:"#fff",lineHeight:1.05,letterSpacing:"-1.2px",fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:10}}>{splashGreetingLine}</div>
-            <div style={{fontSize:14,color:"rgba(246,238,233,0.64)",lineHeight:1.6,fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:18}}>
-              {`Loading ${splashWineryName}.`}
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:isDesktop?"repeat(2,minmax(0,1fr))":"1fr",gap:10}}>
-              <div style={miniStat}>
-                <div style={{fontSize:10,color:"rgba(246,238,233,0.56)",letterSpacing:"1px",textTransform:"uppercase",fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Live Data</div>
-                <div style={{fontSize:16,fontWeight:800,color:"#fff",marginTop:7,fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.35}}>Cellar, journal, audits, and settings</div>
-              </div>
-              <div style={miniStat}>
-                <div style={{fontSize:10,color:"rgba(246,238,233,0.56)",letterSpacing:"1px",textTransform:"uppercase",fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Status</div>
-                <div style={{fontSize:16,fontWeight:800,color:"#fff",marginTop:7,fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.35}}>{ready?"Ready to unlock":"Syncing latest winery data"}</div>
-              </div>
-            </div>
-          </div>
-        </>
-      );
-    }
+    if(splashPhase==="boot") return renderEntryShell(renderBootSplash());
     if(splashPhase==="entering"){
       return renderEntryShell(
         <>
