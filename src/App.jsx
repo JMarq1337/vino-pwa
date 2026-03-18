@@ -3,7 +3,7 @@ import { authApi, dbApi } from "./apiClient";
 import { wineHoldings2021 } from "./data/wineHoldings2021";
 import * as ExcelJSImport from "exceljs";
 
-const APP_VERSION = "8.24";
+const APP_VERSION = "8.25";
 const ADMIN_PIN_DIGITS = 8;
 const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
 const CHANGE_LOG_KEY = "vino_change_log_v1";
@@ -1211,6 +1211,18 @@ const readCache=()=>{
     return raw?JSON.parse(raw):null;
   }catch{return null;}
 };
+const normalizeCachedProfile = profile => {
+  if(!profile || typeof profile!=="object") return null;
+  return {
+    ...DEFAULT_PROFILE,
+    ...profile,
+    accent:detectAccentFromProfileBg(profile.profileBg||"")||profile.accent||DEFAULT_PROFILE.accent,
+    aiMemory:normalizeAiMemoryList(profile.aiMemory||[]),
+    pinEnabled:!!profile?.pinEnabled,
+    pinDigits:[4,6].includes(Number(profile?.pinDigits))?Number(profile.pinDigits):null,
+  };
+};
+const cachedProfileLooksConfigured = profile => !!(profile && (profile.name || profile.cellarName || profile.pinEnabled));
 const readSavedLocations=()=>{
   try{
     const raw=localStorage.getItem(SAVED_LOCATIONS_KEY);
@@ -7651,6 +7663,7 @@ export default function App(){
   const [authRole,setAuthRole]=useState("user");
   const [authBusy,setAuthBusy]=useState(false);
   const [authError,setAuthError]=useState("");
+  const [bootUnavailable,setBootUnavailable]=useState(false);
   const [unlockPin,setUnlockPin]=useState("");
   const [unlockShow,setUnlockShow]=useState(false);
   const [pinDigits,setPinDigits]=useState(4);
@@ -7779,39 +7792,78 @@ export default function App(){
   },[isAuthenticated,relockToPin]);
   useEffect(()=>{
     async function load(){
-      const cache=readCache();
-      let authGranted=false;
       const normalizeLegacyWineRows=rows=>(rows||[]).map(w=>{
         if(!w || !w.wishlist) return w;
         const legacyBottles=Math.max(1,Math.round(safeNum(w.bottles)||0)||1);
         return {...w,wishlist:false,bottles:legacyBottles};
       });
+      const cache=readCache();
+      const cachedProfile=normalizeCachedProfile(cache?.profile);
+      const cachedWines=normalizeLegacyWineRows([...(cache?.wines||[]),...(cache?.wishlist||[])]);
+      const cachedNotes=Array.isArray(cache?.notes)?cache.notes:[];
+      const hydrateCachedState=(reason="")=>{
+        if(cachedProfile){
+          setProfileState(prev=>({...prev,...cachedProfile}));
+          setOName(cachedProfile.name||"");
+          setOCellar(cachedProfile.cellarName||"");
+          setPinDigits([4,6].includes(Number(cachedProfile?.pinDigits))?Number(cachedProfile.pinDigits):4);
+        }
+        setWines(cachedWines);
+        setNotes(cachedNotes);
+        setIsNewUser(!cachedProfileLooksConfigured(cachedProfile) && !cachedWines.length);
+        if(reason){
+          setAuthError(reason);
+          db.setHealth({
+            status:cachedWines.length?"retrying":"offline",
+            lastError:reason,
+          });
+          setSyncHealth(readSyncHealth());
+        }
+      };
+      let authGranted=false;
       try{
         const boot=await authApi.bootstrap();
+        if(!boot.ok){
+          setBootUnavailable(true);
+          setAdminEnabled(true);
+          setAuthRole("user");
+          setIsAuthenticated(false);
+          hydrateCachedState("Live winery data is temporarily unavailable. Retry in a moment.");
+          setReady(true);
+          return;
+        }
+        setBootUnavailable(false);
         const preview=boot.ok?(boot.data?.profile||null):null;
+        const remotePreviewName=(preview?.name||"").trim();
+        const remotePreviewCellar=(preview?.cellarName||"").trim();
+        const remotePreviewHasPin=!!preview?.pinEnabled;
         const previewAccent=detectAccentFromProfileBg(preview?.profileBg||"")||DEFAULT_PROFILE.accent;
         const previewProfile={
           ...DEFAULT_PROFILE,
-          name:preview?.name||DEFAULT_PROFILE.name,
-          description:preview?.description||DEFAULT_PROFILE.description,
-          cellarName:preview?.cellarName||"",
+          name:remotePreviewName||cachedProfile?.name||DEFAULT_PROFILE.name,
+          description:preview?.description||cachedProfile?.description||DEFAULT_PROFILE.description,
+          cellarName:remotePreviewCellar||cachedProfile?.cellarName||"",
+          avatar:cachedProfile?.avatar||null,
+          surname:cachedProfile?.surname||"",
+          bio:cachedProfile?.bio||"",
+          country:cachedProfile?.country||"",
           profileBg:preview?.profileBg||"",
           accent:previewAccent,
-          aiMemory:readSommelierMemory(),
-          pinEnabled:!!preview?.pinEnabled,
-          pinDigits:[4,6].includes(Number(preview?.pinDigits))?Number(preview.pinDigits):null,
+          aiMemory:normalizeAiMemoryList(cachedProfile?.aiMemory||readSommelierMemory()),
+          pinEnabled:remotePreviewHasPin || !!cachedProfile?.pinEnabled,
+          pinDigits:[4,6].includes(Number(preview?.pinDigits))?Number(preview.pinDigits):([4,6].includes(Number(cachedProfile?.pinDigits))?Number(cachedProfile.pinDigits):null),
         };
         setProfileState(prev=>({...prev,...previewProfile}));
         setOName(previewProfile.name||"");
         setOCellar(previewProfile.cellarName||"");
         setPinDigits([4,6].includes(Number(previewProfile?.pinDigits))?Number(previewProfile.pinDigits):4);
-        setIsNewUser(!previewProfile.name||(previewProfile.name===DEFAULT_PROFILE.name&&!previewProfile.cellarName));
+        setIsNewUser(!(remotePreviewName || remotePreviewCellar || remotePreviewHasPin || cachedProfileLooksConfigured(cachedProfile) || cachedWines.length));
         setAdminEnabled(!!(boot.ok&&boot.data?.adminEnabled));
         setAuthRole(boot.ok&&boot.data?.authenticated?(boot.data?.role==="admin"?"admin":"user"):"user");
         setIsAuthenticated(!!(boot.ok&&boot.data?.authenticated));
         if(!(boot.ok&&boot.data?.authenticated)){
-          setWines([]);
-          setNotes([]);
+          setWines(cachedWines);
+          setNotes(cachedNotes);
           setReady(true);
           return;
         }
@@ -7821,6 +7873,43 @@ export default function App(){
         const noteRows=noteRes.ok?(noteRes.rows||[]):[];
         if(!wineRes.ok || !noteRes.ok){
           console.warn("Remote load unavailable; using local fallback only.", { wineErr:wineRes.error, noteErr:noteRes.error });
+          const reason=`Live winery data could not be refreshed.${cachedWines.length?" Showing the last saved local state.":" Retry in a moment."}`;
+          if(prof){
+            const bgAccent=detectAccentFromProfileBg(prof.profileBg||"");
+            const remoteProfile={
+              ...DEFAULT_PROFILE,
+              name:prof.name,
+              description:prof.description,
+              avatar:prof.avatar||null,
+              cellarName:prof.cellarName||"",
+              bio:prof.bio||"",
+              country:prof.country||"",
+              surname:prof.surname||"",
+              profileBg:prof.profileBg||"",
+              accent:bgAccent||cachedProfile?.accent||DEFAULT_PROFILE.accent,
+              aiMemory:normalizeAiMemoryList((prof.aiMemory||[]).length?prof.aiMemory:((cachedProfile?.aiMemory||[]).length?cachedProfile.aiMemory:readSommelierMemory())),
+              pinEnabled:!!prof.pinEnabled,
+              pinDigits:[4,6].includes(Number(prof.pinDigits))?Number(prof.pinDigits):null,
+            };
+            setProfileState(remoteProfile);
+            setOName(prof.name||"");
+            setOCellar(prof.cellarName||"");
+            setPinDigits([4,6].includes(Number(prof.pinDigits))?Number(prof.pinDigits):4);
+            setIsNewUser(!prof.name && !prof.cellarName && !prof.pinEnabled && !cachedWines.length);
+          }else if(cachedProfile){
+            setProfileState(prev=>({...prev,...cachedProfile}));
+            setOName(cachedProfile.name||"");
+            setOCellar(cachedProfile.cellarName||"");
+            setPinDigits([4,6].includes(Number(cachedProfile.pinDigits))?Number(cachedProfile.pinDigits):4);
+            setIsNewUser(!cachedProfileLooksConfigured(cachedProfile) && !cachedWines.length);
+          }
+          setWines(cachedWines);
+          setNotes(cachedNotes);
+          setAuthError(reason);
+          db.setHealth({status:cachedWines.length?"retrying":"offline",lastError:reason});
+          setSyncHealth(readSyncHealth());
+          setReady(true);
+          return;
         }
         const builtInAliasMap=deriveAliasMapFromWines(SEED_WINES);
         const learnedAliasMap=deriveAliasMapFromWines(normalizeLegacyWineRows(wineRows.map(fromDb.wine)));
@@ -7835,19 +7924,9 @@ export default function App(){
         }
         console.log("DB: wines",wineRows.length,"notes",noteRows.length);
         if(wineRows.length===0){
-          if(cache?.wines?.length){
-            const cachedWines=normalizeLegacyWineRows([...(cache.wines||[]),...(cache.wishlist||[])]);
-            const cachedNotes=cache.notes||[];
-            setWines(cachedWines);
-            setNotes(cachedNotes);
-            if(cache.profile)setProfileState(cache.profile);
-            setIsNewUser(!(cache.profile?.name));
-            // Safety: never auto-write remote from local cache.
-            // Restores to Supabase must be explicit/manual to prevent stale-device overwrites.
-          }else{
-            setWines(SEED_WINES);setNotes(SEED_NOTES);
-            setIsNewUser(true);
-          }
+          setWines([]);
+          setNotes(noteRows.length?noteRows.map(fromDb.note):[]);
+          setIsNewUser(!(prof?.name || prof?.cellarName || prof?.pinEnabled));
         }else{
           let all=normalizeLegacyWineRows(wineRows.map(fromDb.wine));
           if(ENABLE_RUNTIME_DATA_REPAIRS){
@@ -8075,16 +8154,21 @@ export default function App(){
             setPinDigits([4,6].includes(Number(cachedProfile?.pinDigits))?Number(cachedProfile.pinDigits):4);
             setIsNewUser(!(cachedProfile?.name));
           }else{
-            setIsNewUser(true);
+            setIsNewUser(false);
           }
         }
       }catch(e){
         console.error("Load error:",e);
-        if(authGranted && cache?.wines?.length){
-          setWines(normalizeLegacyWineRows([...(cache.wines||[]),...(cache.wishlist||[])]));setNotes(cache.notes||[]);
-          if(cache.profile)setProfileState(prev=>({...prev,...cache.profile,pinEnabled:!!cache.profile?.pinEnabled,pinDigits:[4,6].includes(Number(cache.profile?.pinDigits))?Number(cache.profile.pinDigits):null}));
+        const reason="Live winery data could not be loaded. Showing the last saved local state.";
+        if(authGranted && (cachedWines.length || cachedNotes.length || cachedProfile)){
+          hydrateCachedState(reason);
         }else{
-          setWines([]);setNotes([]);
+          setBootUnavailable(true);
+          setWines([]);
+          setNotes([]);
+          setAuthError("Live winery data could not be loaded. Retry in a moment.");
+          db.setHealth({status:"offline",lastError:"Live winery data could not be loaded. Retry in a moment."});
+          setSyncHealth(readSyncHealth());
         }
       }
       setReady(true);
@@ -8102,15 +8186,18 @@ export default function App(){
       setAuthRole("user");
       setUnlockPin("");
       setUnlockShow(false);
-      setAuthError("");
       setPinValue("");
       setPinConfirm("");
       setPinShow(false);
       setPinDigits([4,6].includes(Number(profile?.pinDigits))?Number(profile.pinDigits):4);
+      if(bootUnavailable){
+        setSplashPhase("unlock");
+        return;
+      }
       setSplashPhase(isNewUser ? "setup" : (hasPinConfigured(profile) ? "unlock" : "setupPin"));
     },780);
     return()=>clearTimeout(timer);
-  },[ready,isAuthenticated,isNewUser,profile?.pinDigits,profile?.pinEnabled]);
+  },[ready,isAuthenticated,isNewUser,profile?.pinDigits,profile?.pinEnabled,bootUnavailable]);
 
   const dark=themeMode==="dark"||(themeMode==="system"&&sysDark);
   const th=T(dark);
