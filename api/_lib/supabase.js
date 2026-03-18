@@ -109,29 +109,60 @@ const profileWritePayload = profile => ({
   ai_memory: normalizeAiMemoryList(profile?.aiMemory),
 });
 
+const isMissingColumnError = (text, column) => {
+  const raw = (text || "").toString();
+  if (!raw || !column) return false;
+  return raw.includes("PGRST204") && new RegExp(`\\b${column}\\b`, "i").test(raw);
+};
+
 const saveProfilePayload = async payload => {
-  const patchHeaders = { Prefer: "return=representation" };
-  const patch = await supabaseJson("profile", {
-    method: "PATCH",
-    query: { id: "eq.1" },
-    headers: patchHeaders,
-    body: payload,
-  });
-  if (patch.res.ok) {
-    const rows = Array.isArray(patch.json) ? patch.json : [];
-    return rows[0] || null;
+  const writeProfile = async nextPayload => {
+    const patchHeaders = { Prefer: "return=representation" };
+    const patch = await supabaseJson("profile", {
+      method: "PATCH",
+      query: { id: "eq.1" },
+      headers: patchHeaders,
+      body: nextPayload,
+    });
+    if (patch.res.ok) {
+      const rows = Array.isArray(patch.json) ? patch.json : [];
+      return { ok: true, row: rows[0] || null };
+    }
+    const post = await supabaseJson("profile", {
+      method: "POST",
+      query: { on_conflict: "id" },
+      headers: patchHeaders,
+      body: { id: 1, ...nextPayload },
+    });
+    if (!post.res.ok) {
+      return {
+        ok: false,
+        patchText: patch.text || patch.res.status,
+        postText: post.text || post.res.status,
+      };
+    }
+    const rows = Array.isArray(post.json) ? post.json : [];
+    return { ok: true, row: rows[0] || null };
+  };
+
+  const withoutAiMemory = currentPayload => {
+    if (!currentPayload || !Object.prototype.hasOwnProperty.call(currentPayload, "ai_memory")) return currentPayload;
+    const next = { ...currentPayload };
+    delete next.ai_memory;
+    return next;
+  };
+
+  const attempt = await writeProfile(payload);
+  if (attempt.ok) return attempt.row;
+
+  const combinedError = `${attempt.patchText || ""} | ${attempt.postText || ""}`;
+  if (isMissingColumnError(combinedError, "ai_memory")) {
+    const fallback = await writeProfile(withoutAiMemory(payload));
+    if (fallback.ok) return fallback.row;
+    throw new Error(`Profile write failed: ${fallback.patchText || ""} | ${fallback.postText || ""}`);
   }
-  const post = await supabaseJson("profile", {
-    method: "POST",
-    query: { on_conflict: "id" },
-    headers: patchHeaders,
-    body: { id: 1, ...payload },
-  });
-  if (!post.res.ok) {
-    throw new Error(`Profile write failed: ${patch.text || patch.res.status} | ${post.text || post.res.status}`);
-  }
-  const rows = Array.isArray(post.json) ? post.json : [];
-  return rows[0] || null;
+
+  throw new Error(`Profile write failed: ${attempt.patchText || ""} | ${attempt.postText || ""}`);
 };
 
 module.exports = {

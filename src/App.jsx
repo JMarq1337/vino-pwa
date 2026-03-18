@@ -3,7 +3,7 @@ import { authApi, dbApi } from "./apiClient";
 import { wineHoldings2021 } from "./data/wineHoldings2021";
 import * as ExcelJSImport from "exceljs";
 
-const APP_VERSION = "8.23";
+const APP_VERSION = "8.24";
 const ADMIN_PIN_DIGITS = 8;
 const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
 const CHANGE_LOG_KEY = "vino_change_log_v1";
@@ -35,7 +35,7 @@ const writeLSJson = (key,value) => {
     return false;
   }
 };
-const LOGO_COLOR_SRC = "/icons/logo-vinology-2026-512.png";
+const LOGO_COLOR_SRC = "/icons/logo-vinology-source.png";
 let LOGO_COLOR_PROMISE = null;
 let LOGO_COLOR_CACHE = null;
 let LOGO_MARK_PROMISE = null;
@@ -110,11 +110,22 @@ const getPreparedLogoColorSrc = () => {
             LOGO_COLOR_PROMISE = null;
             return resolve(LOGO_COLOR_CACHE);
           }
-          const pad=8;
+          const pad=Math.max(24,Math.round(Math.max(canvas.width,canvas.height)*0.03));
           minX=Math.max(0,minX-pad);
           minY=Math.max(0,minY-pad);
           maxX=Math.min(canvas.width-1,maxX+pad);
           maxY=Math.min(canvas.height-1,maxY+pad);
+          const cropWidth=maxX-minX+1;
+          const cropHeight=maxY-minY+1;
+          const side=Math.max(cropWidth,cropHeight);
+          const centerX=minX+(cropWidth/2);
+          const centerY=minY+(cropHeight/2);
+          minX=Math.max(0,Math.round(centerX-(side/2)));
+          minY=Math.max(0,Math.round(centerY-(side/2)));
+          maxX=Math.min(canvas.width-1,minX+side-1);
+          maxY=Math.min(canvas.height-1,minY+side-1);
+          if((maxX-minX+1)<side) minX=Math.max(0,maxX-side+1);
+          if((maxY-minY+1)<side) minY=Math.max(0,maxY-side+1);
           const out=document.createElement("canvas");
           out.width=maxX-minX+1;
           out.height=maxY-minY+1;
@@ -194,11 +205,22 @@ const getPreparedLogoMarkSrc = () => {
             LOGO_MARK_PROMISE = null;
             return resolve(LOGO_MARK_CACHE);
           }
-          const pad = 12;
+          const pad = Math.max(20,Math.round(Math.max(canvas.width,canvas.height)*0.02));
           minX=Math.max(0,minX-pad);
           minY=Math.max(0,minY-pad);
           maxX=Math.min(canvas.width-1,maxX+pad);
           maxY=Math.min(canvas.height-1,maxY+pad);
+          const cropWidth=maxX-minX+1;
+          const cropHeight=maxY-minY+1;
+          const side=Math.max(cropWidth,cropHeight);
+          const centerX=minX+(cropWidth/2);
+          const centerY=minY+(cropHeight/2);
+          minX=Math.max(0,Math.round(centerX-(side/2)));
+          minY=Math.max(0,Math.round(centerY-(side/2)));
+          maxX=Math.min(canvas.width-1,minX+side-1);
+          maxY=Math.min(canvas.height-1,minY+side-1);
+          if((maxX-minX+1)<side) minX=Math.max(0,maxX-side+1);
+          if((maxY-minY+1)<side) minY=Math.max(0,maxY-side+1);
           const out=document.createElement("canvas");
           out.width=maxX-minX+1;
           out.height=maxY-minY+1;
@@ -499,6 +521,10 @@ const isCellarEventsPermissionIssue = errorText => {
   const txt=(errorText||"").toString();
   return txt.includes("42501") || /permission denied for table cellar_events/i.test(txt);
 };
+const isOptionalProfileSchemaError = errorText => {
+  const txt=(errorText||"").toString();
+  return txt.includes("PGRST204") && /ai_memory/i.test(txt);
+};
 
 const db = {
   _flushing:false,
@@ -673,6 +699,7 @@ const db = {
       const entityId=row?.id||row?.alias||"";
       await this.persistSnapshot(buildRemoteSnapshotRecord({table:t,action:"upsert",entityId,after:row||null}));
       await this.logEvent(t,"upsert",entityId,row);
+      this.setHealth({status:"healthy",lastError:"",lastSuccess:new Date().toISOString(),pending:readOutbox().length});
       return true;
     }
     catch(e){
@@ -692,6 +719,7 @@ const db = {
       }
       await this.persistSnapshot(buildRemoteSnapshotRecord({table:t,action:"delete",entityId:id,before:before||{id}}));
       await this.logEvent(t,"delete",id,{id});
+      this.setHealth({status:"healthy",lastError:"",lastSuccess:new Date().toISOString(),pending:readOutbox().length});
       return true;
     }
     catch(e){
@@ -715,6 +743,7 @@ const db = {
         cellar_name:p.cellarName||"",bio:p.bio||"",country:p.country||"",profile_bg:p.profileBg||"",
         pin_enabled:hasPinConfigured(p),pin_digits:[4,6].includes(Number(p?.pinDigits))?Number(p.pinDigits):null
       });
+      this.setHealth({status:"healthy",lastError:"",lastSuccess:new Date().toISOString(),pending:readOutbox().length});
       return true;
     }catch(e){
       console.error("saveProfile err",e);
@@ -1965,7 +1994,6 @@ const Icon=({n,size=20,color="currentColor",fill="none",sw=1.5})=>{
 const BrandLogo=({size=42,variant="color"})=>{
   const isMono=variant==="mono";
   const src=LOGO_COLOR_SRC;
-  const radius=Math.max(10,Math.round(size*0.26));
   const [colorSrc,setColorSrc]=useState(()=>LOGO_COLOR_CACHE||src);
   const [markSrc,setMarkSrc]=useState(()=>LOGO_MARK_CACHE);
   useEffect(()=>{
@@ -2005,6 +2033,7 @@ const BrandLogo=({size=42,variant="color"})=>{
               height:size,
               objectFit:"contain",
               objectPosition:"center",
+              filter:"drop-shadow(0 8px 18px rgba(0,0,0,0.14))",
             }}
           />
         ):null}
@@ -2017,12 +2046,9 @@ const BrandLogo=({size=42,variant="color"})=>{
       style={{
         width:size,
         height:size,
-        borderRadius:radius,
         display:"flex",
         alignItems:"center",
         justifyContent:"center",
-        overflow:"hidden",
-        boxShadow:"0 10px 24px rgba(0,0,0,0.16)",
       }}
     >
       <img
@@ -2038,6 +2064,7 @@ const BrandLogo=({size=42,variant="color"})=>{
           objectFit:"contain",
           objectPosition:"center",
           opacity:1,
+          filter:"drop-shadow(0 10px 24px rgba(0,0,0,0.18))",
         }}
       />
     </div>
@@ -2153,14 +2180,14 @@ const callAI=async(msg,wines,history=[],memory=[],profile={})=>{
 
 /* ── THEME ────────────────────────────────────────────────────── */
 const T=dark=>({
-  bg:dark?"#0D0A0B":"#F4F0EA",
-  surface:dark?"#191315":"#FFFCF8",
-  card:dark?"#221A1D":"#FFFFFF",
-  border:dark?"rgba(255,255,255,0.08)":"rgba(109,78,58,0.16)",
-  text:dark?"#F4ECE6":"#221812",
-  sub:dark?"#98877F":"#8A7569",
-  inputBg:dark?"#2A2023":"#F7F3EE",
-  shadow:dark?"rgba(0,0,0,0.58)":"rgba(74,44,24,0.10)",
+  bg:dark?"#0F0B0D":"#F4F0EA",
+  surface:dark?"#181214":"#FFFCF8",
+  card:dark?"#20181B":"#FFFFFF",
+  border:dark?"rgba(255,255,255,0.06)":"rgba(109,78,58,0.16)",
+  text:dark?"#F5EDE7":"#221812",
+  sub:dark?"#B29F96":"#8A7569",
+  inputBg:dark?"#2A2024":"#F7F3EE",
+  shadow:dark?"rgba(0,0,0,0.44)":"rgba(74,44,24,0.10)",
 });
 
 const makeCSS=dark=>`
@@ -2182,7 +2209,7 @@ const makeCSS=dark=>`
   @keyframes duplicateSourceIn{from{opacity:0;transform:translate3d(-18px,10px,0) scale(0.985)}to{opacity:1;transform:translate3d(0,0,0) scale(1)}}
   @keyframes duplicateEditorIn{from{opacity:0;transform:translate3d(18px,14px,0) scale(0.985)}to{opacity:1;transform:translate3d(0,0,0) scale(1)}}
   @keyframes duplicateStackIn{from{opacity:0;transform:translate3d(0,18px,0) scale(0.988)}to{opacity:1;transform:translate3d(0,0,0) scale(1)}}
-  input,textarea,select{font-family:'Plus Jakarta Sans',sans-serif;font-size:15px;color:${dark?"#F4ECE6":"#221812"};background:${dark?"#241C1E":"#FFFFFF"};border:1.5px solid ${dark?"rgba(255,255,255,0.09)":"rgba(103,75,57,0.16)"};border-radius:13px;padding:12px 14px;width:100%;outline:none;transition:border-color 0.2s,box-shadow 0.2s,transform .12s;-webkit-appearance:none;box-shadow:${dark?"0 2px 10px rgba(0,0,0,.25)":"0 2px 8px rgba(81,45,19,.07)"};}
+  input,textarea,select{font-family:'Plus Jakarta Sans',sans-serif;font-size:15px;color:${dark?"#F4ECE6":"#221812"};background:${dark?"#221A1D":"#FFFFFF"};border:1.5px solid ${dark?"rgba(255,255,255,0.07)":"rgba(103,75,57,0.16)"};border-radius:13px;padding:12px 14px;width:100%;outline:none;transition:border-color 0.2s,box-shadow 0.2s,transform .12s;-webkit-appearance:none;box-shadow:${dark?"0 10px 24px rgba(0,0,0,.18)":"0 2px 8px rgba(81,45,19,.07)"};background-clip:padding-box;}
   input:focus,textarea:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 4px ${dark?"rgba(var(--accentRgb),.2)":"rgba(var(--accentRgb),.12)"};}
   select option{background:${dark?"#201A1A":"#fff"};}
   button{cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;transition:all .16s ease;}
@@ -2310,7 +2337,7 @@ const ReviewerInput=({label,value,onChange,suggestions=[]})=>{
   );
 };
 const ReviewEntryEditor=({title,entry,onChange,suggestions=[],onRemove})=>(
-  <div style={{background:"linear-gradient(180deg,rgba(var(--accentRgb),0.08),var(--card))",borderRadius:13,padding:"11px 12px",marginBottom:11,border:"1.5px solid rgba(var(--accentRgb),0.24)",boxShadow:"0 10px 18px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.35)"}}>
+  <div style={{background:"linear-gradient(180deg,rgba(var(--accentRgb),0.08),var(--card))",borderRadius:13,padding:"11px 12px",marginBottom:11,border:"1.5px solid rgba(var(--accentRgb),0.24)",boxShadow:"0 10px 18px rgba(0,0,0,0.08)"}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,marginBottom:8}}>
       <div style={{fontSize:11,fontWeight:800,color:"var(--accent)",letterSpacing:"0.8px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{title}</div>
       {onRemove&&<button type="button" onClick={onRemove} style={{border:"1px solid var(--border)",background:"var(--inputBg)",color:"var(--sub)",fontSize:15,lineHeight:1,width:22,height:22,borderRadius:8,display:"inline-flex",alignItems:"center",justifyContent:"center"}}>×</button>}
@@ -2574,8 +2601,7 @@ const BottleGlyph=({color="#8B1A1A"})=>{
         fill={`url(#${shineId})`}
         opacity="0.9"
       />
-      <rect x="17.5" y="35.4" width="23" height="24" rx="7.8" fill={`url(#${labelId})`} opacity="0.2"/>
-      <path d="M21.2 35.9h15.6" stroke="rgba(255,255,255,0.12)" strokeWidth="0.8" strokeLinecap="round"/>
+      <rect x="18.7" y="37.2" width="20.6" height="20.5" rx="7.2" fill={`url(#${labelId})`} opacity="0.12"/>
       <ellipse cx="29" cy="63.3" rx="10.8" ry="2.5" fill={`url(#${puntId})`} opacity="0.3"/>
     </svg>
   );
@@ -2609,44 +2635,21 @@ const WineCard=({wine,onClick})=>{
   const addedTag=!wine.wishlist&&wine.cellarMeta?.addedDate?(fmtWithDay(wine.cellarMeta.addedDate)?`Added ${fmtWithDay(wine.cellarMeta.addedDate)}`:null):null;
   const paidPerBottle=safeNum(wine.cellarMeta?.pricePerBottle);
   const rrpPerBottle=safeNum(wine.cellarMeta?.rrp);
-  const readinessTag=!wine.wishlist&&ready.key!=="none"?ready.label:null;
   const rrpText=!wine.wishlist&&rrpPerBottle!=null&&rrpPerBottle>0?`RRP $${rrpPerBottle.toFixed(2)}`:null;
   const paidText=!wine.wishlist&&paidPerBottle!=null&&paidPerBottle>0?`Paid $${paidPerBottle.toFixed(2)}`:null;
   const quickTagStyle={padding:"4px 8px",borderRadius:999,fontSize:10.5,fontWeight:800,color:"var(--text)",background:"var(--inputBg)",fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap",border:"1px solid var(--border)"};
   const metaLabelStyle={fontSize:9.5,fontWeight:800,letterSpacing:"0.75px",textTransform:"uppercase",color:"rgba(var(--accentRgb),0.58)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:2};
   const detailTextStyle={fontSize:11.5,color:"var(--sub)",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"};
-  const readinessTint=ready.key==="ready"
-    ?"rgba(47,133,90,0.12)"
+  const readinessTone=ready.key==="ready"
+    ? "#2F855A"
     : ready.key==="late"
-      ?"rgba(184,50,50,0.12)"
+      ? "#B83232"
       : ready.key==="early"
-        ?"rgba(42,90,184,0.12)"
-        :"rgba(var(--accentRgb),0.08)";
-  const readinessBorder=ready.key==="ready"
-    ?"rgba(47,133,90,0.22)"
-    : ready.key==="late"
-      ?"rgba(184,50,50,0.22)"
-      : ready.key==="early"
-        ?"rgba(42,90,184,0.22)"
-        :"rgba(var(--accentRgb),0.16)";
-  const readinessPillStyle={
-    ...quickTagStyle,
-    display:"inline-flex",
-    alignItems:"center",
-    gap:6,
-    color:ready.key==="none"?"var(--sub)":ready.color,
-    background:readinessTint,
-    border:`1px solid ${readinessBorder}`,
-  };
+        ? "#2A5AB8"
+        : "var(--sub)";
   const primaryTags=[
     <WineTypePill key="type" type={type} label={varietal}/>,
     yearTag?<span key="year" style={quickTagStyle}>{yearTag}</span>:null,
-    readinessTag?(
-      <span key="readiness" style={readinessPillStyle}>
-        <span style={{width:7,height:7,borderRadius:"50%",background:ready.key==="none"?"rgba(var(--accentRgb),0.48)":ready.color,display:"inline-block",flexShrink:0}}/>
-        {ready.key==="ready"?"Ready":ready.label}
-      </span>
-    ):null,
   ].filter(Boolean);
   const priceTags=[
     rrpText?<span key="rrp" style={{...quickTagStyle,background:"rgba(var(--accentRgb),0.13)",color:"var(--accent)",fontWeight:800}}>{rrpText}</span>:null,
@@ -2657,7 +2660,6 @@ const WineCard=({wine,onClick})=>{
     <div onClick={onClick} style={{background:"linear-gradient(180deg,var(--card),rgba(var(--accentRgb),0.05) 160%)",borderRadius:24,padding:"15px",cursor:"pointer",border:"1px solid rgba(var(--accentRgb),0.12)",marginBottom:0,display:"grid",gridTemplateColumns:"68px 1fr",gap:14,alignItems:"center",transition:"transform 0.18s, box-shadow 0.18s, border-color 0.18s",boxShadow:"0 10px 24px var(--shadow)",minHeight:126,position:"relative",overflow:"hidden",contain:"layout paint",willChange:"transform, box-shadow",backfaceVisibility:"hidden",transform:"translateZ(0)"}}
       onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow="0 18px 34px var(--shadow)";e.currentTarget.style.borderColor="rgba(var(--accentRgb),0.26)";}}
       onMouseLeave={e=>{e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="0 10px 24px var(--shadow)";e.currentTarget.style.borderColor="rgba(var(--accentRgb),0.12)";}}>
-      <div style={{position:"absolute",inset:"0 0 auto 0",height:2,background:ready.key==="ready"?"rgba(47,133,90,0.58)":ready.key==="late"?"rgba(184,50,50,0.58)":ready.key==="early"?"rgba(42,90,184,0.58)":"rgba(var(--accentRgb),0.22)",pointerEvents:"none"}}/>
       <WineThumbVisual wine={wine} tc={tc}/>
       <div style={{minWidth:0,display:"flex",flexDirection:"column",gap:6}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,minWidth:0}}>
@@ -2671,6 +2673,14 @@ const WineCard=({wine,onClick})=>{
         {(geo.region||geo.country)&&(
           <div style={{fontSize:13,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
             {[geo.region||geo.country,geo.country&&geo.region?geo.country:null].filter(Boolean).join(" · ")}
+          </div>
+        )}
+        {!wine.wishlist&&ready.key!=="none"&&(
+          <div style={{display:"flex",alignItems:"center",gap:7,minWidth:0}}>
+            <span style={{width:8,height:8,borderRadius:"50%",background:readinessTone,boxShadow:`0 0 0 5px ${ready.key==="ready"?"rgba(47,133,90,0.12)":ready.key==="late"?"rgba(184,50,50,0.12)":"rgba(42,90,184,0.12)"}`,flexShrink:0}}/>
+            <div style={{fontSize:11.5,fontWeight:800,color:readinessTone,fontFamily:"'Plus Jakarta Sans',sans-serif",letterSpacing:"0.15px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+              {ready.label}
+            </div>
           </div>
         )}
         <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
@@ -3073,7 +3083,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
   const sectionTitleStyle={display:"flex",alignItems:"center",gap:8,fontSize:10,color:"var(--accent)",fontWeight:900,textTransform:"uppercase",letterSpacing:"1.02px",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"};
   const sectionTitleDotStyle={width:7,height:7,borderRadius:"50%",background:"var(--accent)",boxShadow:"0 0 0 4px rgba(var(--accentRgb),0.14)"};
   const sectionHintStyle={fontSize:12,color:"var(--sub)",marginBottom:10,fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.45,fontWeight:600};
-  const journalBlockStyle={background:"linear-gradient(180deg,rgba(var(--accentRgb),0.1),var(--card))",border:"1.5px solid rgba(var(--accentRgb),0.24)",borderRadius:13,padding:"11px 12px",boxShadow:"0 10px 18px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.3)"};
+  const journalBlockStyle={background:"linear-gradient(180deg,rgba(var(--accentRgb),0.1),var(--card))",border:"1.5px solid rgba(var(--accentRgb),0.24)",borderRadius:13,padding:"11px 12px",boxShadow:"0 10px 18px rgba(0,0,0,0.08)"};
   const topShellStyle={background:"linear-gradient(165deg,rgba(var(--accentRgb),0.16),rgba(var(--accentRgb),0.06) 46%,var(--card))",border:"1px solid rgba(var(--accentRgb),0.26)",borderRadius:18,padding:"12px",marginTop:-2,marginBottom:14,boxShadow:"0 14px 24px rgba(0,0,0,0.09)"};
   const topMetaPillStyle={display:"inline-flex",alignItems:"center",gap:6,padding:"4px 9px",borderRadius:999,border:"1px solid rgba(var(--accentRgb),0.28)",background:"rgba(var(--accentRgb),0.1)",fontSize:10,fontWeight:800,color:"var(--accent)",letterSpacing:"0.8px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"};
   const detailsGridStyle={display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(250px,1fr))",gap:12};
@@ -3150,7 +3160,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
         </div>
       )}
       {splitEnabled&&(
-        <div style={{marginBottom:12,padding:"10px 11px",borderRadius:12,background:"linear-gradient(180deg,rgba(var(--accentRgb),0.14),var(--inputBg))",border:"1px solid rgba(var(--accentRgb),0.3)",boxShadow:"inset 0 1px 0 rgba(255,255,255,0.35)"}}>
+        <div style={{marginBottom:12,padding:"10px 11px",borderRadius:12,background:"linear-gradient(180deg,rgba(var(--accentRgb),0.14),var(--inputBg))",border:"1px solid rgba(var(--accentRgb),0.3)"}}>
           <div style={{fontSize:10,color:"var(--accent)",fontWeight:800,textTransform:"uppercase",letterSpacing:"0.8px",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Second Card Setup</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 2fr 1fr",gap:10}}>
             <Field label="2nd Qty" value={f.splitSecondBottles} onChange={handleSplitSecondBottlesChange} type="number" placeholder="1"/>
@@ -3187,7 +3197,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
           </div>
         </div>
       )}
-      <div style={{background:"linear-gradient(180deg,rgba(var(--accentRgb),0.08),var(--inputBg))",borderRadius:12,padding:"10px 12px",marginBottom:12,border:"1px solid rgba(var(--accentRgb),0.2)",boxShadow:"inset 0 1px 0 rgba(255,255,255,0.35)"}}>
+      <div style={{background:"linear-gradient(180deg,rgba(var(--accentRgb),0.08),var(--inputBg))",borderRadius:12,padding:"10px 12px",marginBottom:12,border:"1px solid rgba(var(--accentRgb),0.2)"}}>
         <div style={{fontSize:10,color:"var(--sub)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Bottle Tracker</div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:8}}>
           {[["Purchased",projectedPurchased],["Left",projectedLeft],["Consumed",projectedConsumed]].map(([label,val])=>(
@@ -3527,7 +3537,7 @@ const WineForm=({initial,onSave,onClose,isWishlist,locationOptions=[],savedLocat
             <div style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"var(--sub)",pointerEvents:"none"}}><Icon n="search" size={16}/></div>
           </div>
           {sugs.length>0&&(
-              <div style={{marginTop:10,background:"linear-gradient(180deg,var(--surface),rgba(var(--accentRgb),0.03))",borderRadius:16,border:"1px solid rgba(var(--accentRgb),0.18)",maxHeight:260,overflowY:"auto",overscrollBehavior:"contain",boxShadow:"0 18px 42px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.4)"}}
+              <div style={{marginTop:10,background:"linear-gradient(180deg,var(--surface),rgba(var(--accentRgb),0.03))",borderRadius:16,border:"1px solid rgba(var(--accentRgb),0.18)",maxHeight:260,overflowY:"auto",overscrollBehavior:"contain",boxShadow:"0 18px 42px rgba(0,0,0,0.12)"}}
                 onWheel={e=>e.stopPropagation()}>
                 <div style={{padding:"10px 14px 8px",fontSize:10,fontWeight:800,color:"var(--sub)",letterSpacing:"0.9px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif",borderBottom:"1px solid rgba(var(--accentRgb),0.08)"}}>
                   Suggested wines
@@ -4441,6 +4451,54 @@ const AuditScreen=({wines,desktop,onSetWineBottles,onRemoveWine,onRevokeAudit})=
     }
     return "Pending check";
   };
+  const auditPanel={
+    background:"var(--card)",
+    border:"1px solid var(--border)",
+    borderRadius:22,
+    boxShadow:"0 16px 34px var(--shadow)",
+  };
+  const auditGlass={
+    background:"linear-gradient(180deg,rgba(var(--accentRgb),0.1),rgba(var(--accentRgb),0.04) 44%,var(--card))",
+    border:"1px solid rgba(var(--accentRgb),0.18)",
+    borderRadius:22,
+    boxShadow:"0 20px 38px var(--shadow)",
+  };
+  const auditMetaChip={
+    display:"inline-flex",
+    alignItems:"center",
+    gap:7,
+    padding:"7px 11px",
+    borderRadius:999,
+    background:"rgba(var(--accentRgb),0.1)",
+    border:"1px solid rgba(var(--accentRgb),0.18)",
+    color:"var(--accent)",
+    fontSize:11,
+    fontWeight:800,
+    fontFamily:"'Plus Jakarta Sans',sans-serif",
+  };
+  const auditGhostBtn={
+    padding:"9px 12px",
+    borderRadius:12,
+    border:"1px solid var(--border)",
+    background:"var(--surface)",
+    color:"var(--text)",
+    fontSize:12,
+    fontWeight:800,
+    fontFamily:"'Plus Jakarta Sans',sans-serif",
+    cursor:"pointer",
+  };
+  const auditPrimaryBtn={
+    padding:"10px 14px",
+    borderRadius:13,
+    border:"none",
+    background:"var(--accent)",
+    color:"#fff",
+    fontSize:12.5,
+    fontWeight:800,
+    fontFamily:"'Plus Jakarta Sans',sans-serif",
+    boxShadow:"0 12px 24px rgba(var(--accentRgb),0.24)",
+    cursor:"pointer",
+  };
 
   useEffect(()=>{
     try{localStorage.setItem(AUDITS_KEY,JSON.stringify(audits.slice(0,60)))}catch{}
@@ -4731,25 +4789,33 @@ const AuditScreen=({wines,desktop,onSetWineBottles,onRemoveWine,onRevokeAudit})=
 
   return(
     <div>
-      <div style={{marginBottom:20}}>
-        <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"2px",textTransform:"uppercase",marginBottom:4}}>Inventory Control</div>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",gap:10}}>
-          <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:34,fontWeight:800,color:"var(--text)",lineHeight:1}}>
-            Audit <span style={{fontSize:18,color:"var(--sub)",fontWeight:400}}>{audits.length} saved</span>
+      <div style={{...auditGlass,padding:desktop?"18px 20px":"16px 16px 14px",marginBottom:16,position:"relative",overflow:"hidden"}}>
+        <div style={{position:"absolute",right:-10,top:-8,opacity:0.08,pointerEvents:"none"}}><BrandLogo size={desktop?104:88} variant="mono"/></div>
+        <div style={{position:"relative",zIndex:1,display:"grid",gridTemplateColumns:desktop?"minmax(0,1fr) auto":"1fr",gap:14,alignItems:"center"}}>
+          <div>
+            <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:11,fontWeight:800,color:"var(--sub)",letterSpacing:"1.8px",textTransform:"uppercase",marginBottom:5}}>Inventory Control</div>
+            <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:desktop?34:30,fontWeight:900,color:"var(--text)",lineHeight:1.02,marginBottom:10}}>Audit</div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+              <span style={auditMetaChip}>{audits.length} saved</span>
+              <span style={auditMetaChip}>{locations.length||1} locations</span>
+              <span style={auditMetaChip}>{col.length} wines in cellar</span>
+            </div>
           </div>
-          <button onClick={openStartAudit} style={{padding:"10px 14px",borderRadius:12,border:"none",background:"var(--accent)",color:"#fff",fontSize:13,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",boxShadow:"0 6px 18px rgba(var(--accentRgb),0.28)",cursor:"pointer",whiteSpace:"nowrap"}}>
-            Start New Audit
-          </button>
+          <div style={{display:"flex",justifyContent:desktop?"flex-end":"stretch"}}>
+            <button onClick={openStartAudit} style={{...auditPrimaryBtn,minWidth:desktop?154:"100%"}}>
+              Start Audit
+            </button>
+          </div>
         </div>
       </div>
 
       {statusMsg&&(
-        <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:"10px 12px",marginBottom:12,fontSize:12,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+        <div style={{background:"var(--card)",border:"1px solid rgba(var(--accentRgb),0.16)",borderRadius:14,padding:"11px 13px",marginBottom:12,fontSize:12.5,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",boxShadow:"0 10px 18px var(--shadow)"}}>
           {statusMsg}
         </div>
       )}
       {syncState!=="ready"&&(
-        <div style={{background:"rgba(184,50,50,0.08)",border:"1px solid rgba(184,50,50,0.22)",borderRadius:12,padding:"10px 12px",marginBottom:12,fontSize:12,color:"#9C2B2B",fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.55}}>
+        <div style={{background:"rgba(184,50,50,0.08)",border:"1px solid rgba(184,50,50,0.22)",borderRadius:14,padding:"11px 13px",marginBottom:12,fontSize:12.5,color:"#9C2B2B",fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.55}}>
           {syncState==="checking"
             ? "Checking audit cloud sync…"
             : "Audit cloud sync is unavailable. Audits are saving locally on this device until the Supabase audits table is configured."}
@@ -4759,14 +4825,14 @@ const AuditScreen=({wines,desktop,onSetWineBottles,onRemoveWine,onRevokeAudit})=
       {!activeAudit&&(
         <>
           {auditsSorted.length===0?(
-            <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:16,padding:"18px"}}>
-              <div style={{fontSize:15,fontWeight:700,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:6}}>No audits yet</div>
+            <div style={{...auditPanel,padding:"22px 20px"}}>
+              <div style={{fontSize:16,fontWeight:800,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:6}}>No audits yet</div>
               <div style={{fontSize:13,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.6}}>
-                Start an audit to verify cellar stock location-by-location and optionally sync the results back to your inventory.
+                Start an audit to verify real stock and bring the cellar back in line where needed.
               </div>
             </div>
           ):(
-            <div style={{display:"grid",gap:9}}>
+            <div style={{display:"grid",gap:10}}>
               {auditsSorted.map(a=>{
                 const rows=Object.values(a.items||{});
                 const done=rows.filter(it=>it.decision&&it.decision!=="pending").length;
@@ -4774,7 +4840,7 @@ const AuditScreen=({wines,desktop,onSetWineBottles,onRemoveWine,onRevokeAudit})=
                 const statusBg=a.status==="completed"?"rgba(47,133,90,0.12)":a.status==="revoked"?"rgba(88,88,88,0.18)":"rgba(var(--accentRgb),0.12)";
                 const statusColor=a.status==="completed"?"#2F855A":a.status==="revoked"?"#5A5A5A":"var(--accent)";
                 return(
-                  <div key={a.id} style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:14,padding:"12px 13px",display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",overflow:"hidden"}}>
+                  <div key={a.id} style={{...auditPanel,padding:"14px 14px 13px",display:"grid",gridTemplateColumns:desktop?"minmax(0,1fr) auto":"1fr",gap:12,alignItems:"center",overflow:"hidden"}}>
                     <div style={{minWidth:0}}>
                       <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:4}}>
                         <div style={{fontSize:14,fontWeight:700,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{a.name}</div>
@@ -4782,16 +4848,19 @@ const AuditScreen=({wines,desktop,onSetWineBottles,onRemoveWine,onRevokeAudit})=
                           {a.status==="completed"?"Completed":a.status==="revoked"?"Revoked":"In progress"}
                         </span>
                       </div>
-                      <div style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:5}}>
-                        {fmtAuditDate(a.createdAt)} · {done}/{rows.length} checked · {pct}%
+                      <div style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:8}}>
+                        {fmtAuditDate(a.createdAt)} · {done}/{rows.length} checked
+                      </div>
+                      <div style={{height:8,borderRadius:999,background:"var(--inputBg)",overflow:"hidden",marginBottom:8}}>
+                        <div style={{width:`${pct}%`,height:"100%",background:"linear-gradient(90deg,var(--accent),rgba(var(--accentRgb),0.5))",borderRadius:999}}/>
                       </div>
                       <div style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
                         {(a.locations||[]).join(" · ")||"All locations"}
                       </div>
                     </div>
-                    <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-                      <button onClick={()=>setActionAuditId(a.id)} style={{width:30,height:30,borderRadius:10,border:"1.5px solid var(--border)",background:"var(--inputBg)",color:"var(--sub)",fontSize:18,lineHeight:1,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} aria-label="Audit actions">⋯</button>
-                      <button onClick={()=>setActiveId(a.id)} style={{padding:"7px 10px",borderRadius:10,border:"1.5px solid var(--border)",background:"var(--inputBg)",color:"var(--text)",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:"pointer",whiteSpace:"nowrap"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                      <button onClick={()=>setActionAuditId(a.id)} style={{...auditGhostBtn,width:36,height:36,padding:0,display:"flex",alignItems:"center",justifyContent:"center"}} aria-label="Audit actions">⋯</button>
+                      <button onClick={()=>setActiveId(a.id)} style={{...auditGhostBtn,whiteSpace:"nowrap"}}>
                         Open
                       </button>
                     </div>
@@ -4805,43 +4874,43 @@ const AuditScreen=({wines,desktop,onSetWineBottles,onRemoveWine,onRevokeAudit})=
 
       {activeAudit&&(
         <div>
-          <div style={{background:"linear-gradient(145deg,#1D1715 0%,#2C201C 55%,#1C1614 100%)",border:"1px solid rgba(255,255,255,0.14)",borderRadius:16,padding:"14px",marginBottom:12,boxShadow:"0 10px 26px rgba(0,0,0,0.26)"}}>
+          <div style={{...auditGlass,padding:"16px 16px 14px",marginBottom:14}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,marginBottom:10}}>
-              <button onClick={()=>setActiveId(null)} style={{padding:"7px 10px",borderRadius:10,border:"1px solid rgba(255,255,255,0.2)",background:"rgba(255,255,255,0.08)",color:"#F6EEE8",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:"pointer",whiteSpace:"nowrap"}}>
+              <button onClick={()=>setActiveId(null)} style={{...auditGhostBtn,whiteSpace:"nowrap"}}>
                 ← Back to Audits
               </button>
-              <div style={{padding:"4px 9px",borderRadius:999,background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.16)",fontSize:11,fontWeight:700,color:"#EADFD8",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+              <div style={{padding:"5px 10px",borderRadius:999,background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.12)",fontSize:11,fontWeight:800,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
                 {checkedRows}/{totalRows} Verified
               </div>
             </div>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,marginBottom:8}}>
               <div style={{minWidth:0}}>
-                <div style={{fontSize:18,fontWeight:800,color:"#FFFFFF",fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.2}}>{activeAudit.name}</div>
-                <div style={{fontSize:12,color:"rgba(255,255,255,0.72)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginTop:2}}>
+                <div style={{fontSize:20,fontWeight:900,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.15}}>{activeAudit.name}</div>
+                <div style={{fontSize:12,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",marginTop:3}}>
                   {fmtAuditDate(activeAudit.createdAt)} · {activeAudit.realtimeSync?"Real-time Sync":"Manual Sync"}
                 </div>
               </div>
             </div>
             <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
-              {(activeAudit.locations||[]).map(loc=><span key={loc} style={{padding:"3px 8px",borderRadius:20,fontSize:11,fontWeight:700,color:"#FAF2EC",background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.16)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{loc}</span>)}
+              {(activeAudit.locations||[]).map(loc=><span key={loc} style={{padding:"4px 9px",borderRadius:999,fontSize:11,fontWeight:800,color:"var(--accent)",background:"rgba(var(--accentRgb),0.1)",border:"1px solid rgba(var(--accentRgb),0.16)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{loc}</span>)}
             </div>
             {!activeAudit.realtimeSync&&(
               <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:9,flexWrap:"wrap"}}>
-                <div style={{display:"inline-flex",alignItems:"center",gap:6,padding:"4px 8px",borderRadius:999,background:"rgba(255,255,255,0.08)",backdropFilter:"blur(10px)",WebkitBackdropFilter:"blur(10px)",border:"1px solid rgba(255,255,255,0.16)"}}>
-                  <span style={{fontSize:10.5,fontWeight:800,letterSpacing:"0.6px",textTransform:"uppercase",color:"#FFF7F2",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Manual Sync</span>
+                <div style={{display:"inline-flex",alignItems:"center",gap:6,padding:"4px 8px",borderRadius:999,background:"rgba(var(--accentRgb),0.08)",border:"1px solid rgba(var(--accentRgb),0.16)"}}>
+                  <span style={{fontSize:10.5,fontWeight:800,letterSpacing:"0.6px",textTransform:"uppercase",color:"var(--accent)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Manual Sync</span>
                 </div>
-                <div style={{fontSize:11.5,color:"rgba(255,255,255,0.82)",fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.45}}>
+                <div style={{fontSize:11.5,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.45}}>
                   {pendingUnsyncedCount>0?`${pendingUnsyncedCount} pending update${pendingUnsyncedCount===1?"":"s"}`:"No pending updates"}
                 </div>
               </div>
             )}
             <div style={{display:"flex",flexWrap:"wrap",gap:7,justifyContent:"flex-end"}}>
               {!activeAudit.realtimeSync&&(
-                <button disabled={busy||pendingUnsyncedCount===0} onClick={()=>applyAuditChanges(activeAudit)} style={{padding:"7px 10px",borderRadius:10,border:"1px solid rgba(255,255,255,0.24)",background:"rgba(255,255,255,0.08)",color:"#FFF7F3",fontSize:11.5,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:(busy||pendingUnsyncedCount===0)?"default":"pointer",opacity:(busy||pendingUnsyncedCount===0)?0.45:1,whiteSpace:"nowrap"}}>
+                <button disabled={busy||pendingUnsyncedCount===0} onClick={()=>applyAuditChanges(activeAudit)} style={{...auditGhostBtn,cursor:(busy||pendingUnsyncedCount===0)?"default":"pointer",opacity:(busy||pendingUnsyncedCount===0)?0.45:1,whiteSpace:"nowrap"}}>
                   Apply Pending Updates {pendingUnsyncedCount>0?`(${pendingUnsyncedCount})`:""}
                 </button>
               )}
-              <button disabled={busy} onClick={()=>{setApplyOnComplete(false);setCompleteOpen(true);}} style={{padding:"7px 11px",borderRadius:10,border:"none",background:"var(--accent)",color:"#fff",fontSize:11.5,fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:busy?"default":"pointer",opacity:busy?0.7:1,boxShadow:"0 6px 16px rgba(var(--accentRgb),0.35)",whiteSpace:"nowrap"}}>
+              <button disabled={busy} onClick={()=>{setApplyOnComplete(false);setCompleteOpen(true);}} style={{...auditPrimaryBtn,padding:"9px 12px",cursor:busy?"default":"pointer",opacity:busy?0.7:1,whiteSpace:"nowrap"}}>
                 Complete Audit
               </button>
             </div>
@@ -4850,7 +4919,7 @@ const AuditScreen=({wines,desktop,onSetWineBottles,onRemoveWine,onRevokeAudit})=
           {auditRows.length===0?(
             <Empty icon="audit" text="No wines are scoped in this audit."/>
           ):(
-            <div style={{display:"grid",gridTemplateColumns:desktop?"repeat(2,minmax(0,1fr))":"1fr",gap:8,overflow:"hidden"}}>
+            <div style={{display:"grid",gridTemplateColumns:desktop?"repeat(2,minmax(0,1fr))":"1fr",gap:10,overflow:"hidden"}}>
               {auditRows.map(({item,wine})=>{
                 const statusLabel=item.decision==="present"?"Present":item.decision==="missing"?"Missing":"Pending";
                 const statusColor=item.decision==="present"?"#2F855A":item.decision==="missing"?"#B83232":"var(--sub)";
@@ -4859,7 +4928,9 @@ const AuditScreen=({wines,desktop,onSetWineBottles,onRemoveWine,onRevokeAudit})=
                 const varietalLabel=item.varietal||resolveVarietal(wine||{});
                 const vintageLabel=item.vintage||wine?.vintage;
                 return(
-                  <div key={item.wineId} style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:14,padding:"10px 11px",overflow:"hidden",boxShadow:"0 2px 8px var(--shadow)"}}>
+                  <div key={item.wineId} style={{...auditPanel,padding:"12px 12px 11px",display:"grid",gridTemplateColumns:"68px minmax(0,1fr)",gap:12,overflow:"hidden"}}>
+                    <WineThumbVisual wine={wine||{photo:null}} tc={WINE_TYPE_COLORS[type]||WINE_TYPE_COLORS.Other}/>
+                    <div style={{minWidth:0}}>
                     <div style={{display:"flex",justifyContent:"space-between",gap:10}}>
                       <div style={{minWidth:0}}>
                         <div style={{fontSize:14.5,fontWeight:800,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
@@ -4877,7 +4948,7 @@ const AuditScreen=({wines,desktop,onSetWineBottles,onRemoveWine,onRevokeAudit})=
                         </div>
                       </div>
                       <div style={{textAlign:"right",flexShrink:0}}>
-                        <div style={{display:"inline-flex",alignItems:"center",justifyContent:"center",padding:"3px 9px",minHeight:20,minWidth:64,borderRadius:20,fontSize:10,fontWeight:700,color:statusColor,background:statusBg,fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:4}}>
+                        <div style={{display:"inline-flex",alignItems:"center",justifyContent:"center",padding:"4px 9px",minHeight:20,minWidth:64,borderRadius:999,fontSize:10,fontWeight:800,color:statusColor,background:statusBg,fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:4,border:`1px solid ${item.decision==="present"?"rgba(47,133,90,0.22)":item.decision==="missing"?"rgba(184,50,50,0.22)":"var(--border)"}`}}>
                           {statusLabel}
                         </div>
                         <div style={{fontSize:11,color:"var(--sub)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
@@ -4889,12 +4960,13 @@ const AuditScreen=({wines,desktop,onSetWineBottles,onRemoveWine,onRevokeAudit})=
                       {itemSummary(item)}
                     </div>
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
-                      <button disabled={busy} onClick={()=>setEntryEditor({wineId:item.wineId,mode:"present",countType:item.countType||"bottles",countedAmount:String(Math.max(0,Math.round(safeNum(item.countedAmount)||safeNum(wine?.bottles)||safeNum(item.expectedBottles)||0)))})} style={{padding:"7px 9px",borderRadius:10,border:"1.5px solid rgba(47,133,90,0.35)",background:item.decision==="present"?"rgba(47,133,90,0.12)":"var(--inputBg)",color:"#2F855A",fontSize:11.5,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:busy?"default":"pointer",opacity:busy?0.6:1}}>
-                        ✓ Present
+                      <button disabled={busy} onClick={()=>setEntryEditor({wineId:item.wineId,mode:"present",countType:item.countType||"bottles",countedAmount:String(Math.max(0,Math.round(safeNum(item.countedAmount)||safeNum(wine?.bottles)||safeNum(item.expectedBottles)||0)))})} style={{padding:"8px 10px",borderRadius:11,border:"1.5px solid rgba(47,133,90,0.32)",background:item.decision==="present"?"rgba(47,133,90,0.12)":"var(--inputBg)",color:"#2F855A",fontSize:11.5,fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:busy?"default":"pointer",opacity:busy?0.6:1}}>
+                        Present
                       </button>
-                      <button disabled={busy} onClick={()=>setEntryEditor({wineId:item.wineId,mode:"missing",missingAction:item.missingAction||"keep"})} style={{padding:"7px 9px",borderRadius:10,border:"1.5px solid rgba(184,50,50,0.35)",background:item.decision==="missing"?"rgba(184,50,50,0.12)":"var(--inputBg)",color:"#B83232",fontSize:11.5,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:busy?"default":"pointer",opacity:busy?0.6:1}}>
-                        ✕ Missing
+                      <button disabled={busy} onClick={()=>setEntryEditor({wineId:item.wineId,mode:"missing",missingAction:item.missingAction||"keep"})} style={{padding:"8px 10px",borderRadius:11,border:"1.5px solid rgba(184,50,50,0.32)",background:item.decision==="missing"?"rgba(184,50,50,0.12)":"var(--inputBg)",color:"#B83232",fontSize:11.5,fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:busy?"default":"pointer",opacity:busy?0.6:1}}>
+                        Missing
                       </button>
+                    </div>
                     </div>
                   </div>
                 );
@@ -6617,7 +6689,7 @@ const ExploreWineries=({onBack})=>{
 /* ── SETTINGS PANEL ───────────────────────────────────────────── */
 const BG_PRESETS = COLOR_THEMES.map(t=>({label:t.label,value:t.profileBg,accentId:t.id}));
 
-const SettingsPanel=({onBack,profile,setProfile,theme,setTheme,authRole,onSavePin})=>{
+const SettingsPanel=({onBack,profile,setProfile,theme,setTheme,authRole,onSavePin,onSaved})=>{
   const THEMES=[{id:"system",label:"System",ic:"monitor"},{id:"light",label:"Light",ic:"sun"},{id:"dark",label:"Dark",ic:"moon"}];
   const COUNTRIES=["Australia","New Zealand","France","Italy","Spain","USA","Argentina","Chile","South Africa","Germany","Portugal","Austria","Other"];
   const [compact,setCompact]=useState(()=>window.innerWidth<920);
@@ -6642,6 +6714,7 @@ const SettingsPanel=({onBack,profile,setProfile,theme,setTheme,authRole,onSavePi
     error:"",
     success:"",
   });
+  const [saveState,setSaveState]=useState({saving:false,error:""});
   useEffect(()=>{
     const onResize=()=>setCompact(window.innerWidth<920);
     window.addEventListener("resize",onResize);
@@ -6650,7 +6723,17 @@ const SettingsPanel=({onBack,profile,setProfile,theme,setTheme,authRole,onSavePi
   const set=(k,v)=>setForm(p=>({...p,[k]:v}));
   const setPin=(k,v)=>setPinForm(p=>({...p,[k]:v,error:k==="current"||k==="next"||k==="confirm"?"":p.error,success:k==="current"||k==="next"||k==="confirm"?"":p.success}));
   const setColorTheme=(accentId,profileBg)=>setForm(p=>({...p,accent:accentId,profileBg}));
-  const save=async()=>{if(form.name.trim()){await setProfile({...profile,...form});onBack();}};
+  const save=async()=>{
+    if(!form.name.trim()) return;
+    setSaveState({saving:true,error:""});
+    const ok=await setProfile({...profile,...form});
+    if(ok){
+      setSaveState({saving:false,error:""});
+      onSaved?.("Settings saved");
+      return;
+    }
+    setSaveState({saving:false,error:"Saved locally. Cloud sync will retry."});
+  };
   const savePin=async()=>{
     const digits=normalizePinDigits(pinForm.digits);
     const nextPin=normalizePinInput(pinForm.next,digits);
@@ -6734,7 +6817,7 @@ const SettingsPanel=({onBack,profile,setProfile,theme,setTheme,authRole,onSavePi
       </div>
 
       <div style={{background:form.profileBg,borderRadius:28,padding:compact?"18px":"22px 24px",marginBottom:14,boxShadow:"0 20px 34px rgba(0,0,0,0.12)",position:"relative",overflow:"hidden"}}>
-        <div style={{position:"absolute",right:-28,top:-20,opacity:0.14,pointerEvents:"none"}}><BrandLogo size={150} variant="mono"/></div>
+        <div style={{position:"absolute",right:-10,top:-10,opacity:0.1,pointerEvents:"none"}}><BrandLogo size={118} variant="mono"/></div>
         <div style={{position:"relative",zIndex:1,display:"grid",gridTemplateColumns:compact?"1fr":"minmax(0,1fr) auto",gap:14,alignItems:"center"}}>
           <div style={{display:"flex",alignItems:"center",gap:14,minWidth:0}}>
             <PhotoPicker value={form.avatar} onChange={v=>set("avatar",v)} size={92} round/>
@@ -6913,10 +6996,11 @@ const SettingsPanel=({onBack,profile,setProfile,theme,setTheme,authRole,onSavePi
           <div style={{minWidth:0}}>
             <div style={{fontSize:11,fontWeight:800,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Ready to save</div>
             <div style={{fontSize:13,color:"var(--text)",fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{previewCellar} · {previewName}</div>
+            {saveState.error&&<div style={{fontSize:11,color:"#B93F3F",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",marginTop:4}}>{saveState.error}</div>}
           </div>
           <div style={{display:"flex",gap:10,marginLeft:"auto"}}>
             <button onClick={onBack} style={{minWidth:112,padding:"13px 16px",borderRadius:14,border:"1.5px solid var(--border)",background:"var(--inputBg)",color:"var(--text)",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Cancel</button>
-            <button onClick={save} disabled={saveDisabled} style={{minWidth:148,padding:"13px 18px",borderRadius:14,border:"none",background:saveDisabled?"var(--inputBg)":"var(--accent)",color:saveDisabled?"var(--sub)":"white",fontSize:14,fontWeight:800,cursor:saveDisabled?"default":"pointer",fontFamily:"'Plus Jakarta Sans',sans-serif",transition:"all 0.18s",boxShadow:saveDisabled?"none":"0 12px 24px rgba(var(--accentRgb),0.24)"}}>Save Changes</button>
+            <button onClick={save} disabled={saveDisabled||saveState.saving} style={{minWidth:148,padding:"13px 18px",borderRadius:14,border:"none",background:saveDisabled||saveState.saving?"var(--inputBg)":"var(--accent)",color:saveDisabled||saveState.saving?"var(--sub)":"white",fontSize:14,fontWeight:800,cursor:saveDisabled||saveState.saving?"default":"pointer",fontFamily:"'Plus Jakarta Sans',sans-serif",transition:"all 0.18s",boxShadow:saveDisabled||saveState.saving?"none":"0 12px 24px rgba(var(--accentRgb),0.24)"}}>{saveState.saving?"Saving…":"Save Changes"}</button>
           </div>
         </div>
       </div>
@@ -6936,11 +7020,17 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile,onNavigateTa
   const [activityType,setActivityType]=useState("all");
   const [retryingSync,setRetryingSync]=useState(false);
   const [retryFeedback,setRetryFeedback]=useState("");
+  const [settingsToast,setSettingsToast]=useState("");
   useEffect(()=>{
     const onResize=()=>setCompact(window.innerWidth<920);
     window.addEventListener("resize",onResize);
     return()=>window.removeEventListener("resize",onResize);
   },[]);
+  useEffect(()=>{
+    if(!settingsToast) return;
+    const timer=setTimeout(()=>setSettingsToast(""),1800);
+    return()=>clearTimeout(timer);
+  },[settingsToast]);
 
   const col=wines.filter(w=>!w.wishlist);
   const bottlesLeft=col.reduce((s,w)=>s+Math.max(0,Math.round(safeNum(w.bottles)||0)),0);
@@ -7117,7 +7207,7 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile,onNavigateTa
   const syncStatusLabel=pendingSync>0?"Pending retries":"All changes synced";
   const syncStatusTone=pendingSync>0?"#D68A16":"#2F855A";
   const syncErrorText=(safeSync.lastError||"").toString().trim();
-  const visibleSyncError=isCellarEventsPermissionIssue(syncErrorText)?"":syncErrorText;
+  const visibleSyncError=(isCellarEventsPermissionIssue(syncErrorText)||isOptionalProfileSchemaError(syncErrorText))?"":syncErrorText;
 
   const healthTotal=Math.max(1,readyCount+notReadyCount+pastPeakCount+noWindowCount);
   const readyPct=(readyCount/healthTotal)*100;
@@ -7147,11 +7237,19 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile,onNavigateTa
     fontFamily:"'Plus Jakarta Sans',sans-serif",
   };
 
-  if(view==="settings")return <SettingsPanel onBack={()=>setView("main")} profile={profile} setProfile={setProfile} theme={theme} setTheme={setTheme} authRole={authRole} onSavePin={onSavePin}/>;
+  if(view==="settings")return <SettingsPanel onBack={()=>setView("main")} onSaved={msg=>{setSettingsToast(msg||"Settings saved");setView("main");}} profile={profile} setProfile={setProfile} theme={theme} setTheme={setTheme} authRole={authRole} onSavePin={onSavePin}/>;
   if(view==="explore")return <ExploreWineries onBack={()=>setView("main")}/>;
 
   return(
     <div>
+      {settingsToast&&(
+        <div style={{position:"sticky",top:14,zIndex:5,display:"flex",justifyContent:"center",pointerEvents:"none",marginBottom:10}}>
+          <div style={{display:"inline-flex",alignItems:"center",gap:8,padding:"11px 14px",borderRadius:999,background:"rgba(20,22,24,0.88)",color:"#fff",boxShadow:"0 16px 34px rgba(0,0,0,0.18)",fontSize:12.5,fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif",backdropFilter:"blur(14px)",WebkitBackdropFilter:"blur(14px)"}}>
+            <span style={{width:18,height:18,borderRadius:"50%",background:"rgba(255,255,255,0.16)",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon n="check" size={11} color="#fff"/></span>
+            {settingsToast}
+          </div>
+        </div>
+      )}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:18}}>
         <div>
           <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:11,fontWeight:700,color:"var(--sub)",letterSpacing:"2px",textTransform:"uppercase",marginBottom:4}}>Summary</div>
@@ -7165,7 +7263,7 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile,onNavigateTa
       </div>
 
       <div style={{...panel,background:profileBg,color:"#fff",padding:compact?"16px":"18px 20px",marginBottom:12,position:"relative",overflow:"hidden"}}>
-        <div style={{position:"absolute",right:-20,top:-18,opacity:0.14,pointerEvents:"none"}}><BrandLogo size={140} variant="mono"/></div>
+        <div style={{position:"absolute",right:-8,top:-6,opacity:0.1,pointerEvents:"none"}}><BrandLogo size={116} variant="mono"/></div>
         <div style={{position:"relative",zIndex:1,display:"grid",gridTemplateColumns:compact?"1fr":"minmax(0,1fr) minmax(300px,0.92fr)",gap:14,alignItems:"center"}}>
           <div style={{display:"flex",alignItems:"center",gap:12,minWidth:0}}>
             <div style={{width:64,height:64,borderRadius:"50%",background:"rgba(255,255,255,0.15)",overflow:"hidden",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",border:"2px solid rgba(255,255,255,0.3)"}}>
@@ -7559,6 +7657,7 @@ export default function App(){
   const [pinValue,setPinValue]=useState("");
   const [pinConfirm,setPinConfirm]=useState("");
   const [pinShow,setPinShow]=useState(false);
+  const [pinFocus,setPinFocus]=useState({create:false,confirm:false,unlock:false});
   const [oName,setOName]=useState("");
   const [oCellar,setOCellar]=useState("");
   const snapshotTimerRef=useRef(null);
@@ -7611,6 +7710,9 @@ export default function App(){
     window.addEventListener("resize",h);
     return()=>window.removeEventListener("resize",h);
   },[]);
+  useEffect(()=>{
+    setPinFocus({create:false,confirm:false,unlock:false});
+  },[splashPhase,authRole]);
   useEffect(()=>{
     if(!isAuthenticated) return;
     const flush=()=>{db.flushOutbox();};
@@ -8408,9 +8510,6 @@ export default function App(){
   const splashValue=splashMetricsVisible?splashCollection.reduce((sum,w)=>sum+((safeNum(w?.cellarMeta?.rrp)||0)*getTotalPurchased(w)),0):0;
   const splashAudits=splashMetricsVisible?readAudits():[];
   const splashInProgressAudits=splashAudits.filter(a=>(a?.status||"")==="in_progress").length;
-  const splashFooterLine=splashMetricsVisible&&wines.length>0
-    ? `${wines.length} wines · ${splashBottlesLeft} bottles left · ${splashConsumedCount} consumed`
-    : "Secure winery access";
   const splashGreeting=(()=>{
     const hour=new Date().getHours();
     if(hour<5) return "Good evening";
@@ -8447,20 +8546,20 @@ export default function App(){
     alignItems:"start",
   };
   const heroCard={
-    background:"linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.04))",
-    border:"1px solid rgba(255,255,255,0.14)",
+    background:"linear-gradient(180deg,rgba(22,15,17,0.94),rgba(16,11,13,0.9))",
+    border:"1px solid rgba(255,255,255,0.1)",
     borderRadius:30,
     padding:isDesktop?"30px 30px 28px":"24px 22px",
-    boxShadow:"0 28px 80px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.08)",
+    boxShadow:"0 28px 80px rgba(0,0,0,0.34)",
     backdropFilter:"blur(18px)",
     WebkitBackdropFilter:"blur(18px)",
   };
   const actionCard={
-    background:"rgba(15,10,11,0.8)",
+    background:"rgba(15,10,11,0.92)",
     border:"1px solid rgba(255,255,255,0.12)",
     borderRadius:28,
     padding:isDesktop?"24px 24px 22px":"20px 18px 18px",
-    boxShadow:"0 24px 72px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.04)",
+    boxShadow:"0 24px 72px rgba(0,0,0,0.34)",
     backdropFilter:"blur(18px)",
     WebkitBackdropFilter:"blur(18px)",
   };
@@ -8474,7 +8573,7 @@ export default function App(){
     background:"rgba(255,255,255,0.04)",
     border:"1.5px solid rgba(255,255,255,0.1)",
     color:"#F6EEE9",
-    boxShadow:"inset 0 1px 0 rgba(255,255,255,0.03)",
+    boxShadow:"0 10px 22px rgba(0,0,0,0.18)",
   };
   const smallLabel={fontSize:11,fontWeight:700,color:"rgba(246,238,233,0.58)",letterSpacing:"1.4px",textTransform:"uppercase",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"};
   const pillStyle={display:"inline-flex",alignItems:"center",gap:8,padding:"8px 12px",borderRadius:999,border:"1px solid rgba(255,255,255,0.1)",background:"rgba(255,255,255,0.05)",fontSize:11,fontWeight:700,color:"rgba(246,238,233,0.78)",fontFamily:"'Plus Jakarta Sans',sans-serif"};
@@ -8537,12 +8636,12 @@ export default function App(){
       </div>
       <div style={{fontSize:14,color:"rgba(246,238,233,0.62)",lineHeight:1.6,maxWidth:600,marginTop:14,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
         {authRole==="admin"
-          ? "Open the live winery with admin recovery access."
+          ? "Admin recovery access for the live winery."
           : isNewUser
-            ? "Set up the winery once, secure it with a PIN, and it will open straight into the cellar."
+            ? "Set up the winery once and secure it with a PIN."
             : hasPinConfigured(profile)
-              ? "Enter the winery PIN to unlock the cellar."
-              : "Secure the winery with a PIN so only trusted users can open it."}
+              ? "Enter the winery PIN to continue."
+              : "Create the winery PIN to continue."}
       </div>
       {splashMetricsVisible && (
         <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:18}}>
@@ -8551,24 +8650,6 @@ export default function App(){
           <div style={pillStyle}>{splashInProgressAudits} audits open</div>
         </div>
       )}
-      <div style={{display:"grid",gridTemplateColumns:isDesktop?"repeat(2,minmax(0,1fr))":"1fr",gap:10,marginTop:22}}>
-        <div style={miniStat}>
-          <div style={{fontSize:12,color:"rgba(246,238,233,0.62)",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{splashMetricsVisible?"Cellar status":"Access"}</div>
-          <div style={{fontSize:22,fontWeight:900,color:"#fff",marginTop:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{splashMetricsVisible?`${wines.length} wines tracked`:"Protected winery"}</div>
-          <div style={{fontSize:12,color:"rgba(246,238,233,0.66)",marginTop:6,fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.5}}>
-            {splashMetricsVisible ? `${splashConsumedCount} consumed · ${splashInProgressAudits} audits open` : "Server-side PIN protected access."}
-          </div>
-        </div>
-        <div style={miniStat}>
-          <div style={{fontSize:12,color:"rgba(246,238,233,0.62)",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Security</div>
-          <div style={{fontSize:22,fontWeight:900,color:"#fff",marginTop:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
-            {authRole==="admin" ? "Admin Recovery" : (hasPinConfigured(profile) ? `${normalizePinDigits(profile.pinDigits)}-digit PIN` : "PIN not set")}
-          </div>
-          <div style={{fontSize:12,color:"rgba(246,238,233,0.66)",marginTop:6,fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.5}}>
-            {authRole==="admin" ? "Opens the same synced cellar." : `Relocks after 15 minutes of inactivity.`}
-          </div>
-        </div>
-      </div>
       {extra}
     </div>
   );
@@ -8650,7 +8731,7 @@ export default function App(){
       <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:10,alignItems:"end",marginBottom:12}}>
         <div>
           <div style={smallLabel}>Create PIN</div>
-          <input type={pinShow?"text":"password"} inputMode="numeric" value={pinValue} onChange={e=>setPinValue(normalizePinInput(e.target.value,pinDigits))} placeholder={"•".repeat(normalizePinDigits(pinDigits))} style={pinFieldStyle}/>
+          <input type={pinShow?"text":"password"} inputMode="numeric" value={pinValue} onChange={e=>setPinValue(normalizePinInput(e.target.value,pinDigits))} onFocus={()=>setPinFocus(p=>({...p,create:true}))} onBlur={()=>setPinFocus(p=>({...p,create:false}))} placeholder={pinFocus.create||pinValue?"":"•".repeat(normalizePinDigits(pinDigits))} style={pinFieldStyle}/>
         </div>
         <button type="button" onClick={()=>setPinShow(v=>!v)} style={{height:52,padding:"0 16px",borderRadius:14,border:"1px solid rgba(255,255,255,0.12)",background:"rgba(255,255,255,0.05)",color:"#F6EEE9",fontSize:12,fontWeight:800}}>
           {pinShow?"Hide":"Show"}
@@ -8658,7 +8739,7 @@ export default function App(){
       </div>
       <div style={{marginBottom:16}}>
         <div style={smallLabel}>Confirm PIN</div>
-        <input type={pinShow?"text":"password"} inputMode="numeric" value={pinConfirm} onChange={e=>setPinConfirm(normalizePinInput(e.target.value,pinDigits))} placeholder={"•".repeat(normalizePinDigits(pinDigits))} style={pinFieldStyle}/>
+        <input type={pinShow?"text":"password"} inputMode="numeric" value={pinConfirm} onChange={e=>setPinConfirm(normalizePinInput(e.target.value,pinDigits))} onFocus={()=>setPinFocus(p=>({...p,confirm:true}))} onBlur={()=>setPinFocus(p=>({...p,confirm:false}))} placeholder={pinFocus.confirm||pinConfirm?"":"•".repeat(normalizePinDigits(pinDigits))} style={pinFieldStyle}/>
       </div>
       {authError&&<div style={{marginBottom:14,padding:"12px 14px",borderRadius:14,background:"rgba(180,52,52,0.14)",border:"1px solid rgba(220,90,90,0.24)",color:"#FFD7D7",fontSize:12,fontWeight:700,lineHeight:1.5}}>{authError}</div>}
       <button type="button" onClick={finishProfileSetup} disabled={authBusy} style={{...primaryAction,opacity:authBusy?0.68:1}}>
@@ -8675,7 +8756,7 @@ export default function App(){
       <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:10,alignItems:"end",marginBottom:12}}>
         <div>
           <div style={smallLabel}>Create PIN</div>
-          <input type={pinShow?"text":"password"} inputMode="numeric" value={pinValue} onChange={e=>setPinValue(normalizePinInput(e.target.value,pinDigits))} placeholder={"•".repeat(normalizePinDigits(pinDigits))} style={pinFieldStyle}/>
+          <input type={pinShow?"text":"password"} inputMode="numeric" value={pinValue} onChange={e=>setPinValue(normalizePinInput(e.target.value,pinDigits))} onFocus={()=>setPinFocus(p=>({...p,create:true}))} onBlur={()=>setPinFocus(p=>({...p,create:false}))} placeholder={pinFocus.create||pinValue?"":"•".repeat(normalizePinDigits(pinDigits))} style={pinFieldStyle}/>
         </div>
         <button type="button" onClick={()=>setPinShow(v=>!v)} style={{height:52,padding:"0 16px",borderRadius:14,border:"1px solid rgba(255,255,255,0.12)",background:"rgba(255,255,255,0.05)",color:"#F6EEE9",fontSize:12,fontWeight:800}}>
           {pinShow?"Hide":"Show"}
@@ -8683,7 +8764,7 @@ export default function App(){
       </div>
       <div style={{marginBottom:16}}>
         <div style={smallLabel}>Confirm PIN</div>
-        <input type={pinShow?"text":"password"} inputMode="numeric" value={pinConfirm} onChange={e=>setPinConfirm(normalizePinInput(e.target.value,pinDigits))} placeholder={"•".repeat(normalizePinDigits(pinDigits))} style={pinFieldStyle}/>
+        <input type={pinShow?"text":"password"} inputMode="numeric" value={pinConfirm} onChange={e=>setPinConfirm(normalizePinInput(e.target.value,pinDigits))} onFocus={()=>setPinFocus(p=>({...p,confirm:true}))} onBlur={()=>setPinFocus(p=>({...p,confirm:false}))} placeholder={pinFocus.confirm||pinConfirm?"":"•".repeat(normalizePinDigits(pinDigits))} style={pinFieldStyle}/>
       </div>
       {authError&&<div style={{marginBottom:14,padding:"12px 14px",borderRadius:14,background:"rgba(180,52,52,0.14)",border:"1px solid rgba(220,90,90,0.24)",color:"#FFD7D7",fontSize:12,fontWeight:700,lineHeight:1.5}}>{authError}</div>}
       <button type="button" onClick={finishPinSetup} disabled={authBusy} style={{...primaryAction,opacity:authBusy?0.68:1}}>
@@ -8711,7 +8792,9 @@ export default function App(){
             value={unlockPin}
             onChange={e=>setUnlockPin(normalizePinInput(e.target.value,splashDigits))}
             onKeyDown={e=>e.key==="Enter"&&unlockApp()}
-            placeholder={"•".repeat(splashDigits)}
+            onFocus={()=>setPinFocus(p=>({...p,unlock:true}))}
+            onBlur={()=>setPinFocus(p=>({...p,unlock:false}))}
+            placeholder={pinFocus.unlock||unlockPin?"":"•".repeat(splashDigits)}
             autoFocus
             style={{...pinFieldStyle,letterSpacing:unlockShow?"0.14em":"0.26em"}}
           />
