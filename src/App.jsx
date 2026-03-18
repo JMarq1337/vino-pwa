@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { authApi, dbApi } from "./apiClient";
 import { wineHoldings2021 } from "./data/wineHoldings2021";
 
-const APP_VERSION = "8.19";
+const APP_VERSION = "8.20";
 const ADMIN_PIN_DIGITS = 8;
 const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
 const CHANGE_LOG_KEY = "vino_change_log_v1";
@@ -772,6 +772,14 @@ const db = {
   async listGrapeAliases(){
     try{
       const res=await dbApi.call("listGrapeAliases");
+      return {ok:res.ok,rows:res.ok?(res.data?.rows||[]):[],error:res.ok?"":(res.error||"")};
+    }catch(e){
+      return {ok:false,rows:[],error:String(e)};
+    }
+  },
+  async listCellarEvents(limit=500){
+    try{
+      const res=await dbApi.call("listCellarEvents",{limit});
       return {ok:res.ok,rows:res.ok?(res.data?.rows||[]):[],error:res.ok?"":(res.error||"")};
     }catch(e){
       return {ok:false,rows:[],error:String(e)};
@@ -5697,23 +5705,21 @@ const TYPE_STYLES={
 };
 const TYPE_EMOJI={Red:"🍷",White:"🥂",Rosé:"🌸",Sparkling:"✨",Dessert:"🍯",Fortified:"🏰",Other:"🍾"};
 const EXCEL_MIME="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+let excelJsLibPromise=null;
 const loadExcelJsLib=async()=>{
-  if(window.ExcelJS) return window.ExcelJS;
-  await new Promise((res,rej)=>{
-    const existing=document.querySelector('script[data-lib="exceljs"]');
-    if(existing){
-      existing.addEventListener("load",res,{once:true});
-      existing.addEventListener("error",rej,{once:true});
-      return;
-    }
-    const s=document.createElement("script");
-    s.dataset.lib="exceljs";
-    s.src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js";
-    s.onload=res;
-    s.onerror=rej;
-    document.head.appendChild(s);
-  });
-  return window.ExcelJS;
+  if(!excelJsLibPromise){
+    excelJsLibPromise=import("exceljs")
+      .then(mod=>mod?.default||mod)
+      .then(lib=>{
+        if(!lib?.Workbook) throw new Error("exceljs-unavailable");
+        return lib;
+      })
+      .catch(err=>{
+        excelJsLibPromise=null;
+        throw err;
+      });
+  }
+  return excelJsLibPromise;
 };
 const downloadArrayBufferAsFile=(buffer,fileName)=>{
   const blob=new Blob([buffer],{type:EXCEL_MIME});
@@ -5841,6 +5847,12 @@ const exportToExcel=async(wines,wishlist,notes,profile={}, {includeWishlist=true
     const d=new Date(t);
     if(Number.isFinite(d.getTime())) return d.toLocaleDateString("en-AU",{year:"numeric",month:"short",day:"numeric"});
     return t;
+  };
+  const timeOrZero=v=>{
+    const t=(v??"").toString().trim();
+    if(!t) return 0;
+    const parsed=Date.parse(t);
+    return Number.isFinite(parsed)?parsed:0;
   };
   const toCellValue=v=>{
     if(typeof v==="number"&&Number.isFinite(v)) return v;
@@ -5996,11 +6008,17 @@ const exportToExcel=async(wines,wishlist,notes,profile={}, {includeWishlist=true
   };
 
   const localAudits=readAudits();
+  const localChangeEvents=readLocalChangeLog();
   let remoteAudits=[];
+  let remoteEvents=[];
   const withTimeout=(p,ms)=>Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej(new Error("timeout")),ms))]);
   try{
     const res=await withTimeout(db.listAudits(),4500);
     if(res.ok) remoteAudits=(res.rows||[]).map(fromDbAudit).filter(a=>a&&a.id);
+  }catch{}
+  try{
+    const res=await withTimeout(db.listCellarEvents(5000),4500);
+    if(res.ok) remoteEvents=Array.isArray(res.rows)?res.rows:[];
   }catch{}
   const auditsById=new Map();
   [...localAudits,...remoteAudits].forEach(a=>{ if(a?.id) auditsById.set(a.id,normalizeAuditRecord(a)); });
@@ -6055,6 +6073,7 @@ const exportToExcel=async(wines,wishlist,notes,profile={}, {includeWishlist=true
       "Journal",
       "Audits",
       "Audit Items",
+      "Activity Log",
       ...(includeNotes?["Legacy Notes"]:[]),
       ...(includePhotos?["Wine Photos"]:[]),
     ],
@@ -6079,7 +6098,7 @@ const exportToExcel=async(wines,wishlist,notes,profile={}, {includeWishlist=true
     ["Audits Logged",audits.length],
     ["Completed Audits",audits.filter(a=>a.status==="completed").length],
     ["In Progress Audits",audits.filter(a=>a.status==="in_progress").length],
-    ["Included Sections",["Overview","Summary","Profile & Settings","Cellar","Journal","Audits","Audit Items",includeNotes?"Legacy Notes":"",includePhotos?"Wine Photos":""].filter(Boolean).join(", ")],
+    ["Included Sections",["Overview","Summary","Profile & Settings","Cellar","Journal","Audits","Audit Items","Activity Log",includeNotes?"Legacy Notes":"",includePhotos?"Wine Photos":""].filter(Boolean).join(", ")],
     ["AI Conversations Exported","No"],
   ].map(([k,v])=>[textOrNil(k),textOrNil(v)]);
   appendTableSheet({
@@ -6273,6 +6292,46 @@ const exportToExcel=async(wines,wishlist,notes,profile={}, {includeWishlist=true
     widths:[24,24,14,30,18,10,24,13,11,10,13,14,12,10,14,16,14,14,12,26],
     types:["text","text","text","text","text","count","text","count","text","text","count","count","text","text","count","text","text","text","count","text"],
     accent:"1E4675"
+  });
+
+  const summarizeEventPayload=payload=>{
+    const safe=sanitizeLogPayload(payload||{});
+    if(!safe || typeof safe!=="object" || Array.isArray(safe)) return textOrNil(safe);
+    const preferred=[
+      safe.name,
+      safe.auditName,
+      safe.location,
+      safe.bottlesLeft!=null?`${safe.bottlesLeft} left`:"",
+      safe.consumed!=null?`${safe.consumed} consumed`:"",
+      safe.winesRestored!=null?`${safe.winesRestored} restored`:"",
+    ].filter(Boolean);
+    if(preferred.length) return preferred.join(" · ");
+    const firstEntries=Object.entries(safe).slice(0,4).map(([k,v])=>`${k}: ${typeof v==="object"?JSON.stringify(v):String(v)}`);
+    return firstEntries.join(" · ")||NIL;
+  };
+  const rawActivityEvents=(remoteEvents.length?remoteEvents:localChangeEvents).slice();
+  const activityRows=rawActivityEvents
+    .sort((a,b)=>(timeOrZero(b?.created_at||b?.createdAt||"")-timeOrZero(a?.created_at||a?.createdAt||"")))
+    .map(ev=>[
+      textOrNil(remoteEvents.length?"backend":"local"),
+      dateOrNil(ev?.created_at||ev?.createdAt||""),
+      textOrNil(ev?.entity||"activity"),
+      textOrNil(ev?.action||"update"),
+      textOrNil(ev?.entity_id||ev?.entityId||""),
+      textOrNil(summarizeEventPayload(ev?.payload||{})),
+      textOrNil(JSON.stringify(sanitizeLogPayload(ev?.payload||{}))),
+    ]);
+  appendTableSheet({
+    name:"Activity Log",
+    title:`Activity Log (${activityRows.length})`,
+    subtitle:remoteEvents.length
+      ? "Backend cellar event log captured through the secured server route."
+      : "Local activity history fallback captured in the browser when backend log rows are unavailable.",
+    headers:["Source","Logged At","Entity","Action","Entity ID","Summary","Payload"],
+    rows:activityRows,
+    widths:[12,18,18,20,18,42,64],
+    types:["text","text","text","text","text","text","text"],
+    accent:"4A3B76"
   });
 
   if(includeNotes){
@@ -6934,7 +6993,7 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile,onNavigateTa
   const audits=readAudits();
   const localEvents=readLocalChangeLog();
   const semanticEvents=(localEvents||[])
-    .filter(ev=>["wine_added","wine_updated","journal_updated","consumption_updated","wine_duplicated","inventory_recounted","audit_reverted","profile_updated"].includes((ev?.action||"").toString()))
+    .filter(ev=>["wine_added","wine_updated","journal_updated","consumption_updated","wine_duplicated","inventory_recounted","wine_deleted","wine_restored","audit_reverted","profile_updated"].includes((ev?.action||"").toString()))
     .map(ev=>{
       const action=(ev?.action||"").toString();
       const payload=ev?.payload||{};
@@ -6964,6 +7023,12 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile,onNavigateTa
       }else if(action==="inventory_recounted"){
         title="Bottle count updated";
         detail=[name,payload?.bottlesLeft!=null?`${payload.bottlesLeft} left`:""].filter(Boolean).join(" · ");
+      }else if(action==="wine_deleted"){
+        title="Wine removed";
+        detail=[name,payload?.location||""].filter(Boolean).join(" · ");
+      }else if(action==="wine_restored"){
+        title="Wine restored";
+        detail=[name,payload?.location||""].filter(Boolean).join(" · ");
       }else if(action==="audit_reverted"){
         type="audit";
         title="Audit reverted";
@@ -7469,6 +7534,7 @@ export default function App(){
   const [oCellar,setOCellar]=useState("");
   const snapshotTimerRef=useRef(null);
   const idleTimerRef=useRef(null);
+  const latestStateRef=useRef({wines:[],notes:[],profile:DEFAULT_PROFILE,audits:[]});
   const relockToPin = useCallback(async(reason="Session expired after 15 minutes of inactivity.")=>{
     try{await authApi.logout();}catch{}
     setIsAuthenticated(false);
@@ -7498,6 +7564,9 @@ export default function App(){
   useEffect(()=>{try{localStorage.setItem("vino_theme",themeMode)}catch{}},[themeMode]);
   useEffect(()=>{try{localStorage.setItem(SAVED_LOCATIONS_KEY,JSON.stringify(savedLocations))}catch{}},[savedLocations]);
   useEffect(()=>{try{localStorage.setItem(DELETED_WINES_KEY,JSON.stringify(deletedWines.slice(0,40)))}catch{}},[deletedWines]);
+  useEffect(()=>{
+    latestStateRef.current={wines,notes,profile,audits:readAudits()};
+  },[wines,notes,profile]);
   useEffect(()=>{
     grapeAliasMapRef.current=grapeAliasMap||{};
     setGrapeAliasCache(grapeAliasMapRef.current);
@@ -7533,6 +7602,29 @@ export default function App(){
       window.removeEventListener("vino-sync-health",onSyncEvent);
     };
   },[isAuthenticated]);
+  useEffect(()=>{
+    const persistImmediate=reason=>{
+      const state=latestStateRef.current;
+      try{
+        localStorage.setItem(CACHE_KEY,JSON.stringify(state));
+      }catch{}
+      void saveIndexedSnapshot(reason,state);
+      void db.flushOutbox();
+    };
+    const onVisibility=()=>{
+      if(document.visibilityState==="hidden") persistImmediate("visibility-hidden");
+    };
+    const onPageHide=()=>persistImmediate("pagehide");
+    const onBeforeUnload=()=>persistImmediate("beforeunload");
+    document.addEventListener("visibilitychange",onVisibility);
+    window.addEventListener("pagehide",onPageHide);
+    window.addEventListener("beforeunload",onBeforeUnload);
+    return()=>{
+      document.removeEventListener("visibilitychange",onVisibility);
+      window.removeEventListener("pagehide",onPageHide);
+      window.removeEventListener("beforeunload",onBeforeUnload);
+    };
+  },[]);
   useEffect(()=>{
     if(!isAuthenticated) return;
     const resetIdleTimer=()=>{
@@ -7907,7 +7999,7 @@ export default function App(){
     snapshotTimerRef.current=setTimeout(()=>{
       saveIndexedSnapshot("state-change",state);
       snapshotTimerRef.current=null;
-    },1200);
+    },450);
     return ()=>{
       if(snapshotTimerRef.current){
         clearTimeout(snapshotTimerRef.current);
@@ -8023,6 +8115,12 @@ export default function App(){
     if(!removed) return null;
     setDeletedWines(prev=>[{wine:removed,deletedAt:new Date().toISOString()},...prev.filter(entry=>entry?.wine?.id!==id)].slice(0,40));
     await db.del("wines",id,toDb.wine(removed));
+    recordSemanticEvent("activity","wine_deleted",id,{
+      wineId:id,
+      name:removed.name||"Unnamed wine",
+      location:formatWineLocation(removed),
+      deletedAt:new Date().toISOString(),
+    });
     return id;
   };
   const restoreDeletedWine=async id=>{
@@ -8034,6 +8132,12 @@ export default function App(){
     if(!found?.wine) return null;
     setWines(prev=>prev.some(w=>w.id===id)?prev:[found.wine,...prev]);
     await db.upsert("wines",toDb.wine(found.wine));
+    recordSemanticEvent("activity","wine_restored",id,{
+      wineId:id,
+      name:found.wine.name||"Unnamed wine",
+      location:formatWineLocation(found.wine),
+      restoredAt:new Date().toISOString(),
+    });
     return found.wine;
   };
   const dismissDeletedWine=id=>setDeletedWines(prev=>prev.filter(entry=>entry?.wine?.id!==id));
@@ -8404,12 +8508,12 @@ export default function App(){
       </div>
       <div style={{fontSize:14,color:"rgba(246,238,233,0.62)",lineHeight:1.6,maxWidth:600,marginTop:14,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
         {authRole==="admin"
-          ? "Open the same live cellar data with admin recovery access. No separate winery copy is created."
+          ? "Open the live winery with admin recovery access."
           : isNewUser
-            ? "Set up the winery once, secure it with a PIN, and the app will open straight into the cellar."
+            ? "Set up the winery once, secure it with a PIN, and it will open straight into the cellar."
             : hasPinConfigured(profile)
-              ? "Unlock the cellar to review inventory, audits, journal entries, and sommelier prompts."
-              : "The cellar is loaded. Secure it now with a winery PIN so only trusted users can open it."}
+              ? "Enter the winery PIN to unlock the cellar."
+              : "Secure the winery with a PIN so only trusted users can open it."}
       </div>
       {splashMetricsVisible && (
         <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:18}}>
@@ -8423,7 +8527,7 @@ export default function App(){
           <div style={{fontSize:12,color:"rgba(246,238,233,0.62)",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{splashMetricsVisible?"Cellar status":"Access"}</div>
           <div style={{fontSize:22,fontWeight:900,color:"#fff",marginTop:8,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{splashMetricsVisible?`${wines.length} wines tracked`:"Protected winery"}</div>
           <div style={{fontSize:12,color:"rgba(246,238,233,0.66)",marginTop:6,fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.5}}>
-            {splashMetricsVisible ? `${splashConsumedCount} consumed · ${splashInProgressAudits} audits open` : "The cellar loads after the PIN is verified on the server."}
+            {splashMetricsVisible ? `${splashConsumedCount} consumed · ${splashInProgressAudits} audits open` : "Server-side PIN protected access."}
           </div>
         </div>
         <div style={miniStat}>
@@ -8539,20 +8643,22 @@ export default function App(){
           {renderHero(
             <div style={{marginTop:22,display:"flex",alignItems:"center",gap:10}}>
               {[0,1,2].map(i=><div key={i} style={{width:8,height:8,borderRadius:"50%",background:"rgba(var(--accentRgb),0.82)",animation:`blink 1.2s ${i*0.18}s ease infinite`}}/>)}
-              <span style={{fontSize:12,color:"rgba(246,238,233,0.44)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{ready?"Preparing secure entry…":"Loading cellar, journal, audits, and settings…"}</span>
+              <span style={{fontSize:12,color:"rgba(246,238,233,0.44)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{ready?"Preparing secure entry…":"Loading the winery…"}</span>
             </div>
           )}
           <div style={{...actionCard,display:"flex",flexDirection:"column",justifyContent:"center",minHeight:isDesktop?360:260,animation:isDesktop?"floatUp 0.9s 0.06s ease both":"fadeUp 0.55s ease both"}}>
-            <div style={{fontSize:12,color:"rgba(246,238,233,0.56)",letterSpacing:"1.6px",textTransform:"uppercase",fontWeight:700,marginBottom:12,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Startup</div>
-            <div style={{fontSize:30,fontWeight:900,color:"#fff",lineHeight:1.05,letterSpacing:"-1.2px",fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:10}}>Opening the winery.</div>
-            <div style={{fontSize:14,color:"rgba(246,238,233,0.64)",lineHeight:1.6,fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:18}}>Everything is loading now so once you pass this entry screen the app goes straight into the live cellar.</div>
+            <div style={{fontSize:12,color:"rgba(246,238,233,0.56)",letterSpacing:"1.6px",textTransform:"uppercase",fontWeight:700,marginBottom:12,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Welcome</div>
+            <div style={{fontSize:30,fontWeight:900,color:"#fff",lineHeight:1.05,letterSpacing:"-1.2px",fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:10}}>{splashGreetingLine}</div>
+            <div style={{fontSize:14,color:"rgba(246,238,233,0.64)",lineHeight:1.6,fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:18}}>
+              {`Loading ${splashWineryName}.`}
+            </div>
             <div style={{display:"grid",gridTemplateColumns:isDesktop?"repeat(2,minmax(0,1fr))":"1fr",gap:10}}>
               <div style={miniStat}>
-                <div style={{fontSize:10,color:"rgba(246,238,233,0.56)",letterSpacing:"1px",textTransform:"uppercase",fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Background Preload</div>
-                <div style={{fontSize:16,fontWeight:800,color:"#fff",marginTop:7,fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.35}}>Cellar, journal, audits and settings ready</div>
+                <div style={{fontSize:10,color:"rgba(246,238,233,0.56)",letterSpacing:"1px",textTransform:"uppercase",fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Live Data</div>
+                <div style={{fontSize:16,fontWeight:800,color:"#fff",marginTop:7,fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.35}}>Cellar, journal, audits, and settings</div>
               </div>
               <div style={miniStat}>
-                <div style={{fontSize:10,color:"rgba(246,238,233,0.56)",letterSpacing:"1px",textTransform:"uppercase",fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Current State</div>
+                <div style={{fontSize:10,color:"rgba(246,238,233,0.56)",letterSpacing:"1px",textTransform:"uppercase",fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Status</div>
                 <div style={{fontSize:16,fontWeight:800,color:"#fff",marginTop:7,fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.35}}>{ready?"Ready to unlock":"Syncing latest winery data"}</div>
               </div>
             </div>
@@ -8566,7 +8672,7 @@ export default function App(){
           {renderHero(
             <div style={{marginTop:22,display:"flex",alignItems:"center",gap:10}}>
               {[0,1,2].map(i=><div key={i} style={{width:8,height:8,borderRadius:"50%",background:"rgba(var(--accentRgb),0.82)",animation:`blink 1.2s ${i*0.18}s ease infinite`}}/>)}
-              <span style={{fontSize:12,color:"rgba(246,238,233,0.5)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Session verified. Entering the live cellar…</span>
+              <span style={{fontSize:12,color:"rgba(246,238,233,0.5)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>PIN accepted. Entering the cellar…</span>
             </div>
           )}
           <div style={{...actionCard,display:"flex",flexDirection:"column",justifyContent:"center",alignItems:"center",minHeight:isDesktop?360:280,animation:isDesktop?"floatUp 0.55s ease both":"fadeUp 0.4s ease both",textAlign:"center"}}>
@@ -8578,7 +8684,7 @@ export default function App(){
               {splashGreetingLine}
             </div>
             <div style={{fontSize:14,color:"rgba(246,238,233,0.66)",lineHeight:1.6,fontFamily:"'Plus Jakarta Sans',sans-serif",maxWidth:360}}>
-              Opening {splashWineryName} and taking you straight into the cellar.
+              {`Opening ${splashWineryName}.`}
             </div>
           </div>
         </>

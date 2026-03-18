@@ -80,6 +80,18 @@ module.exports = async (req, res) => {
       return res.status(out.res.ok ? 200 : 400).json({ ok: out.res.ok, rows: out.res.ok ? (out.json || []) : [], error: out.res.ok ? "" : (out.text || `HTTP ${out.res.status}`) });
     }
 
+    if (action === "listCellarEvents") {
+      const limit = Math.max(1, Math.min(5000, Number(body.limit || 500) || 500));
+      const out = await supabaseJson("cellar_events", {
+        query: {
+          select: "id,entity,action,entity_id,payload,created_at",
+          order: "created_at.desc",
+          limit,
+        },
+      });
+      return res.status(out.res.ok ? 200 : 400).json({ ok: out.res.ok, rows: out.res.ok ? (out.json || []) : [], error: out.res.ok ? "" : (out.text || `HTTP ${out.res.status}`) });
+    }
+
     return res.status(400).json({ error: "Unknown db action" });
   } catch (err) {
     return res.status(500).json({ error: err.message || "Database route failed" });
