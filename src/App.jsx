@@ -3,7 +3,7 @@ import { authApi, dbApi } from "./apiClient";
 import { wineHoldings2021 } from "./data/wineHoldings2021";
 import * as ExcelJSImport from "exceljs";
 
-const APP_VERSION = "8.32";
+const APP_VERSION = "8.33";
 const ADMIN_PIN_DIGITS = 8;
 const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
 const CHANGE_LOG_KEY = "vino_change_log_v1";
@@ -2785,7 +2785,7 @@ const PhotoPicker=({value,onChange,size=80,round})=>{
   );
 };
 
-const BottleGlyph=({color="#8B1A1A",width=60,height=82,scale=1.5,translateY=7})=>{
+const BottleGlyph=({color="#8B1A1A",width=60,height=82,scale=1.08,translateY=2})=>{
   const accentRgb=hexToRgb(color)||"184,50,50";
   return(
     <div style={{width,height,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",transform:"translateZ(0)"}}>
@@ -2800,8 +2800,8 @@ const BottleGlyph=({color="#8B1A1A",width=60,height=82,scale=1.5,translateY=7})=
           objectFit:"contain",
           objectPosition:"center",
           transform:`translateY(${translateY}px) scale(${scale})`,
-          transformOrigin:"center 70%",
-          filter:`drop-shadow(0 16px 18px rgba(20,16,16,0.2)) drop-shadow(0 4px 7px rgba(${accentRgb},0.16))`,
+          transformOrigin:"center 76%",
+          filter:`drop-shadow(0 14px 16px rgba(20,16,16,0.18)) drop-shadow(0 4px 7px rgba(${accentRgb},0.14))`,
           pointerEvents:"none",
           userSelect:"none",
           WebkitUserDrag:"none",
@@ -2814,16 +2814,17 @@ const BottleGlyph=({color="#8B1A1A",width=60,height=82,scale=1.5,translateY=7})=
 const WineThumbVisual=({wine,tc})=>{
   const bottleRgb=hexToRgb(tc.dot)||"139,26,26";
   return(
-    <div style={{width:68,height:88,borderRadius:18,background:"linear-gradient(180deg, rgba(255,252,248,0.98), rgba(247,239,231,0.94) 100%)",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",border:"1px solid rgba(118,88,72,0.10)",boxShadow:"0 14px 28px rgba(92,67,52,0.08), inset 0 1px 0 rgba(255,255,255,0.78)",alignSelf:"center",position:"relative",transform:"translateZ(0)",willChange:"transform"}}>
+    <div style={{width:68,height:88,borderRadius:18,background:"linear-gradient(180deg, rgba(255,251,247,0.98), rgba(248,241,234,0.95) 62%, rgba(243,234,225,0.94) 100%)",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",border:"1px solid rgba(118,88,72,0.10)",boxShadow:"0 14px 28px rgba(92,67,52,0.08), inset 0 1px 0 rgba(255,255,255,0.78)",alignSelf:"center",position:"relative",transform:"translateZ(0)",willChange:"transform"}}>
       {!wine.photo&&(
         <>
-          <div style={{position:"absolute",inset:0,background:"linear-gradient(180deg, rgba(255,255,255,0.34), rgba(255,255,255,0) 42%)",pointerEvents:"none"}}/>
-          <div style={{position:"absolute",left:8,right:8,bottom:7,height:28,borderRadius:"999px",background:`radial-gradient(ellipse at center, rgba(${bottleRgb},0.26) 0%, rgba(${bottleRgb},0.11) 42%, rgba(${bottleRgb},0.04) 62%, rgba(${bottleRgb},0) 82%)`,pointerEvents:"none"}}/>
+          <div style={{position:"absolute",inset:0,background:"linear-gradient(180deg, rgba(255,255,255,0.36), rgba(255,255,255,0.08) 38%, rgba(255,255,255,0) 56%)",pointerEvents:"none"}}/>
+          <div style={{position:"absolute",inset:0,background:`linear-gradient(180deg, rgba(${bottleRgb},0) 0%, rgba(${bottleRgb},0.03) 46%, rgba(${bottleRgb},0.12) 72%, rgba(${bottleRgb},0.2) 100%)`,pointerEvents:"none"}}/>
+          <div style={{position:"absolute",left:6,right:6,bottom:-4,height:46,borderRadius:"999px",background:`radial-gradient(ellipse at center, rgba(${bottleRgb},0.24) 0%, rgba(${bottleRgb},0.12) 34%, rgba(${bottleRgb},0.04) 58%, rgba(${bottleRgb},0) 80%)`,pointerEvents:"none"}}/>
         </>
       )}
       {wine.photo?(
-        <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(180deg, rgba(255,255,255,0.34), rgba(255,255,255,0.04) 46%, rgba(120,90,72,0.06) 100%)",isolation:"isolate"}}>
-          <div style={{position:"absolute",left:9,right:9,bottom:6,height:24,borderRadius:"999px",background:`radial-gradient(ellipse at center, rgba(${bottleRgb},0.18) 0%, rgba(${bottleRgb},0.07) 44%, rgba(${bottleRgb},0) 80%)`,pointerEvents:"none"}}/>
+        <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(180deg, rgba(255,255,255,0.34), rgba(255,255,255,0.04) 44%, rgba(120,90,72,0.04) 100%)",isolation:"isolate"}}>
+          <div style={{position:"absolute",inset:0,background:`linear-gradient(180deg, rgba(${bottleRgb},0) 0%, rgba(${bottleRgb},0.02) 54%, rgba(${bottleRgb},0.08) 100%)`,pointerEvents:"none"}}/>
           <WinePhotoImage src={wine.photo} alt={wine.name} style={{width:"100%",height:"100%",objectFit:"contain",objectPosition:"center",padding:"3px",filter:"drop-shadow(0 2px 6px rgba(0,0,0,0.22))"}}/>
         </div>
       ):<BottleGlyph color={tc.dot}/>}
@@ -3078,7 +3079,7 @@ const DuplicateSourcePreview=({wine,onHide})=>{
         ):(
           <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:12}}>
             <div style={{width:96,height:120,borderRadius:26,background:`linear-gradient(180deg,${tc.bg} 0%,rgba(255,255,255,0.7) 100%)`,display:"flex",alignItems:"center",justifyContent:"center",border:"1px solid rgba(18,18,22,0.08)"}}>
-              <BottleGlyph color={tc.dot} width={92} height={118} scale={1.38} translateY={8}/>
+              <BottleGlyph color={tc.dot} width={92} height={118} scale={1.04} translateY={3}/>
             </div>
             <div style={{fontSize:12,color:"var(--sub)",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",letterSpacing:"0.45px"}}>No photo attached</div>
           </div>
