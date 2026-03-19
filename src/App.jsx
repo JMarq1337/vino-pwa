@@ -2786,14 +2786,14 @@ const PhotoPicker=({value,onChange,size=80,round})=>{
 
 const BottleGlyph=({color="#8B1A1A"})=>{
   const accentRgb=hexToRgb(color)||"184,50,50";
-  const bottleTop=mixHex(color,"#F3E8DD",0.72);
-  const bottleMid=mixHex(color,"#D4C0B2",0.5);
-  const bottleBase=mixHex(color,"#725D56",0.26);
-  const capsuleTop=mixHex(color,"#F1D6C7",0.18);
-  const capsuleBase=darkenHex(mixHex(color,"#5B2B30",0.22),0.14);
-  const labelPaper=mixHex(color,"#F5EFE5",0.9);
-  const labelShade=mixHex(color,"#D7C3B3",0.82);
-  const foilLine=mixHex(color,"#FAE7DB",0.36);
+  const bottleTop="#625650";
+  const bottleMid="#433A36";
+  const bottleBase="#241F1D";
+  const capsuleTop="#8A7D75";
+  const capsuleBase="#534944";
+  const labelPaper="#EFE6DA";
+  const labelShade="#D8CAB9";
+  const foilLine="rgba(255,255,255,0.3)";
   const ids=useRef({
     root:`bottle-${Math.random().toString(36).slice(2,9)}`,
   });
@@ -2804,7 +2804,7 @@ const BottleGlyph=({color="#8B1A1A"})=>{
   const shoulderLabelId=`${ids.current.root}-shoulder`;
   const puntId=`${ids.current.root}-punt`;
   return(
-    <svg width="58" height="74" viewBox="0 0 58 74" aria-hidden="true" style={{display:"block",transform:"translateZ(0)"}}>
+    <svg width="58" height="78" viewBox="0 0 58 78" aria-hidden="true" style={{display:"block",transform:"translateZ(0)"}}>
       <defs>
         <linearGradient id={bodyId} x1="29" y1="5" x2="29" y2="69" gradientUnits="userSpaceOnUse">
           <stop offset="0%" stopColor={bottleTop}/>
@@ -2831,51 +2831,50 @@ const BottleGlyph=({color="#8B1A1A"})=>{
           <stop offset="100%" stopColor={mixHex(labelShade,"#C5AF9D",0.15)}/>
         </linearGradient>
         <radialGradient id={puntId} cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor={`rgba(${accentRgb},0.22)`}/>
+          <stop offset="0%" stopColor="rgba(255,255,255,0.18)"/>
           <stop offset="100%" stopColor="rgba(255,255,255,0)"/>
         </radialGradient>
       </defs>
-      <ellipse cx="29" cy="69" rx="14.5" ry="3.6" fill={`rgba(${accentRgb},0.16)`}/>
+      <ellipse cx="29" cy="73" rx="14.8" ry="3.9" fill={`rgba(${accentRgb},0.14)`}/>
       <path
-        d="M21 5.5c3.5-1.8 12.5-1.8 16 0v2.6c0 1.2.2 2.1 1 3v10.1c0 3 1.7 5.9 4 8.8 3.8 4.8 5.8 9.8 5.8 15.5v16c0 5.3-5 7.9-18.8 7.9S10.2 66.8 10.2 61.5v-16c0-5.7 2-10.7 5.8-15.5 2.3-2.9 4-5.8 4-8.8V11.1c.8-.9 1-1.8 1-3V5.5z"
+        d="M22.1 6.3c2.9-1.45 10.9-1.45 13.8 0v1.5c0 1.15.22 2 .82 2.7v12.7c0 2.95 1.78 6.08 4.45 9.55 3.65 4.76 5.44 9.78 5.44 15.57v17.1c0 4.38-4.9 6.62-17.5 6.62S11.5 69.78 11.5 65.4V48.3c0-5.79 1.79-10.81 5.44-15.57 2.67-3.47 4.45-6.6 4.45-9.55V10.5c.6-.7.82-1.55.82-2.7V6.3z"
         fill={`url(#${bodyId})`}
-        stroke="rgba(78,56,50,0.46)"
-        strokeWidth="1.05"
+        stroke="rgba(69,58,53,0.44)"
+        strokeWidth="1"
         strokeLinejoin="round"
       />
       <path
-        d="M21.8 8.6c2.8-1.3 10.6-1.3 13.4 0"
-        stroke="rgba(255,255,255,0.26)"
+        d="M22.8 8.8c2.35-1.02 9.95-1.02 12.3 0"
+        stroke="rgba(255,255,255,0.22)"
         strokeWidth="1"
         strokeLinecap="round"
       />
       <path
-        d="M22.4 8.4h13.2v12.2c0 4 1.7 7 3.6 9.6 3 4 4.8 8.3 4.8 13.8v16.7c0 2.9-2.7 5.1-15 5.1s-15-2.2-15-5.1V44c0-5.5 1.8-9.8 4.8-13.8 1.9-2.6 3.6-5.6 3.6-9.6V8.4z"
+        d="M22.6 9.3h12.8v13.2c0 3.75 1.55 6.84 3.4 9.42 2.84 3.96 4.55 8.28 4.55 13.42v18.2c0 2.62-2.55 4.55-14.9 4.55S14.1 66.2 14.1 63.58v-18.2c0-5.14 1.71-9.46 4.55-13.42 1.85-2.58 3.4-5.67 3.4-9.42V9.3z"
         fill="none"
-        stroke="rgba(255,255,255,0.1)"
-        strokeWidth="0.9"
+        stroke="rgba(255,255,255,0.08)"
+        strokeWidth="0.85"
       />
       <path
-        d="M20.6 10.1c.7-.7.9-1.4.9-2.2V5.5c3.5-1.8 12-1.8 15.4 0v2.4c0 .8.2 1.5.9 2.2v11H20.6v-11z"
+        d="M21.9 11c.55-.65.72-1.28.72-2.06V6.3c2.92-1.45 9.86-1.45 12.78 0v2.64c0 .78.17 1.41.72 2.06v11H21.9V11z"
         fill={`url(#${capsuleId})`}
       />
       <path
-        d="M23.5 12.2h10.8"
+        d="M24.1 13.2h9.8"
         stroke={foilLine}
         strokeWidth="0.9"
         strokeLinecap="round"
       />
       <path
-        d="M20.4 14.6c0-2.2.7-4 2.6-6.2h3.8c-2 2.7-2.6 5.4-2.6 8.9v39.2c0 3.5.4 6.3 2.3 9H23c-1.8-2.2-2.6-4.1-2.6-6.3V14.6z"
+        d="M21.5 15.5c0-2 .7-3.95 2.45-6.08h3.2c-1.86 2.58-2.42 5.08-2.42 8.4v42.1c0 3.18.38 5.74 2.12 8.13h-2.96c-1.76-2.11-2.39-3.9-2.39-6.15V15.5z"
         fill={`url(#${shineId})`}
-        opacity="0.9"
+        opacity="0.82"
       />
-      <rect x="19.8" y="27.8" width="18.5" height="7.8" rx="3.9" fill={`url(#${shoulderLabelId})`} opacity="0.92" stroke="rgba(99,78,69,0.12)" strokeWidth="0.45"/>
-      <rect x="18.9" y="38" width="20.2" height="18.6" rx="6.8" fill={`url(#${labelId})`} opacity="0.95" stroke="rgba(99,78,69,0.18)" strokeWidth="0.55"/>
-      <rect x="22.4" y="42.3" width="13.1" height="1.6" rx="0.8" fill={`rgba(${accentRgb},0.32)`}/>
-      <rect x="21.8" y="46.5" width="14.4" height="1.25" rx="0.6" fill="rgba(116,91,79,0.18)"/>
-      <rect x="23" y="49.6" width="12" height="1.1" rx="0.55" fill="rgba(116,91,79,0.16)"/>
-      <ellipse cx="29" cy="63.3" rx="10.8" ry="2.5" fill={`url(#${puntId})`} opacity="0.38"/>
+      <rect x="20.6" y="28.5" width="16.8" height="6.9" rx="3.45" fill={`url(#${shoulderLabelId})`} opacity="0.94" stroke="rgba(99,78,69,0.1)" strokeWidth="0.42"/>
+      <rect x="18.7" y="39.1" width="20.6" height="19.8" rx="6.9" fill={`url(#${labelId})`} opacity="0.96" stroke="rgba(99,78,69,0.16)" strokeWidth="0.52"/>
+      <rect x="22.6" y="43.5" width="12.8" height="1.35" rx="0.65" fill="rgba(122,104,93,0.24)"/>
+      <rect x="21.9" y="47.1" width="14.2" height="1.05" rx="0.52" fill="rgba(122,104,93,0.15)"/>
+      <ellipse cx="29" cy="67.1" rx="10.7" ry="2.45" fill={`url(#${puntId})`} opacity="0.34"/>
     </svg>
   );
 };
