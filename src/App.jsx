@@ -3,7 +3,7 @@ import { authApi, dbApi } from "./apiClient";
 import { wineHoldings2021 } from "./data/wineHoldings2021";
 import * as ExcelJSImport from "exceljs";
 
-const APP_VERSION = "8.33";
+const APP_VERSION = "8.34";
 const ADMIN_PIN_DIGITS = 8;
 const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
 const CHANGE_LOG_KEY = "vino_change_log_v1";
@@ -2824,8 +2824,10 @@ const WineThumbVisual=({wine,tc})=>{
       )}
       {wine.photo?(
         <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(180deg, rgba(255,255,255,0.34), rgba(255,255,255,0.04) 44%, rgba(120,90,72,0.04) 100%)",isolation:"isolate"}}>
-          <div style={{position:"absolute",inset:0,background:`linear-gradient(180deg, rgba(${bottleRgb},0) 0%, rgba(${bottleRgb},0.02) 54%, rgba(${bottleRgb},0.08) 100%)`,pointerEvents:"none"}}/>
-          <WinePhotoImage src={wine.photo} alt={wine.name} style={{width:"100%",height:"100%",objectFit:"contain",objectPosition:"center",padding:"3px",filter:"drop-shadow(0 2px 6px rgba(0,0,0,0.22))"}}/>
+          <div style={{position:"absolute",inset:0,background:"linear-gradient(180deg, rgba(255,255,255,0.36), rgba(255,255,255,0.08) 38%, rgba(255,255,255,0) 56%)",pointerEvents:"none"}}/>
+          <div style={{position:"absolute",inset:0,background:`linear-gradient(180deg, rgba(${bottleRgb},0) 0%, rgba(${bottleRgb},0.03) 46%, rgba(${bottleRgb},0.11) 72%, rgba(${bottleRgb},0.18) 100%)`,pointerEvents:"none"}}/>
+          <div style={{position:"absolute",left:6,right:6,bottom:-4,height:46,borderRadius:"999px",background:`radial-gradient(ellipse at center, rgba(${bottleRgb},0.2) 0%, rgba(${bottleRgb},0.1) 34%, rgba(${bottleRgb},0.035) 58%, rgba(${bottleRgb},0) 80%)`,pointerEvents:"none"}}/>
+          <WinePhotoImage src={wine.photo} alt={wine.name} style={{width:"100%",height:"100%",objectFit:"contain",objectPosition:"center",padding:"3px",filter:`drop-shadow(0 2px 6px rgba(0,0,0,0.22)) drop-shadow(0 4px 8px rgba(${bottleRgb},0.12))`}}/>
         </div>
       ):<BottleGlyph color={tc.dot}/>}
     </div>
