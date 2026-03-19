@@ -5,6 +5,11 @@ const {
   sanitizeProfilePreview,
   saveProfilePayload,
 } = require("./supabase");
+const {
+  hasExternalPinStoreConfig,
+  getUserPinRecord,
+  saveUserPinRecord,
+} = require("./pin-store");
 
 const COOKIE_NAME = "vinology_session";
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 12;
@@ -32,7 +37,7 @@ const hashPinValue = (pin, salt) => crypto.pbkdf2Sync(
   "sha256"
 ).toString("hex");
 
-const hasConfiguredUserPin = row => !!((row?.pin_hash || "").trim() && (row?.pin_salt || "").trim());
+const hasConfiguredProfilePin = row => !!((row?.pin_hash || "").trim() && (row?.pin_salt || "").trim());
 
 const createUserPinRecord = (pin, digits) => {
   const pinDigits = normalizeUserPinDigits(digits);
@@ -45,10 +50,53 @@ const createUserPinRecord = (pin, digits) => {
 };
 
 const verifyUserPin = (row, pin) => {
-  if (!hasConfiguredUserPin(row)) return false;
+  if (!hasConfiguredProfilePin(row)) return false;
   const expected = String(row.pin_hash || "");
   const actual = hashPinValue(pin, row.pin_salt || "");
   return safeEqualText(actual, expected);
+};
+const normalizeExternalPinRecord = record => {
+  if (!record) return null;
+  return {
+    pin_hash: String(record.pin_hash || ""),
+    pin_salt: String(record.pin_salt || ""),
+    pin_digits: normalizeUserPinDigits(record.pin_digits),
+    updated_at: record.updated_at || new Date().toISOString(),
+  };
+};
+const resolveUserPinState = async profileRow => {
+  if (!hasExternalPinStoreConfig()) {
+    return {
+      source: "profile",
+      record: hasConfiguredProfilePin(profileRow) ? {
+        pin_hash: String(profileRow.pin_hash || ""),
+        pin_salt: String(profileRow.pin_salt || ""),
+        pin_digits: normalizeUserPinDigits(profileRow.pin_digits),
+      } : null,
+    };
+  }
+  const externalRecord = normalizeExternalPinRecord(await getUserPinRecord());
+  if (externalRecord) return { source: "external", record: externalRecord };
+  if (hasConfiguredProfilePin(profileRow)) {
+    const migrated = normalizeExternalPinRecord({
+      pin_hash: profileRow.pin_hash,
+      pin_salt: profileRow.pin_salt,
+      pin_digits: profileRow.pin_digits,
+      updated_at: new Date().toISOString(),
+    });
+    await saveUserPinRecord(migrated);
+    return { source: "external", record: migrated, migrated: true };
+  }
+  return { source: "external", record: null };
+};
+const attachPinState = async sanitizedProfile => {
+  const pinState = await resolveUserPinState(null).catch(() => null);
+  if (!pinState) return sanitizedProfile;
+  return {
+    ...sanitizedProfile,
+    pinEnabled: !!pinState.record,
+    pinDigits: pinState.record?.pin_digits || null,
+  };
 };
 
 const adminConfig = () => ({
@@ -124,7 +172,7 @@ const clearSessionCookie = res => {
   res.setHeader("Set-Cookie", `${COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`);
 };
 
-const sessionFingerprintForProfile = row => String(row?.pin_hash || "");
+const sessionFingerprintForProfile = pinRecord => String(pinRecord?.pin_hash || "");
 const sessionFingerprintForAdmin = () => {
   const cfg = adminConfig();
   if (cfg.hash) return cfg.hash;
@@ -158,13 +206,20 @@ const resolveSession = async req => {
   }
   const profileRow = await getProfileRow().catch(() => null);
   if (!profileRow) return { authenticated: false, role: "user", profile: null };
-  if (!safeEqualText(parsed.fingerprint || "", sessionFingerprintForProfile(profileRow))) {
+  const pinState = await resolveUserPinState(profileRow).catch(() => null);
+  const activePinRecord = pinState?.record || null;
+  if (!activePinRecord) return { authenticated: false, role: "user", profile: null };
+  if (!safeEqualText(parsed.fingerprint || "", sessionFingerprintForProfile(activePinRecord))) {
     return { authenticated: false, role: "user", profile: null };
   }
   return {
     authenticated: true,
     role: "user",
-    profile: sanitizeProfile(profileRow),
+    profile: {
+      ...sanitizeProfile(profileRow),
+      pinEnabled: true,
+      pinDigits: activePinRecord.pin_digits,
+    },
     profileRow,
   };
 };
@@ -182,14 +237,19 @@ const requireSession = async (req, res) => {
 const bootstrapPayload = async req => {
   const profileRow = await getProfileRow().catch(() => null);
   const session = await resolveSession(req);
+  const pinState = await resolveUserPinState(profileRow).catch(() => null);
   return {
-    profile: profileRow ? sanitizeProfilePreview(profileRow) : {
+    profile: profileRow ? {
+      ...sanitizeProfilePreview(profileRow),
+      pinEnabled: !!pinState?.record,
+      pinDigits: pinState?.record?.pin_digits || null,
+    } : {
       name: "",
       description: "",
       cellarName: "",
       profileBg: "",
-      pinEnabled: false,
-      pinDigits: null,
+      pinEnabled: !!pinState?.record,
+      pinDigits: pinState?.record?.pin_digits || null,
     },
     authenticated: session.authenticated,
     role: session.authenticated ? session.role : "user",
@@ -210,32 +270,39 @@ const loginWithPin = async ({ role, pin }) => {
     };
   }
   const profileRow = await getProfileRow().catch(() => null);
-  if (!profileRow || !hasConfiguredUserPin(profileRow)) return { ok: false, error: "This winery PIN is not configured yet." };
-  const digits = normalizeUserPinDigits(profileRow.pin_digits);
+  const pinState = await resolveUserPinState(profileRow).catch(err => ({ error: err }));
+  if (pinState?.error) return { ok: false, error: "Winery security is temporarily unavailable." };
+  if (!profileRow || !pinState?.record) return { ok: false, error: "This winery PIN is not configured yet." };
+  const digits = normalizeUserPinDigits(pinState.record.pin_digits);
   const entered = normalizePinInput(pin, digits);
-  if (entered.length !== digits || !verifyUserPin(profileRow, entered)) {
+  if (entered.length !== digits || !verifyUserPin(pinState.record, entered)) {
     return { ok: false, error: "PIN did not match this winery." };
   }
   return {
     ok: true,
     role: "user",
-    profile: sanitizeProfile(profileRow),
-    fingerprint: sessionFingerprintForProfile(profileRow),
+    profile: {
+      ...sanitizeProfile(profileRow),
+      pinEnabled: true,
+      pinDigits: pinState.record.pin_digits,
+    },
+    fingerprint: sessionFingerprintForProfile(pinState.record),
   };
 };
 
 const setupOrChangeUserPin = async ({ ownerName = "", cellarName = "", nextPin = "", digits = 4, currentPin = "", allowBootstrap = false, role = "user" }) => {
   const profileRow = await getProfileRow().catch(() => null);
-  const hasExistingPin = hasConfiguredUserPin(profileRow);
+  const pinState = await resolveUserPinState(profileRow);
+  const hasExistingPin = !!pinState?.record;
   const pinDigits = normalizeUserPinDigits(digits);
   const cleanNext = normalizePinInput(nextPin, pinDigits);
   if (cleanNext.length !== pinDigits) {
     return { ok: false, error: `Enter a ${pinDigits}-digit PIN.` };
   }
   if (hasExistingPin && role !== "admin") {
-    const currentDigits = normalizeUserPinDigits(profileRow.pin_digits);
+    const currentDigits = normalizeUserPinDigits(pinState.record.pin_digits);
     const cleanCurrent = normalizePinInput(currentPin, currentDigits);
-    if (!verifyUserPin(profileRow, cleanCurrent)) {
+    if (!verifyUserPin(pinState.record, cleanCurrent)) {
       return { ok: false, error: "Current PIN did not match." };
     }
   }
@@ -247,14 +314,30 @@ const setupOrChangeUserPin = async ({ ownerName = "", cellarName = "", nextPin =
     ...(profileRow || { id: 1 }),
     name: trim(ownerName) || profileRow?.name || "",
     cellar_name: trim(cellarName) || profileRow?.cellar_name || "",
-    pin_hash: pinRecord.pin_hash,
-    pin_salt: pinRecord.pin_salt,
-    pin_digits: pinRecord.pin_digits,
   };
   const savedRow = await saveProfilePayload(payload);
+  if (hasExternalPinStoreConfig()) {
+    await saveUserPinRecord({
+      pin_hash: pinRecord.pin_hash,
+      pin_salt: pinRecord.pin_salt,
+      pin_digits: pinRecord.pin_digits,
+      updated_at: new Date().toISOString(),
+    });
+  } else {
+    await saveProfilePayload({
+      ...payload,
+      pin_hash: pinRecord.pin_hash,
+      pin_salt: pinRecord.pin_salt,
+      pin_digits: pinRecord.pin_digits,
+    });
+  }
   return {
     ok: true,
-    profile: sanitizeProfile(savedRow || payload),
+    profile: {
+      ...sanitizeProfile(savedRow || payload),
+      pinEnabled: true,
+      pinDigits: pinRecord.pin_digits,
+    },
     fingerprint: pinRecord.pin_hash,
   };
 };

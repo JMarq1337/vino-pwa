@@ -6,6 +6,7 @@ const {
   profileWritePayload,
   saveProfilePayload,
 } = require("./_lib/supabase");
+const { getUserPinPreview, hasExternalPinStoreConfig } = require("./_lib/pin-store");
 
 const UPSERT_TABLES = new Set(["wines", "tasting_notes", "audits", "grape_aliases", "cellar_events", "cellar_snapshots"]);
 const DELETE_TABLES = new Set(["wines", "tasting_notes", "audits"]);
@@ -16,6 +17,16 @@ const CONFLICT_KEY = {
   grape_aliases: "alias",
   cellar_events: "id",
   cellar_snapshots: "id",
+};
+const withPinPreview = async profile => {
+  if (!profile) return null;
+  if (!hasExternalPinStoreConfig()) return profile;
+  const preview = await getUserPinPreview();
+  return {
+    ...profile,
+    pinEnabled: !!preview.pinEnabled,
+    pinDigits: preview.pinDigits || null,
+  };
 };
 
 const parseBody = req => (typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {}));
@@ -62,12 +73,12 @@ module.exports = async (req, res) => {
 
     if (action === "getProfile") {
       const row = await getProfileRow();
-      return res.status(200).json({ ok: true, profile: row ? sanitizeProfile(row) : null });
+      return res.status(200).json({ ok: true, profile: row ? await withPinPreview(sanitizeProfile(row)) : null });
     }
 
     if (action === "saveProfile") {
       const saved = await saveProfilePayload(profileWritePayload(body.profile || {}));
-      return res.status(200).json({ ok: true, profile: sanitizeProfile(saved || body.profile || {}) });
+      return res.status(200).json({ ok: true, profile: await withPinPreview(sanitizeProfile(saved || body.profile || {})) });
     }
 
     if (action === "listAudits") {
