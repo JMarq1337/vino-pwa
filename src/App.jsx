@@ -3,7 +3,7 @@ import { authApi, dbApi } from "./apiClient";
 import { wineHoldings2021 } from "./data/wineHoldings2021";
 import * as ExcelJSImport from "exceljs";
 
-const APP_VERSION = "8.28";
+const APP_VERSION = "8.29";
 const ADMIN_PIN_DIGITS = 8;
 const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
 const CHANGE_LOG_KEY = "vino_change_log_v1";
@@ -2786,14 +2786,16 @@ const PhotoPicker=({value,onChange,size=80,round})=>{
 
 const BottleGlyph=({color="#8B1A1A"})=>{
   const accentRgb=hexToRgb(color)||"184,50,50";
-  const bottleTop="#625650";
-  const bottleMid="#433A36";
-  const bottleBase="#241F1D";
-  const capsuleTop="#8A7D75";
-  const capsuleBase="#534944";
-  const labelPaper="#EFE6DA";
-  const labelShade="#D8CAB9";
-  const foilLine="rgba(255,255,255,0.3)";
+  const bottleTop="#4F4744";
+  const bottleMid="#2D2827";
+  const bottleBase="#141213";
+  const bottleEdge="#6B605B";
+  const capsuleTop="#8E827A";
+  const capsuleMid="#655B55";
+  const capsuleBase="#403835";
+  const labelPaper="#F1E6D8";
+  const labelShade="#DCCAB8";
+  const crestTint=mixHex(color,"#B89C85",0.62);
   const ids=useRef({
     root:`bottle-${Math.random().toString(36).slice(2,9)}`,
   });
@@ -2801,80 +2803,105 @@ const BottleGlyph=({color="#8B1A1A"})=>{
   const capsuleId=`${ids.current.root}-capsule`;
   const shineId=`${ids.current.root}-shine`;
   const labelId=`${ids.current.root}-label`;
-  const shoulderLabelId=`${ids.current.root}-shoulder`;
+  const neckGlassId=`${ids.current.root}-neck`;
+  const shoulderTagId=`${ids.current.root}-shoulder`;
+  const crestId=`${ids.current.root}-crest`;
   const puntId=`${ids.current.root}-punt`;
   return(
-    <svg width="58" height="78" viewBox="0 0 58 78" aria-hidden="true" style={{display:"block",transform:"translateZ(0)"}}>
+    <svg width="60" height="82" viewBox="0 0 60 82" aria-hidden="true" style={{display:"block",transform:"translateZ(0)"}}>
       <defs>
-        <linearGradient id={bodyId} x1="29" y1="5" x2="29" y2="69" gradientUnits="userSpaceOnUse">
+        <linearGradient id={bodyId} x1="30" y1="5" x2="30" y2="74" gradientUnits="userSpaceOnUse">
           <stop offset="0%" stopColor={bottleTop}/>
-          <stop offset="24%" stopColor={bottleMid}/>
-          <stop offset="68%" stopColor={bottleBase}/>
-          <stop offset="100%" stopColor={darkenHex(bottleBase,0.12)}/>
+          <stop offset="20%" stopColor="#3A3331"/>
+          <stop offset="58%" stopColor={bottleMid}/>
+          <stop offset="100%" stopColor={bottleBase}/>
         </linearGradient>
-        <linearGradient id={capsuleId} x1="29" y1="4" x2="29" y2="21" gradientUnits="userSpaceOnUse">
+        <linearGradient id={capsuleId} x1="30" y1="4" x2="30" y2="23" gradientUnits="userSpaceOnUse">
           <stop offset="0%" stopColor={capsuleTop}/>
+          <stop offset="42%" stopColor={capsuleMid}/>
           <stop offset="100%" stopColor={capsuleBase}/>
         </linearGradient>
-        <linearGradient id={shineId} x1="18" y1="10" x2="31" y2="62" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="rgba(255,255,255,0.72)"/>
-          <stop offset="18%" stopColor="rgba(255,255,255,0.26)"/>
-          <stop offset="60%" stopColor="rgba(255,255,255,0.06)"/>
+        <linearGradient id={neckGlassId} x1="30" y1="10" x2="30" y2="31" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="rgba(255,255,255,0.12)"/>
           <stop offset="100%" stopColor="rgba(255,255,255,0)"/>
         </linearGradient>
-        <linearGradient id={labelId} x1="16" y1="34" x2="41" y2="62" gradientUnits="userSpaceOnUse">
+        <linearGradient id={shineId} x1="17" y1="11" x2="31" y2="66" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="rgba(255,255,255,0.74)"/>
+          <stop offset="12%" stopColor="rgba(255,255,255,0.36)"/>
+          <stop offset="38%" stopColor="rgba(255,255,255,0.12)"/>
+          <stop offset="100%" stopColor="rgba(255,255,255,0)"/>
+        </linearGradient>
+        <linearGradient id={labelId} x1="18" y1="40" x2="42" y2="63" gradientUnits="userSpaceOnUse">
           <stop offset="0%" stopColor={labelPaper}/>
           <stop offset="100%" stopColor={labelShade}/>
         </linearGradient>
-        <linearGradient id={shoulderLabelId} x1="18" y1="26" x2="40" y2="34" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor={mixHex(labelPaper,"#FFFFFF",0.2)}/>
-          <stop offset="100%" stopColor={mixHex(labelShade,"#C5AF9D",0.15)}/>
+        <linearGradient id={shoulderTagId} x1="19" y1="30" x2="41" y2="35" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor={mixHex(labelPaper,"#FFFFFF",0.18)}/>
+          <stop offset="100%" stopColor={mixHex(labelShade,"#D1BDA9",0.08)}/>
         </linearGradient>
+        <radialGradient id={crestId} cx="50%" cy="42%" r="58%">
+          <stop offset="0%" stopColor={crestTint}/>
+          <stop offset="100%" stopColor={mixHex(crestTint,"#7B665A",0.45)}/>
+        </radialGradient>
         <radialGradient id={puntId} cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor="rgba(255,255,255,0.18)"/>
+          <stop offset="0%" stopColor={`rgba(${accentRgb},0.18)`}/>
           <stop offset="100%" stopColor="rgba(255,255,255,0)"/>
         </radialGradient>
       </defs>
-      <ellipse cx="29" cy="73" rx="14.8" ry="3.9" fill={`rgba(${accentRgb},0.14)`}/>
+      <ellipse cx="30" cy="76" rx="15.4" ry="4.2" fill={`rgba(${accentRgb},0.18)`}/>
       <path
-        d="M22.1 6.3c2.9-1.45 10.9-1.45 13.8 0v1.5c0 1.15.22 2 .82 2.7v12.7c0 2.95 1.78 6.08 4.45 9.55 3.65 4.76 5.44 9.78 5.44 15.57v17.1c0 4.38-4.9 6.62-17.5 6.62S11.5 69.78 11.5 65.4V48.3c0-5.79 1.79-10.81 5.44-15.57 2.67-3.47 4.45-6.6 4.45-9.55V10.5c.6-.7.82-1.55.82-2.7V6.3z"
+        d="M22.2 6.6c3.28-1.66 12.32-1.66 15.6 0v1.72c0 1.16.25 1.98.88 2.7v12.96c0 2.92 1.8 5.96 4.55 9.45 3.73 4.74 5.55 9.81 5.55 15.49v16.92c0 5.09-5.12 7.72-18.6 7.72s-18.6-2.63-18.6-7.72V48.94c0-5.68 1.82-10.75 5.55-15.49 2.75-3.49 4.55-6.53 4.55-9.45V11.08c.63-.72.88-1.54.88-2.7V6.6z"
         fill={`url(#${bodyId})`}
-        stroke="rgba(69,58,53,0.44)"
-        strokeWidth="1"
+        stroke={bottleEdge}
+        strokeWidth="1.06"
         strokeLinejoin="round"
       />
       <path
-        d="M22.8 8.8c2.35-1.02 9.95-1.02 12.3 0"
-        stroke="rgba(255,255,255,0.22)"
-        strokeWidth="1"
+        d="M23.5 9.15c2.18-.92 10.82-.92 13 0"
+        stroke="rgba(255,255,255,0.18)"
+        strokeWidth="0.95"
         strokeLinecap="round"
       />
       <path
-        d="M22.6 9.3h12.8v13.2c0 3.75 1.55 6.84 3.4 9.42 2.84 3.96 4.55 8.28 4.55 13.42v18.2c0 2.62-2.55 4.55-14.9 4.55S14.1 66.2 14.1 63.58v-18.2c0-5.14 1.71-9.46 4.55-13.42 1.85-2.58 3.4-5.67 3.4-9.42V9.3z"
+        d="M23.35 9.8h13.3v14.4c0 3.58 1.45 6.42 3.18 8.9 2.86 4.08 4.58 8.44 4.58 13.52v17.04c0 3.08-2.78 5.22-15.71 5.22s-15.71-2.14-15.71-5.22V46.62c0-5.08 1.72-9.44 4.58-13.52 1.73-2.48 3.18-5.32 3.18-8.9V9.8z"
         fill="none"
-        stroke="rgba(255,255,255,0.08)"
-        strokeWidth="0.85"
+        stroke="rgba(255,255,255,0.07)"
+        strokeWidth="0.82"
       />
       <path
-        d="M21.9 11c.55-.65.72-1.28.72-2.06V6.3c2.92-1.45 9.86-1.45 12.78 0v2.64c0 .78.17 1.41.72 2.06v11H21.9V11z"
+        d="M23.35 11.62c.44-.6.62-1.26.62-2.02V6.86c2.3-1.1 9.76-1.1 12.06 0V9.6c0 .76.18 1.42.62 2.02v10.84H23.35V11.62z"
         fill={`url(#${capsuleId})`}
       />
       <path
-        d="M24.1 13.2h9.8"
-        stroke={foilLine}
-        strokeWidth="0.9"
+        d="M24.7 17.1h10.6"
+        stroke="rgba(255,255,255,0.2)"
+        strokeWidth="0.82"
         strokeLinecap="round"
       />
       <path
-        d="M21.5 15.5c0-2 .7-3.95 2.45-6.08h3.2c-1.86 2.58-2.42 5.08-2.42 8.4v42.1c0 3.18.38 5.74 2.12 8.13h-2.96c-1.76-2.11-2.39-3.9-2.39-6.15V15.5z"
-        fill={`url(#${shineId})`}
-        opacity="0.82"
+        d="M24.2 19.25h11.6"
+        stroke="rgba(0,0,0,0.18)"
+        strokeWidth="0.7"
+        strokeLinecap="round"
       />
-      <rect x="20.6" y="28.5" width="16.8" height="6.9" rx="3.45" fill={`url(#${shoulderLabelId})`} opacity="0.94" stroke="rgba(99,78,69,0.1)" strokeWidth="0.42"/>
-      <rect x="18.7" y="39.1" width="20.6" height="19.8" rx="6.9" fill={`url(#${labelId})`} opacity="0.96" stroke="rgba(99,78,69,0.16)" strokeWidth="0.52"/>
-      <rect x="22.6" y="43.5" width="12.8" height="1.35" rx="0.65" fill="rgba(122,104,93,0.24)"/>
-      <rect x="21.9" y="47.1" width="14.2" height="1.05" rx="0.52" fill="rgba(122,104,93,0.15)"/>
-      <ellipse cx="29" cy="67.1" rx="10.7" ry="2.45" fill={`url(#${puntId})`} opacity="0.34"/>
+      <path
+        d="M23.85 12.5h12.3v13.35"
+        fill={`url(#${neckGlassId})`}
+        opacity="0.9"
+      />
+      <path
+        d="M22.7 16.1c0-2.2.73-4.22 2.5-6.28h3.38c-1.76 2.58-2.3 5.17-2.3 8.46v41.3c0 3.76.45 6.54 2.14 9.17h-3.1c-1.76-2.11-2.62-4.15-2.62-6.56V16.1z"
+        fill={`url(#${shineId})`}
+        opacity="0.76"
+      />
+      <rect x="21.1" y="29.15" width="17.8" height="6.8" rx="3.4" fill={`url(#${shoulderTagId})`} opacity="0.96" stroke="rgba(100,82,70,0.1)" strokeWidth="0.4"/>
+      <rect x="19" y="40.8" width="22" height="19.9" rx="7.2" fill={`url(#${labelId})`} opacity="0.98" stroke="rgba(100,82,70,0.16)" strokeWidth="0.56"/>
+      <circle cx="30" cy="34.25" r="1.45" fill={`url(#${crestId})`} opacity="0.88"/>
+      <path d="M29.05 33.85h1.9M30 33.05v2.35" stroke="rgba(255,255,255,0.34)" strokeWidth="0.36" strokeLinecap="round"/>
+      <rect x="24.1" y="45.05" width="11.8" height="1.4" rx="0.7" fill="rgba(120,97,84,0.22)"/>
+      <rect x="22.7" y="48.85" width="14.6" height="1.18" rx="0.59" fill="rgba(120,97,84,0.14)"/>
+      <rect x="24.25" y="52.2" width="11.5" height="1.02" rx="0.51" fill="rgba(120,97,84,0.12)"/>
+      <ellipse cx="30" cy="69.5" rx="11.3" ry="2.7" fill={`url(#${puntId})`} opacity="0.4"/>
     </svg>
   );
 };
@@ -2882,12 +2909,12 @@ const BottleGlyph=({color="#8B1A1A"})=>{
 const WineThumbVisual=({wine,tc})=>{
   const bottleRgb=hexToRgb(tc.dot)||"139,26,26";
   return(
-    <div style={{width:68,height:88,borderRadius:18,background:`radial-gradient(circle at 26% 18%, rgba(255,255,255,0.88), transparent 32%), linear-gradient(180deg, rgba(${bottleRgb},0.12), rgba(255,248,243,0.96) 56%, rgba(${bottleRgb},0.06) 100%)`,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",border:"1px solid rgba(128,99,85,0.10)",boxShadow:"0 12px 24px rgba(92,67,52,0.08), inset 0 1px 0 rgba(255,255,255,0.78)",alignSelf:"center",position:"relative",transform:"translateZ(0)",willChange:"transform"}}>
+    <div style={{width:68,height:88,borderRadius:18,background:`radial-gradient(circle at 28% 18%, rgba(255,255,255,0.9), transparent 32%), linear-gradient(180deg, rgba(${bottleRgb},0.28), rgba(${bottleRgb},0.16) 20%, rgba(255,247,241,0.92) 58%, rgba(${bottleRgb},0.18) 100%)`,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",border:"1px solid rgba(${bottleRgb},0.14)",boxShadow:"0 14px 28px rgba(92,67,52,0.09), inset 0 1px 0 rgba(255,255,255,0.78)",alignSelf:"center",position:"relative",transform:"translateZ(0)",willChange:"transform"}}>
       {!wine.photo&&(
-        <div style={{position:"absolute",inset:10,borderRadius:14,background:`radial-gradient(circle at 50% 42%, rgba(${bottleRgb},0.16), rgba(${bottleRgb},0.035) 48%, transparent 74%)`,pointerEvents:"none"}}/>
+        <div style={{position:"absolute",inset:8,borderRadius:15,background:`radial-gradient(circle at 50% 42%, rgba(${bottleRgb},0.26), rgba(${bottleRgb},0.08) 48%, transparent 75%)`,pointerEvents:"none"}}/>
       )}
       {wine.photo?(
-        <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(180deg,rgba(255,255,255,0.34),rgba(255,255,255,0.08) 48%,rgba(117,92,75,0.05))",isolation:"isolate"}}>
+        <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",background:`linear-gradient(180deg,rgba(255,255,255,0.36),rgba(${bottleRgb},0.06) 40%,rgba(${bottleRgb},0.1) 100%)`,isolation:"isolate"}}>
           <WinePhotoImage src={wine.photo} alt={wine.name} style={{width:"100%",height:"100%",objectFit:"contain",objectPosition:"center",padding:"3px",filter:"drop-shadow(0 2px 6px rgba(0,0,0,0.22))"}}/>
         </div>
       ):<BottleGlyph color={tc.dot}/>}
