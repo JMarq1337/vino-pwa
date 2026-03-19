@@ -3,7 +3,7 @@ import { authApi, dbApi } from "./apiClient";
 import { wineHoldings2021 } from "./data/wineHoldings2021";
 import * as ExcelJSImport from "exceljs";
 
-const APP_VERSION = "8.25";
+const APP_VERSION = "8.26";
 const ADMIN_PIN_DIGITS = 8;
 const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
 const CHANGE_LOG_KEY = "vino_change_log_v1";
@@ -305,6 +305,199 @@ const sanitizeLogPayload = (value,key="",depth=0) => {
   }
   return String(value);
 };
+const compactText = (value,max=180) => {
+  const txt=(value==null?"":String(value)).trim();
+  if(!txt) return "";
+  return txt.length>max ? `${txt.slice(0,max)}…` : txt;
+};
+const compactReviewEntries = value => normalizeOtherReviews(value||[]).slice(0,4).map(entry=>({
+  reviewer:compactText(entry?.reviewer||"",60),
+  rating:compactText(entry?.rating||"",24),
+  text:compactText(entry?.text||"",160),
+}));
+const compactWineRecord = (value,{minimal=false}={}) => {
+  if(!value||typeof value!=="object") return value??null;
+  const parsedNotes=typeof value?.notes==="string"?parseWineMetaFromNotes(value.notes):{plain:value?.notes||"",meta:null};
+  const meta=(value?.cellarMeta&&typeof value.cellarMeta==="object") ? value.cellarMeta : (parsedNotes.meta||{});
+  const journal=(meta?.journal&&typeof meta.journal==="object") ? meta.journal : {};
+  const base={
+    id:(value?.id||"").toString(),
+    name:compactText(value?.name||"",120),
+    origin:compactText(value?.origin||"",120),
+    grape:compactText(value?.grape||"",120),
+    vintage:safeNum(value?.vintage),
+    bottles:Math.max(0,Math.round(safeNum(value?.bottles)||0)),
+    location:normalizeLocation(value?.location||""),
+    locationSlot:compactText(value?.locationSlot||value?.location_slot||"",60),
+    wineType:compactText(value?.wineType||value?.wine_type||"",40),
+    wishlist:!!value?.wishlist,
+    createdAt:(value?.createdAt||value?.created_at||"").toString(),
+    datePurchased:(value?.datePurchased||value?.date_purchased||"").toString(),
+    addedDate:(meta?.addedDate||"").toString(),
+    drinkStart:safeNum(meta?.drinkStart),
+    drinkEnd:safeNum(meta?.drinkEnd),
+    totalPurchased:safeNum(meta?.totalPurchased),
+    totalPaid:safeNum(meta?.totalPaid),
+    paidPerBottle:safeNum(meta?.pricePerBottle),
+    rrpPerBottle:safeNum(meta?.rrp),
+    manualCategory:compactText(meta?.manualWineCategory||"",40),
+    hasPhoto:!!value?.photo,
+    photoBytes:typeof value?.photo==="string"?value.photo.length:0,
+  };
+  if(minimal) return base;
+  return {
+    ...base,
+    rating:safeNum(value?.rating),
+    locationSection:normalizeKennardsSection(meta?.locationSection||""),
+    supplier:compactText(meta?.supplier||"",80),
+    notesExcerpt:compactText(parsedNotes?.plain||value?.notes||"",180),
+    reviewExcerpt:compactText(value?.review||journal?.primary?.text||"",180),
+    tastingNotesExcerpt:compactText(value?.tastingNotes||value?.tasting_notes||"",180),
+    primaryReviewer:compactText(value?.reviewPrimaryReviewer||journal?.primary?.reviewer||"",60),
+    primaryRating:compactText(value?.reviewPrimaryRating||journal?.primary?.rating||"",24),
+    otherReviews:compactReviewEntries(value?.otherReviews||journal?.otherReviews||[]),
+  };
+};
+const compactWineForAuditRestore = value => {
+  if(!value||typeof value!=="object") return value??null;
+  const parsedNotes=typeof value?.notes==="string"?parseWineMetaFromNotes(value.notes):{plain:value?.notes||"",meta:null};
+  const meta=(value?.cellarMeta&&typeof value.cellarMeta==="object") ? value.cellarMeta : (parsedNotes.meta||{});
+  const journal=(meta?.journal&&typeof meta.journal==="object") ? meta.journal : {};
+  return {
+    id:(value?.id||"").toString(),
+    name:compactText(value?.name||"",120),
+    origin:compactText(value?.origin||"",120),
+    grape:compactText(value?.grape||"",120),
+    alcohol:safeNum(value?.alcohol)||0,
+    vintage:safeNum(value?.vintage),
+    bottles:Math.max(0,Math.round(safeNum(value?.bottles)||0)),
+    rating:safeNum(value?.rating)||0,
+    notes:compactText(parsedNotes?.plain||value?.notes||"",180),
+    review:compactText(value?.review||journal?.primary?.text||"",180),
+    tastingNotes:compactText(value?.tastingNotes||value?.tasting_notes||"",180),
+    datePurchased:(value?.datePurchased||value?.date_purchased||"").toString(),
+    wishlist:!!value?.wishlist,
+    color:(value?.color||"").toString(),
+    photo:null,
+    photoLostFromRemoteSnapshot:!!value?.photo,
+    location:normalizeLocation(value?.location||""),
+    locationSlot:compactText(value?.locationSlot||value?.location_slot||"",60),
+    wineType:compactText(value?.wineType||value?.wine_type||"",40),
+    createdAt:(value?.createdAt||value?.created_at||"").toString(),
+    reviewPrimaryReviewer:compactText(value?.reviewPrimaryReviewer||journal?.primary?.reviewer||"",60),
+    reviewPrimaryRating:compactText(value?.reviewPrimaryRating||journal?.primary?.rating||"",24),
+    otherReviews:compactReviewEntries(value?.otherReviews||journal?.otherReviews||[]),
+    cellarMeta:{
+      addedDate:(meta?.addedDate||"").toString(),
+      drinkStart:safeNum(meta?.drinkStart),
+      drinkEnd:safeNum(meta?.drinkEnd),
+      totalPurchased:safeNum(meta?.totalPurchased),
+      totalPaid:safeNum(meta?.totalPaid),
+      pricePerBottle:safeNum(meta?.pricePerBottle),
+      rrp:safeNum(meta?.rrp),
+      manualWineCategory:compactText(meta?.manualWineCategory||"",40),
+      locationSection:normalizeKennardsSection(meta?.locationSection||""),
+      updatedAt:(meta?.updatedAt||"").toString(),
+      journalUpdatedAt:(meta?.journalUpdatedAt||"").toString(),
+      supplier:compactText(meta?.supplier||"",80),
+    },
+  };
+};
+const compactAuditItemForRemote = item => {
+  if(!item||!item.wineId) return null;
+  return {
+    wineId:(item.wineId||"").toString(),
+    wineName:compactText(item.wineName||"",120),
+    origin:compactText(item.origin||"",120),
+    varietal:compactText(item.varietal||"",100),
+    vintage:safeNum(item.vintage),
+    location:normalizeLocation(item.location||""),
+    locationSection:normalizeKennardsSection(item.locationSection||""),
+    locationSlot:compactText(item.locationSlot||"",60),
+    expectedBottles:Math.max(0,Math.round(safeNum(item.expectedBottles)||0)),
+    decision:item.decision==="present"||item.decision==="missing"?item.decision:"pending",
+    countType:item.countType==="boxes"?"boxes":"bottles",
+    countedAmount:Math.max(0,Math.round(safeNum(item.countedAmount)||0)),
+    missingAction:item.missingAction==="remove"?"remove":"keep",
+    synced:!!item.synced,
+    updatedAt:(item.updatedAt||"").toString(),
+    beforeWine:item.beforeWine&&item.beforeWine.id?compactWineForAuditRestore(item.beforeWine):null,
+  };
+};
+const compactAuditItemsForRemote = items => {
+  const entries=Object.entries(items&&typeof items==="object"?items:{});
+  const out={};
+  entries.slice(0,400).forEach(([key,item])=>{
+    const next=compactAuditItemForRemote(item);
+    if(next) out[key]=next;
+  });
+  if(entries.length>400) out.__truncated = `${entries.length-400} more items omitted`;
+  return out;
+};
+const compactProfileRecord = value => {
+  if(!value||typeof value!=="object") return value??null;
+  const aiMemory=normalizeAiMemoryList(value?.aiMemory||value?.ai_memory||[]);
+  const pinDigits=[4,6].includes(Number(value?.pinDigits))?Number(value.pinDigits):([4,6].includes(Number(value?.pin_digits))?Number(value.pin_digits):null);
+  return {
+    name:compactText(value?.name||"",80),
+    surname:compactText(value?.surname||"",80),
+    cellarName:compactText(value?.cellarName||value?.cellar_name||"",120),
+    description:compactText(value?.description||"",140),
+    bio:compactText(value?.bio||"",180),
+    country:compactText(value?.country||"",80),
+    profileBg:compactText(value?.profileBg||value?.profile_bg||"",140),
+    hasAvatar:!!value?.avatar,
+    avatarBytes:typeof value?.avatar==="string"?value.avatar.length:0,
+    aiMemoryCount:aiMemory.length,
+    aiMemoryPreview:aiMemory.slice(0,8),
+    pinEnabled:!!(value?.pinEnabled || ((value?.pin_hash||"").toString().trim() && (value?.pin_salt||"").toString().trim())),
+    pinDigits,
+  };
+};
+const compactNoteRecord = value => {
+  if(!value||typeof value!=="object") return value??null;
+  return {
+    id:(value?.id||"").toString(),
+    wineId:(value?.wineId||value?.wine_id||"").toString(),
+    title:compactText(value?.title||"",120),
+    content:compactText(value?.content||"",220),
+    date:(value?.date||"").toString(),
+  };
+};
+const compactAuditRecord = value => {
+  if(!value||typeof value!=="object") return value??null;
+  return {
+    id:(value?.id||"").toString(),
+    name:compactText(value?.name||"",120),
+    status:(value?.status||"").toString(),
+    realtimeSync:!!(value?.realtimeSync ?? value?.realtime_sync),
+    locations:Array.isArray(value?.locations)?value.locations.slice(0,40).map(normalizeLocation):[],
+    createdAt:(value?.createdAt||value?.created_at||"").toString(),
+    updatedAt:(value?.updatedAt||value?.updated_at||"").toString(),
+    completedAt:(value?.completedAt||value?.completed_at||"").toString(),
+    items:compactAuditItemsForRemote(value?.items||{}),
+  };
+};
+const compactRemoteRecord = (table,value) => {
+  if(value==null) return value;
+  if(table==="wines") return compactWineRecord(value);
+  if(table==="audits") return compactAuditRecord(value);
+  if(table==="profile") return compactProfileRecord(value);
+  if(table==="tasting_notes") return compactNoteRecord(value);
+  if(table==="grape_aliases") return {
+    alias:compactText(value?.alias||"",80),
+    wine_type:compactText(value?.wine_type||"",40),
+    source:compactText(value?.source||"",40),
+  };
+  return sanitizeLogPayload(value);
+};
+const compactRemoteEventPayload = (entity,payload) => {
+  if(entity==="wines") return compactWineRecord(payload);
+  if(entity==="audits") return compactAuditRecord(payload);
+  if(entity==="profile") return compactProfileRecord(payload);
+  if(entity==="tasting_notes") return compactNoteRecord(payload);
+  return sanitizeLogPayload(payload);
+};
 const appendLocalChangeLog = event => {
   try{
     const raw=localStorage.getItem(CHANGE_LOG_KEY);
@@ -480,9 +673,9 @@ const buildRemoteSnapshotRecord = ({table="",action="",entityId="",before=null,a
     table,
     action,
     entityId:(entityId||"").toString(),
-    before:before??null,
-    after:after??null,
-    meta:meta??null,
+    before:compactRemoteRecord(table,before),
+    after:compactRemoteRecord(table,after),
+    meta:sanitizeLogPayload(meta??null),
     appVersion:APP_VERSION,
     capturedAt:new Date().toISOString(),
   },
@@ -530,6 +723,13 @@ const db = {
   _flushing:false,
   _flushTimer:null,
   _health:readSyncHealth(),
+  signalPersistence(reason="state-save"){
+    try{
+      if(typeof window!=="undefined" && typeof window.dispatchEvent==="function"){
+        window.dispatchEvent(new CustomEvent("vino-persist-now",{detail:{reason,timestamp:new Date().toISOString()}}));
+      }
+    }catch{}
+  },
   setHealth(patch){
     this._health = emitSyncHealth({...this._health,...(patch||{})});
     return this._health;
@@ -673,7 +873,7 @@ const db = {
       entity:entity||"",
       action:action||"",
       entity_id:entityId||"",
-      payload:rawPayload,
+      payload:compactRemoteEventPayload(entity,rawPayload),
       created_at:new Date().toISOString(),
     };
     appendLocalChangeLog({...event,payload:sanitizeLogPayload(rawPayload)});
@@ -699,6 +899,7 @@ const db = {
       const entityId=row?.id||row?.alias||"";
       await this.persistSnapshot(buildRemoteSnapshotRecord({table:t,action:"upsert",entityId,after:row||null}));
       await this.logEvent(t,"upsert",entityId,row);
+      this.signalPersistence(`${t}:upsert`);
       this.setHealth({status:"healthy",lastError:"",lastSuccess:new Date().toISOString(),pending:readOutbox().length});
       return true;
     }
@@ -719,6 +920,7 @@ const db = {
       }
       await this.persistSnapshot(buildRemoteSnapshotRecord({table:t,action:"delete",entityId:id,before:before||{id}}));
       await this.logEvent(t,"delete",id,{id});
+      this.signalPersistence(`${t}:delete`);
       this.setHealth({status:"healthy",lastError:"",lastSuccess:new Date().toISOString(),pending:readOutbox().length});
       return true;
     }
@@ -743,6 +945,7 @@ const db = {
         cellar_name:p.cellarName||"",bio:p.bio||"",country:p.country||"",profile_bg:p.profileBg||"",
         pin_enabled:hasPinConfigured(p),pin_digits:[4,6].includes(Number(p?.pinDigits))?Number(p.pinDigits):null
       });
+      this.signalPersistence("profile:upsert");
       this.setHealth({status:"healthy",lastError:"",lastSuccess:new Date().toISOString(),pending:readOutbox().length});
       return true;
     }catch(e){
@@ -777,6 +980,7 @@ const db = {
       }
       await this.persistSnapshot(buildRemoteSnapshotRecord({table:"audits",action:"upsert",entityId:row?.id||"",after:row||null}));
       await this.logEvent("audits","upsert",row?.id||"",row);
+      this.signalPersistence("audits:upsert");
       return {ok:true};
     }catch(e){
       this.queue({kind:"upsert",table:"audits",row});
@@ -793,6 +997,7 @@ const db = {
       }
       await this.persistSnapshot(buildRemoteSnapshotRecord({table:"audits",action:"delete",entityId:id,before:before||{id}}));
       await this.logEvent("audits","delete",id,{id});
+      this.signalPersistence("audits:delete");
       return {ok:true};
     }catch(e){
       this.queue({kind:"delete",table:"audits",id,before:before||null});
@@ -1296,13 +1501,18 @@ const fromDbAudit = row => normalizeAuditRecord({
   locations:Array.isArray(row.locations)?row.locations:[],
   items:row.items&&typeof row.items==="object"?row.items:{},
 });
+const toDbAuditItems = items => Object.fromEntries(
+  Object.entries(items&&typeof items==="object"?items:{})
+    .map(([key,item])=>[key,compactAuditItemForRemote(item)])
+    .filter(([,item])=>!!item)
+);
 const toDbAudit = audit => ({
   id:audit.id,
   name:audit.name,
   status:audit.status,
   realtime_sync:!!audit.realtimeSync,
   locations:Array.isArray(audit.locations)?audit.locations:[],
-  items:audit.items||{},
+  items:toDbAuditItems(audit.items),
   created_at:audit.createdAt||new Date().toISOString(),
   updated_at:new Date().toISOString(),
   completed_at:audit.completedAt||null,
@@ -2381,6 +2591,7 @@ const Btn=({children,onClick,variant="primary",full,disabled,icon})=>{
 
 const PHOTO_RENDER_CACHE = new Map();
 const PHOTO_RENDER_PROMISES = new Map();
+const MAX_STORED_PHOTO_DATA_URL_CHARS = 1_200_000;
 const loadImageForPhoto = src => new Promise((resolve,reject)=>{
   const img=new Image();
   img.decoding="async";
@@ -2496,6 +2707,28 @@ const getPreparedPhotoSrc = async src => {
   PHOTO_RENDER_PROMISES.set(src,p);
   return p;
 };
+const fitPhotoForStorage = async src => {
+  if(!src || typeof src!=="string" || !src.startsWith("data:image/") || src.length<=MAX_STORED_PHOTO_DATA_URL_CHARS) return src;
+  try{
+    let current=src;
+    for(let attempt=0;attempt<6 && current.length>MAX_STORED_PHOTO_DATA_URL_CHARS;attempt+=1){
+      const img=await loadImageForPhoto(current);
+      const nextW=Math.max(1,Math.round((img.width||1)*0.82));
+      const nextH=Math.max(1,Math.round((img.height||1)*0.82));
+      if(nextW>=(img.width||1) || nextH>=(img.height||1)) break;
+      const canvas=document.createElement("canvas");
+      canvas.width=nextW;
+      canvas.height=nextH;
+      const ctx=canvas.getContext("2d");
+      if(!ctx) break;
+      ctx.drawImage(img,0,0,nextW,nextH);
+      current=canvas.toDataURL("image/png");
+    }
+    return current;
+  }catch{
+    return src;
+  }
+};
 const WinePhotoImage=({src,alt,style={}})=>{
   const [displaySrc,setDisplaySrc]=useState(()=>PHOTO_RENDER_CACHE.get(src)||null);
   useEffect(()=>{
@@ -2526,7 +2759,8 @@ const PhotoPicker=({value,onChange,size=80,round})=>{
       const raw=ev?.target?.result;
       if(typeof raw!=="string"){onChange(raw);return;}
       const cleaned=await getPreparedPhotoSrc(raw);
-      onChange(cleaned||raw);
+      const fitted=await fitPhotoForStorage(cleaned||raw);
+      onChange(fitted||cleaned||raw);
     };
     r.readAsDataURL(f);
   };
@@ -4417,7 +4651,7 @@ const CollectionScreen=({wines,onAdd,onUpdate,onDelete,onAdjustConsumption,onDup
 };
 
 /* ── AUDIT ────────────────────────────────────────────────────── */
-const AuditScreen=({wines,desktop,onSetWineBottles,onRemoveWine,onRevokeAudit})=>{
+const AuditScreen=({wines,desktop,onSetWineBottles,onRemoveWine,onRevokeAudit,onAuditStateChange})=>{
   const col=wines.filter(w=>!w.wishlist);
   const locations=dedupeLocations(col.map(w=>w.location));
   const [audits,setAudits]=useState(()=>readAudits());
@@ -4514,7 +4748,8 @@ const AuditScreen=({wines,desktop,onSetWineBottles,onRemoveWine,onRevokeAudit})=
 
   useEffect(()=>{
     try{localStorage.setItem(AUDITS_KEY,JSON.stringify(audits.slice(0,60)))}catch{}
-  },[audits]);
+    onAuditStateChange?.(audits);
+  },[audits,onAuditStateChange]);
   useEffect(()=>{
     let cancelled=false;
     const localAudits=readAudits();
@@ -7021,7 +7256,7 @@ const SettingsPanel=({onBack,profile,setProfile,theme,setTheme,authRole,onSavePi
 };
 
 /* ── PROFILE ──────────────────────────────────────────────────── */
-const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile,onNavigateTab,syncHealth,onRetrySync,authRole,onSavePin})=>{
+const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile,onNavigateTab,authRole,onSavePin})=>{
   const [view,setView]=useState("main"); // main | settings | explore
   const [exportOpen,setExportOpen]=useState(false);
   const [exportBusy,setExportBusy]=useState(false);
@@ -7030,8 +7265,6 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile,onNavigateTa
   const [compact,setCompact]=useState(()=>window.innerWidth<920);
   const [activityRange,setActivityRange]=useState("7d");
   const [activityType,setActivityType]=useState("all");
-  const [retryingSync,setRetryingSync]=useState(false);
-  const [retryFeedback,setRetryFeedback]=useState("");
   const [settingsToast,setSettingsToast]=useState("");
   useEffect(()=>{
     const onResize=()=>setCompact(window.innerWidth<920);
@@ -7203,24 +7436,6 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile,onNavigateTa
     .filter(item=>withinRange(item.ts,activityRange))
     .filter(item=>activityType==="all"||inferActivityType(item)===activityType)
     .slice(0,activityRange==="all"?14:8);
-  const lastSyncTs=rangedActivity[0]?.ts||0;
-  const lastSyncLabel=lastSyncTs
-    ? new Date(lastSyncTs).toLocaleString("en-AU",{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})
-    : "No sync yet";
-  const fmtSyncTs=raw=>{
-    const ts=(raw||"").toString().trim();
-    if(!ts) return "—";
-    const d=new Date(ts);
-    if(Number.isNaN(d.getTime())) return "—";
-    return d.toLocaleString("en-AU",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});
-  };
-  const safeSync=syncHealth&&typeof syncHealth==="object"?syncHealth:defaultSyncHealth();
-  const pendingSync=Math.max(0,Math.round(Number(safeSync.pending)||0));
-  const syncStatusLabel=pendingSync>0?"Pending retries":"All changes synced";
-  const syncStatusTone=pendingSync>0?"#D68A16":"#2F855A";
-  const syncErrorText=(safeSync.lastError||"").toString().trim();
-  const visibleSyncError=(isCellarEventsPermissionIssue(syncErrorText)||isOptionalProfileSchemaError(syncErrorText))?"":syncErrorText;
-
   const healthTotal=Math.max(1,readyCount+notReadyCount+pastPeakCount+noWindowCount);
   const readyPct=(readyCount/healthTotal)*100;
   const earlyPct=(notReadyCount/healthTotal)*100;
@@ -7287,7 +7502,7 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile,onNavigateTa
               {!profile.bio&&profile.description&&<div style={{fontSize:12,color:"rgba(255,255,255,0.7)",marginTop:3,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{profile.description}</div>}
               <div style={{display:"flex",alignItems:"center",gap:10,marginTop:5,flexWrap:"wrap"}}>
                 {profile.country&&<span style={{fontSize:11,color:"rgba(255,255,255,0.62)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{profile.country}</span>}
-                <span style={{fontSize:11,color:"rgba(255,255,255,0.56)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Last sync: {lastSyncLabel}</span>
+                {topRegion!=="—"&&<span style={{fontSize:11,color:"rgba(255,255,255,0.56)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{topRegion}</span>}
               </div>
             </div>
           </div>
@@ -7343,61 +7558,6 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile,onNavigateTa
             </div>
           </button>
         ))}
-      </div>
-
-      <div style={{...panel,padding:"12px 13px",marginBottom:12,background:pendingSync>0?"rgba(214,138,22,0.08)":"rgba(47,133,90,0.08)",border:pendingSync>0?"1px solid rgba(214,138,22,0.26)":"1px solid rgba(47,133,90,0.26)"}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
-          <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
-            <span style={{width:10,height:10,borderRadius:"50%",background:syncStatusTone,boxShadow:`0 0 0 4px ${pendingSync>0?"rgba(214,138,22,0.16)":"rgba(47,133,90,0.16)"}`}}/>
-            <div>
-              <div style={{...tinyLabel,color:"var(--text)"}}>Sync Health</div>
-              <div style={{fontSize:13,fontWeight:800,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{syncStatusLabel}</div>
-            </div>
-          </div>
-          <button onClick={async()=>{
-            setRetryingSync(true);
-            setRetryFeedback("");
-            try{
-              const res=await onRetrySync?.();
-              const pending=Math.max(0,Math.round(Number(res?.pending ?? readSyncHealth().pending)||0));
-              setRetryFeedback(pending>0?`${pending} changes still queued`:"Sync refreshed");
-            }catch{
-              setRetryFeedback("Retry failed");
-            }finally{
-              setRetryingSync(false);
-            }
-          }} style={{padding:"8px 10px",borderRadius:10,border:"1px solid rgba(var(--accentRgb),0.28)",background:"rgba(var(--accentRgb),0.1)",color:"var(--accent)",fontSize:11.5,fontWeight:800,fontFamily:"'Plus Jakarta Sans',sans-serif",cursor:retryingSync?"default":"pointer",display:"inline-flex",alignItems:"center",gap:6,opacity:retryingSync?0.72:1}} disabled={retryingSync}>
-            <Icon n="sync" size={13} color="var(--accent)"/> {retryingSync?"Retrying…":"Retry Sync"}
-          </button>
-        </div>
-        {retryFeedback&&(
-          <div style={{marginTop:8,fontSize:11.5,color:"var(--sub)",fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
-            {retryFeedback}
-          </div>
-        )}
-        <div style={{display:"grid",gridTemplateColumns:compact?"1fr":"repeat(4,minmax(0,1fr))",gap:8,marginTop:10}}>
-          <div style={{background:"var(--inputBg)",border:"1px solid var(--border)",borderRadius:10,padding:"8px 9px"}}>
-            <div style={tinyLabel}>Pending</div>
-            <div style={{fontSize:14,fontWeight:800,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{pendingSync}</div>
-          </div>
-          <div style={{background:"var(--inputBg)",border:"1px solid var(--border)",borderRadius:10,padding:"8px 9px"}}>
-            <div style={tinyLabel}>Last Success</div>
-            <div style={{fontSize:12,fontWeight:700,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{fmtSyncTs(safeSync.lastSuccess)}</div>
-          </div>
-          <div style={{background:"var(--inputBg)",border:"1px solid var(--border)",borderRadius:10,padding:"8px 9px"}}>
-            <div style={tinyLabel}>Last Attempt</div>
-            <div style={{fontSize:12,fontWeight:700,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{fmtSyncTs(safeSync.lastAttempt)}</div>
-          </div>
-          <div style={{background:"var(--inputBg)",border:"1px solid var(--border)",borderRadius:10,padding:"8px 9px"}}>
-            <div style={tinyLabel}>Status</div>
-            <div style={{fontSize:12,fontWeight:700,color:syncStatusTone,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{(safeSync.status||"idle").replace(/_/g," ")}</div>
-          </div>
-        </div>
-        {visibleSyncError&&(
-          <div style={{marginTop:8,padding:"8px 10px",borderRadius:10,border:"1px solid rgba(184,50,50,0.22)",background:"rgba(184,50,50,0.08)",fontSize:11,color:"#7B1C1C",fontFamily:"'Plus Jakarta Sans',sans-serif",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
-            Last error: {visibleSyncError}
-          </div>
-        )}
       </div>
 
       <div style={{display:"grid",gridTemplateColumns:compact?"1fr":"1.05fr 1fr",gap:10,marginBottom:12}}>
@@ -7654,7 +7814,6 @@ export default function App(){
   const [profile,setProfileState]=useState(DEFAULT_PROFILE);
   const [savedLocations,setSavedLocations]=useState(()=>readSavedLocations());
   const [ready,setReady]=useState(false);
-  const [syncHealth,setSyncHealth]=useState(()=>readSyncHealth());
   const [splashPhase,setSplashPhase]=useState("boot"); // boot | setup | setupPin | unlock | entering | done
   const [isDesktop,setIsDesktop]=useState(()=>window.innerWidth>=768);
   const [isNewUser,setIsNewUser]=useState(false);
@@ -7686,6 +7845,23 @@ export default function App(){
     setAuthError(reason);
     setSplashPhase(hasPinConfigured(profile)?"unlock":"setupPin");
   },[profile]);
+  const persistLocalStateNow = useCallback((reason="state-change",overrides={})=>{
+    if(snapshotTimerRef.current){
+      clearTimeout(snapshotTimerRef.current);
+      snapshotTimerRef.current=null;
+    }
+    const nextState={
+      wines:Array.isArray(overrides?.wines)?overrides.wines:(latestStateRef.current.wines||[]),
+      notes:Array.isArray(overrides?.notes)?overrides.notes:(latestStateRef.current.notes||[]),
+      profile:Object.prototype.hasOwnProperty.call(overrides||{},"profile")?(overrides.profile||DEFAULT_PROFILE):(latestStateRef.current.profile||DEFAULT_PROFILE),
+      audits:Array.isArray(overrides?.audits)?overrides.audits:readAudits(),
+    };
+    latestStateRef.current=nextState;
+    try{
+      localStorage.setItem(CACHE_KEY,JSON.stringify(nextState));
+    }catch{}
+    void saveIndexedSnapshot(reason,nextState);
+  },[]);
 
   useEffect(()=>{
     let cancelled=false;
@@ -7708,6 +7884,11 @@ export default function App(){
   useEffect(()=>{
     latestStateRef.current={wines,notes,profile,audits:readAudits()};
   },[wines,notes,profile]);
+  useEffect(()=>{
+    const onPersist=e=>persistLocalStateNow(e?.detail?.reason||"state-save");
+    window.addEventListener("vino-persist-now",onPersist);
+    return()=>window.removeEventListener("vino-persist-now",onPersist);
+  },[persistLocalStateNow]);
   useEffect(()=>{
     grapeAliasMapRef.current=grapeAliasMap||{};
     setGrapeAliasCache(grapeAliasMapRef.current);
@@ -7733,26 +7914,17 @@ export default function App(){
     const interval=setInterval(flush,12000);
     const onOnline=()=>flush();
     const onVisible=()=>{if(document.visibilityState==="visible") flush();};
-    const onSyncEvent=e=>setSyncHealth(e?.detail||readSyncHealth());
-    const healthPoll=setInterval(()=>setSyncHealth(readSyncHealth()),3000);
     window.addEventListener("online",onOnline);
     document.addEventListener("visibilitychange",onVisible);
-    window.addEventListener("vino-sync-health",onSyncEvent);
     return()=>{
       clearInterval(interval);
-      clearInterval(healthPoll);
       window.removeEventListener("online",onOnline);
       document.removeEventListener("visibilitychange",onVisible);
-      window.removeEventListener("vino-sync-health",onSyncEvent);
     };
   },[isAuthenticated]);
   useEffect(()=>{
     const persistImmediate=reason=>{
-      const state=latestStateRef.current;
-      try{
-        localStorage.setItem(CACHE_KEY,JSON.stringify(state));
-      }catch{}
-      void saveIndexedSnapshot(reason,state);
+      persistLocalStateNow(reason);
       void db.flushOutbox();
     };
     const onVisibility=()=>{
@@ -7768,7 +7940,7 @@ export default function App(){
       window.removeEventListener("pagehide",onPageHide);
       window.removeEventListener("beforeunload",onBeforeUnload);
     };
-  },[]);
+  },[persistLocalStateNow]);
   useEffect(()=>{
     if(!isAuthenticated) return;
     const resetIdleTimer=()=>{
@@ -7817,7 +7989,6 @@ export default function App(){
             status:cachedWines.length?"retrying":"offline",
             lastError:reason,
           });
-          setSyncHealth(readSyncHealth());
         }
       };
       let authGranted=false;
@@ -7907,7 +8078,6 @@ export default function App(){
           setNotes(cachedNotes);
           setAuthError(reason);
           db.setHealth({status:cachedWines.length?"retrying":"offline",lastError:reason});
-          setSyncHealth(readSyncHealth());
           setReady(true);
           return;
         }
@@ -8168,7 +8338,6 @@ export default function App(){
           setNotes([]);
           setAuthError("Live winery data could not be loaded. Retry in a moment.");
           db.setHealth({status:"offline",lastError:"Live winery data could not be loaded. Retry in a moment."});
-          setSyncHealth(readSyncHealth());
         }
       }
       setReady(true);
@@ -8210,21 +8379,23 @@ export default function App(){
   });
   useEffect(()=>{
     const state={wines,notes,profile,audits:readAudits()};
-    try{
-      localStorage.setItem(CACHE_KEY,JSON.stringify(state));
-    }catch{}
+    latestStateRef.current=state;
     if(snapshotTimerRef.current) clearTimeout(snapshotTimerRef.current);
     snapshotTimerRef.current=setTimeout(()=>{
-      saveIndexedSnapshot("state-change",state);
+      persistLocalStateNow("state-change",state);
       snapshotTimerRef.current=null;
-    },450);
+    },220);
     return ()=>{
       if(snapshotTimerRef.current){
         clearTimeout(snapshotTimerRef.current);
         snapshotTimerRef.current=null;
       }
     };
-  },[wines,notes,profile]);
+  },[wines,notes,profile,persistLocalStateNow]);
+  const handleAuditStateChange = useCallback(audits=>{
+    const safeAudits=Array.isArray(audits)?audits:readAudits();
+    persistLocalStateNow("audit-change",{audits:safeAudits});
+  },[persistLocalStateNow]);
 
   const applyWineTypeAndLearnAliases = useCallback(async wineInput=>{
     const manualCategory=normalizeWineCategory(wineInput?.cellarMeta?.manualWineCategory||"");
@@ -8933,10 +9104,10 @@ export default function App(){
   const screens=(
     <>
       {tab==="collection"&&<CollectionScreen wines={wines} onAdd={addWine} onUpdate={updWine} onDelete={delWine} onDuplicate={duplicateWine} onAdjustConsumption={adjustWineConsumption} desktop={isDesktop} savedLocations={savedLocations} onSaveLocation={addSavedLocation} onRemoveLocation={removeSavedLocation} deletedWines={deletedWines} onRestoreDeleted={restoreDeletedWine} onDismissDeleted={dismissDeletedWine}/>}
-      {tab==="audit"&&<AuditScreen wines={wines} desktop={isDesktop} onSetWineBottles={setWineBottleCount} onRemoveWine={delWine} onRevokeAudit={revokeAuditSnapshot}/>}
+      {tab==="audit"&&<AuditScreen wines={wines} desktop={isDesktop} onSetWineBottles={setWineBottleCount} onRemoveWine={delWine} onRevokeAudit={revokeAuditSnapshot} onAuditStateChange={handleAuditStateChange}/>}
       {tab==="ai"&&<AIScreen wines={wines} profile={profile} setProfile={setProfile}/>}
       {tab==="notes"&&<JournalScreen wines={wines} onUpdate={updWine} desktop={isDesktop}/>}
-      {tab==="profile"&&<ProfileScreen wines={wines} notes={notes} theme={themeMode} setTheme={setThemeMode} profile={profile} setProfile={setProfile} onNavigateTab={setTab} syncHealth={syncHealth} onRetrySync={async()=>{const res=await db.flushOutbox();setSyncHealth(readSyncHealth());return res;}} authRole={authRole} onSavePin={updateWineryPin}/>}
+      {tab==="profile"&&<ProfileScreen wines={wines} notes={notes} theme={themeMode} setTheme={setThemeMode} profile={profile} setProfile={setProfile} onNavigateTab={setTab} authRole={authRole} onSavePin={updateWineryPin}/>}
     </>
   );
 
