@@ -3,7 +3,7 @@ import { authApi, dbApi } from "./apiClient";
 import { wineHoldings2021 } from "./data/wineHoldings2021";
 import * as ExcelJSImport from "exceljs";
 
-const APP_VERSION = "8.34";
+const APP_VERSION = "8.35";
 const ADMIN_PIN_DIGITS = 8;
 const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
 const CHANGE_LOG_KEY = "vino_change_log_v1";
@@ -2529,18 +2529,34 @@ const DuplicateWorkspaceModal=({show,onClose,desktop,showSource,sourcePanel,edit
   );
 };
 
-const Field=({label,value,onChange,type="text",placeholder,rows,optional,clearable,onClear,clearLabel="Clear"})=>(
-  <div style={{marginBottom:14}}>
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-      <label style={{fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{label}</label>
-      <div style={{display:"flex",alignItems:"center",gap:8}}>
-        {clearable&&!!value&&<button type="button" onClick={onClear} style={{fontSize:10,color:"var(--accent)",fontWeight:700,letterSpacing:"0.6px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif",background:"none",border:"none",padding:0,cursor:"pointer"}}>{clearLabel}</button>}
-        {optional&&<span style={{fontSize:10,color:"var(--sub)",opacity:0.6,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>optional</span>}
+const Field=({label,value,onChange,type="text",placeholder,rows,optional,clearable,onClear,clearLabel="Clear"})=>{
+  const numeric=type==="number";
+  return(
+    <div style={{marginBottom:14}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+        <label style={{fontSize:11,fontWeight:600,color:"var(--sub)",letterSpacing:"0.8px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{label}</label>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          {clearable&&!!value&&<button type="button" onClick={onClear} style={{fontSize:10,color:"var(--accent)",fontWeight:700,letterSpacing:"0.6px",textTransform:"uppercase",fontFamily:"'Plus Jakarta Sans',sans-serif",background:"none",border:"none",padding:0,cursor:"pointer"}}>{clearLabel}</button>}
+          {optional&&<span style={{fontSize:10,color:"var(--sub)",opacity:0.6,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>optional</span>}
+        </div>
       </div>
+      {rows?(
+        <textarea value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} rows={rows} style={{resize:"none"}}/>
+      ):(
+        <input
+          type={type}
+          value={value}
+          onChange={e=>onChange(e.target.value)}
+          placeholder={placeholder}
+          inputMode={numeric?"decimal":undefined}
+          onWheelCapture={numeric?e=>{
+            e.currentTarget.blur();
+          }:undefined}
+        />
+      )}
     </div>
-    {rows?<textarea value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} rows={rows} style={{resize:"none"}}/>:<input type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder}/>}
-  </div>
-);
+  );
+};
 
 const SelField=({label,value,onChange,options})=>(
   <div style={{marginBottom:14}}>
