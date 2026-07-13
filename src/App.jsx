@@ -3,9 +3,8 @@ import { authApi, dbApi } from "./apiClient";
 import { wineHoldings2021 } from "./data/wineHoldings2021";
 import * as ExcelJSImport from "exceljs";
 
-const APP_VERSION = "8.35";
-const ADMIN_PIN_DIGITS = 8;
-const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
+const APP_VERSION = "8.36";
+const ENTRY_SESSION_KEY = "vinology_entry_granted_v1";
 const CHANGE_LOG_KEY = "vino_change_log_v1";
 const DEFAULT_BOTTLE_ICON = "/icons/default-wine-bottle.png";
 const OUTBOX_KEY = "vino_sync_outbox_v2";
@@ -438,7 +437,6 @@ const compactAuditItemsForRemote = items => {
 const compactProfileRecord = value => {
   if(!value||typeof value!=="object") return value??null;
   const aiMemory=normalizeAiMemoryList(value?.aiMemory||value?.ai_memory||[]);
-  const pinDigits=[4,6].includes(Number(value?.pinDigits))?Number(value.pinDigits):([4,6].includes(Number(value?.pin_digits))?Number(value.pin_digits):null);
   return {
     name:compactText(value?.name||"",80),
     surname:compactText(value?.surname||"",80),
@@ -451,8 +449,6 @@ const compactProfileRecord = value => {
     avatarBytes:typeof value?.avatar==="string"?value.avatar.length:0,
     aiMemoryCount:aiMemory.length,
     aiMemoryPreview:aiMemory.slice(0,8),
-    pinEnabled:!!(value?.pinEnabled || ((value?.pin_hash||"").toString().trim() && (value?.pin_salt||"").toString().trim())),
-    pinDigits,
   };
 };
 const compactNoteRecord = value => {
@@ -661,12 +657,6 @@ const normalizeAiMemoryList = value => {
   return out.slice(0,80);
 };
 const toHex = value => Array.from(new Uint8Array(value)).map(b=>b.toString(16).padStart(2,"0")).join("");
-const normalizePinDigits = value => Number(value)===6 ? 6 : 4;
-const normalizePinInput = (value,digits=4) => {
-  const maxLen=Math.max(1,Math.round(Number(digits)||0));
-  return (value||"").toString().replace(/\D/g,"").slice(0,maxLen);
-};
-const hasPinConfigured = profile => !!(profile?.pinEnabled && [4,6].includes(Number(profile?.pinDigits)));
 const buildRemoteSnapshotRecord = ({table="",action="",entityId="",before=null,after=null,meta=null}) => ({
   id:makeLocalId(),
   reason:`${table}:${action}`,
@@ -943,8 +933,7 @@ const db = {
       await this.persistSnapshot(buildRemoteSnapshotRecord({table:"profile",action:"upsert",entityId:"1",after:profileFullPayload(p)}));
       await this.logEvent("profile","upsert","1",{
         name:p.name,description:p.description,avatar:p.avatar,surname:p.surname||"",
-        cellar_name:p.cellarName||"",bio:p.bio||"",country:p.country||"",profile_bg:p.profileBg||"",
-        pin_enabled:hasPinConfigured(p),pin_digits:[4,6].includes(Number(p?.pinDigits))?Number(p.pinDigits):null
+        cellar_name:p.cellarName||"",bio:p.bio||"",country:p.country||"",profile_bg:p.profileBg||""
       });
       this.signalPersistence("profile:upsert");
       this.setHealth({status:"healthy",lastError:"",lastSuccess:new Date().toISOString(),pending:readOutbox().length});
@@ -1434,11 +1423,9 @@ const normalizeCachedProfile = profile => {
     ...profile,
     accent:detectAccentFromProfileBg(profile.profileBg||"")||profile.accent||DEFAULT_PROFILE.accent,
     aiMemory:normalizeAiMemoryList(profile.aiMemory||[]),
-    pinEnabled:!!profile?.pinEnabled,
-    pinDigits:[4,6].includes(Number(profile?.pinDigits))?Number(profile.pinDigits):null,
   };
 };
-const cachedProfileLooksConfigured = profile => !!(profile && (profile.name || profile.cellarName || profile.pinEnabled));
+const cachedProfileLooksConfigured = profile => !!(profile && (profile.name || profile.cellarName));
 const readSavedLocations=()=>{
   try{
     const raw=localStorage.getItem(SAVED_LOCATIONS_KEY);
@@ -2179,7 +2166,7 @@ const SEED_NOTES=[
   {id:"n1",wineId:"s1",title:"Christmas Dinner 2023",content:"Opened with family. Paired with slow-roasted lamb. Absolutely magical.",date:"2023-12-25"},
   {id:"n2",wineId:"s3",title:"Summer BBQ Pairings",content:"Incredible with fresh prawns on the barbie. Also tried with grilled snapper — even better.",date:"2023-11-12"},
 ];
-const DEFAULT_PROFILE={name:"Neale",description:"Winemaker & Collector",avatar:null,accent:"wine",aiMemory:[],pinEnabled:false,pinDigits:null};
+const DEFAULT_PROFILE={name:"Neale",description:"Winemaker & Collector",avatar:null,accent:"wine",aiMemory:[]};
 
 /* ── ICONS ────────────────────────────────────────────────────── */
 const IC={
@@ -6132,8 +6119,6 @@ const exportToExcel=async(wines,wishlist,notes,profile={}, {includeWishlist=true
     description:(profile?.description||"").toString().trim(),
     country:(profile?.country||"").toString().trim(),
     accent:(profile?.accent||"").toString().trim(),
-    pinEnabled:!!profile?.pinEnabled,
-    pinDigits:profile?.pinDigits==null?"":String(profile.pinDigits),
     aiMemory:normalizeAiMemoryList(profile?.aiMemory||[]),
   };
 
@@ -6446,8 +6431,6 @@ const exportToExcel=async(wines,wishlist,notes,profile={}, {includeWishlist=true
     ["Profile Title",safeProfile.description||NIL],
     ["Country",safeProfile.country||NIL],
     ["Accent Theme",safeProfile.accent||NIL],
-    ["PIN Enabled",safeProfile.pinEnabled?"Yes":"No"],
-    ["PIN Digits",safeProfile.pinDigits||NIL],
     ["Sommelier Memory",safeProfile.aiMemory.length?safeProfile.aiMemory.join(" || "):NIL],
     ["Exported App Version",APP_VERSION],
   ];
@@ -6917,7 +6900,7 @@ const ExploreWineries=({onBack})=>{
 /* ── SETTINGS PANEL ───────────────────────────────────────────── */
 const BG_PRESETS = COLOR_THEMES.map(t=>({label:t.label,value:t.profileBg,accentId:t.id}));
 
-const SettingsPanel=({onBack,profile,setProfile,theme,setTheme,authRole,onSavePin,onSaved})=>{
+const SettingsPanel=({onBack,profile,setProfile,theme,setTheme,onSaved})=>{
   const THEMES=[{id:"system",label:"System",ic:"monitor"},{id:"light",label:"Light",ic:"sun"},{id:"dark",label:"Dark",ic:"moon"}];
   const COUNTRIES=["Australia","New Zealand","France","Italy","Spain","USA","Argentina","Chile","South Africa","Germany","Portugal","Austria","Other"];
   const [compact,setCompact]=useState(()=>window.innerWidth<920);
@@ -6932,16 +6915,6 @@ const SettingsPanel=({onBack,profile,setProfile,theme,setTheme,authRole,onSavePi
     profileBg:profile.profileBg||THEME_BY_ID[(profile.accent||"wine")]?.profileBg||BG_PRESETS[0].value,
     accent:detectAccentFromProfileBg(profile.profileBg||"")||profile.accent||DEFAULT_PROFILE.accent,
   });
-  const [pinForm,setPinForm]=useState({
-    current:"",
-    next:"",
-    confirm:"",
-    digits:[4,6].includes(Number(profile.pinDigits))?Number(profile.pinDigits):4,
-    show:false,
-    saving:false,
-    error:"",
-    success:"",
-  });
   const [saveState,setSaveState]=useState({saving:false,error:""});
   useEffect(()=>{
     const onResize=()=>setCompact(window.innerWidth<920);
@@ -6949,7 +6922,6 @@ const SettingsPanel=({onBack,profile,setProfile,theme,setTheme,authRole,onSavePi
     return()=>window.removeEventListener("resize",onResize);
   },[]);
   const set=(k,v)=>setForm(p=>({...p,[k]:v}));
-  const setPin=(k,v)=>setPinForm(p=>({...p,[k]:v,error:k==="current"||k==="next"||k==="confirm"?"":p.error,success:k==="current"||k==="next"||k==="confirm"?"":p.success}));
   const setColorTheme=(accentId,profileBg)=>setForm(p=>({...p,accent:accentId,profileBg}));
   const save=async()=>{
     if(!form.name.trim()) return;
@@ -6961,35 +6933,6 @@ const SettingsPanel=({onBack,profile,setProfile,theme,setTheme,authRole,onSavePi
       return;
     }
     setSaveState({saving:false,error:"Saved locally. Cloud sync will retry."});
-  };
-  const savePin=async()=>{
-    const digits=normalizePinDigits(pinForm.digits);
-    const nextPin=normalizePinInput(pinForm.next,digits);
-    const confirmPin=normalizePinInput(pinForm.confirm,digits);
-    if(nextPin.length!==digits){
-      setPinForm(p=>({...p,error:`Enter a ${digits}-digit PIN.`,success:""}));
-      return;
-    }
-    if(nextPin!==confirmPin){
-      setPinForm(p=>({...p,error:"The PIN entries do not match.",success:""}));
-      return;
-    }
-    setPinForm(p=>({...p,saving:true,error:"",success:""}));
-    const result=await onSavePin?.({currentPin:pinForm.current,nextPin,digits});
-    if(result?.ok){
-      setPinForm({
-        current:"",
-        next:"",
-        confirm:"",
-        digits,
-        show:false,
-        saving:false,
-        error:"",
-        success:`${digits}-digit PIN saved.`,
-      });
-      return;
-    }
-    setPinForm(p=>({...p,saving:false,error:result?.error||"The PIN could not be saved.",success:""}));
   };
   const previewName=[form.name,form.surname].filter(Boolean).join(" ")||"Winery owner";
   const previewCellar=form.cellarName||"Your winery";
@@ -7040,7 +6983,7 @@ const SettingsPanel=({onBack,profile,setProfile,theme,setTheme,authRole,onSavePi
         <button onClick={onBack} style={{background:"var(--inputBg)",border:"1px solid var(--border)",borderRadius:12,width:40,height:40,display:"flex",alignItems:"center",justifyContent:"center",color:"var(--sub)",cursor:"pointer",flexShrink:0,fontSize:20,boxShadow:"0 8px 18px rgba(0,0,0,0.05)"}}>←</button>
         <div style={{minWidth:0}}>
           <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:11,fontWeight:800,color:"var(--sub)",letterSpacing:"1px",textTransform:"uppercase",marginBottom:2}}>Settings</div>
-          <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:24,fontWeight:900,color:"var(--text)",lineHeight:1.05}}>Winery Profile & Access</div>
+          <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:24,fontWeight:900,color:"var(--text)",lineHeight:1.05}}>Winery Profile</div>
         </div>
       </div>
 
@@ -7062,8 +7005,8 @@ const SettingsPanel=({onBack,profile,setProfile,theme,setTheme,authRole,onSavePi
           <div style={{display:"grid",gridTemplateColumns:compact?"repeat(3,minmax(0,1fr))":"repeat(3,minmax(110px,1fr))",gap:8}}>
             {[
               {label:"Theme",value:selectedTheme.label,icon:selectedTheme.ic},
-              {label:"Session",value:"15 min relock",icon:"lock"},
-              {label:"Access",value:authRole==="admin"?"Admin":"Winery",icon:authRole==="admin"?"shield":"user"},
+              {label:"Access",value:"Direct entry",icon:"wine"},
+              {label:"Sync",value:"Live",icon:"refresh"},
             ].map(item=>(
               <div key={item.label} style={{padding:"10px 11px",borderRadius:16,background:"rgba(255,255,255,0.14)",border:"1px solid rgba(255,255,255,0.18)",backdropFilter:"blur(10px)"}}>
                 <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:5}}>
@@ -7161,61 +7104,6 @@ const SettingsPanel=({onBack,profile,setProfile,theme,setTheme,authRole,onSavePi
             </div>
           </div>
 
-          <div style={{...sectionCard,background:"linear-gradient(180deg,rgba(var(--accentRgb),0.09),rgba(var(--accentRgb),0.03))"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:12}}>
-              <div>
-                <div style={sectionLabel}>Security</div>
-                <div style={{fontSize:18,fontWeight:900,color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.05}}>{hasPinConfigured(profile)?"Change Winery PIN":"Create Winery PIN"}</div>
-                <div style={{fontSize:12,color:"var(--sub)",marginTop:6,fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1.55}}>
-                  {authRole==="admin"
-                    ? "Admin session active. This can override the winery PIN."
-                    : hasPinConfigured(profile)
-                      ? `This winery currently uses a ${normalizePinDigits(profile.pinDigits)}-digit PIN and relocks after 15 minutes of inactivity.`
-                      : "Protect the cellar with a winery PIN. The app will relock after 15 minutes of inactivity."}
-                </div>
-              </div>
-              <button type="button" onClick={()=>setPin("show",!pinForm.show)} style={{padding:"9px 12px",borderRadius:12,border:"1px solid rgba(var(--accentRgb),0.24)",background:"var(--surface)",color:"var(--accent)",fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.6px"}}>
-                {pinForm.show?"Hide":"Show"}
-              </button>
-            </div>
-            <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}}>
-              <span style={infoChip}><Icon n="lock" size={12} color="var(--accent)"/>{normalizePinDigits(pinForm.digits)} digits</span>
-              <span style={infoChip}><Icon n="shield" size={12} color="var(--accent)"/>{authRole==="admin"?"Admin access":"Winery access"}</span>
-              <span style={infoChip}><Icon n="timer" size={12} color="var(--accent)"/>Auto relock</span>
-            </div>
-            <div style={{marginBottom:12}}>
-              <SegmentedToggle
-                options={[{label:"4 Digits",value:4},{label:"6 Digits",value:6}]}
-                value={normalizePinDigits(pinForm.digits)}
-                onChange={value=>{
-                  const digits=normalizePinDigits(value);
-                  setPinForm(p=>({...p,digits,next:normalizePinInput(p.next,digits),confirm:normalizePinInput(p.confirm,digits),error:"",success:""}));
-                }}
-                minWidth={0}
-              />
-            </div>
-            {hasPinConfigured(profile) && authRole!=="admin" && (
-              <div style={{marginBottom:12}}>
-                <label style={fieldLabel}>Current PIN</label>
-                <input type={pinForm.show?"text":"password"} inputMode="numeric" value={pinForm.current} onChange={e=>setPin("current",normalizePinInput(e.target.value,normalizePinDigits(profile.pinDigits)))} placeholder={"•".repeat(normalizePinDigits(profile.pinDigits))} style={{letterSpacing:pinForm.show?"0.14em":"0.22em",textAlign:"center",fontWeight:800}}/>
-              </div>
-            )}
-            <div style={{display:"grid",gridTemplateColumns:compact?"1fr":"1fr 1fr",gap:10}}>
-              <div>
-                <label style={fieldLabel}>New PIN</label>
-                <input type={pinForm.show?"text":"password"} inputMode="numeric" value={pinForm.next} onChange={e=>setPin("next",normalizePinInput(e.target.value,pinForm.digits))} placeholder={"•".repeat(normalizePinDigits(pinForm.digits))} style={{letterSpacing:pinForm.show?"0.14em":"0.22em",textAlign:"center",fontWeight:800}}/>
-              </div>
-              <div>
-                <label style={fieldLabel}>Confirm PIN</label>
-                <input type={pinForm.show?"text":"password"} inputMode="numeric" value={pinForm.confirm} onChange={e=>setPin("confirm",normalizePinInput(e.target.value,pinForm.digits))} placeholder={"•".repeat(normalizePinDigits(pinForm.digits))} style={{letterSpacing:pinForm.show?"0.14em":"0.22em",textAlign:"center",fontWeight:800}}/>
-              </div>
-            </div>
-            {pinForm.error&&<div style={{marginTop:12,padding:"11px 12px",borderRadius:12,background:"rgba(196,50,50,0.1)",border:"1px solid rgba(196,50,50,0.18)",color:"#B93F3F",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{pinForm.error}</div>}
-            {pinForm.success&&<div style={{marginTop:12,padding:"11px 12px",borderRadius:12,background:"rgba(32,130,88,0.1)",border:"1px solid rgba(32,130,88,0.18)",color:"#2F855A",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{pinForm.success}</div>}
-            <button type="button" onClick={savePin} disabled={pinForm.saving} style={{marginTop:14,width:"100%",padding:"13px 14px",borderRadius:14,border:"none",background:"var(--accent)",color:"#fff",fontSize:13,fontWeight:800,boxShadow:"0 12px 24px rgba(var(--accentRgb),0.22)",opacity:pinForm.saving?0.7:1}}>
-              {pinForm.saving?"Saving PIN…":"Save Winery PIN"}
-            </button>
-          </div>
         </div>
       </div>
 
@@ -7237,7 +7125,7 @@ const SettingsPanel=({onBack,profile,setProfile,theme,setTheme,authRole,onSavePi
 };
 
 /* ── PROFILE ──────────────────────────────────────────────────── */
-const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile,onNavigateTab,authRole,onSavePin})=>{
+const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile,onNavigateTab})=>{
   const [view,setView]=useState("main"); // main | settings | explore
   const [exportOpen,setExportOpen]=useState(false);
   const [exportBusy,setExportBusy]=useState(false);
@@ -7445,7 +7333,7 @@ const ProfileScreen=({wines,notes,theme,setTheme,profile,setProfile,onNavigateTa
     fontFamily:"'Plus Jakarta Sans',sans-serif",
   };
 
-  if(view==="settings")return <SettingsPanel onBack={()=>setView("main")} onSaved={msg=>{setSettingsToast(msg||"Settings saved");setView("main");}} profile={profile} setProfile={setProfile} theme={theme} setTheme={setTheme} authRole={authRole} onSavePin={onSavePin}/>;
+  if(view==="settings")return <SettingsPanel onBack={()=>setView("main")} onSaved={msg=>{setSettingsToast(msg||"Settings saved");setView("main");}} profile={profile} setProfile={setProfile} theme={theme} setTheme={setTheme}/>;
   if(view==="explore")return <ExploreWineries onBack={()=>setView("main")}/>;
 
   return(
@@ -7795,37 +7683,16 @@ export default function App(){
   const [profile,setProfileState]=useState(DEFAULT_PROFILE);
   const [savedLocations,setSavedLocations]=useState(()=>readSavedLocations());
   const [ready,setReady]=useState(false);
-  const [splashPhase,setSplashPhase]=useState("boot"); // boot | setup | setupPin | unlock | entering | done
+  const [splashPhase,setSplashPhase]=useState("boot"); // boot | access | entering | done
   const [isDesktop,setIsDesktop]=useState(()=>window.innerWidth>=768);
   const [isNewUser,setIsNewUser]=useState(false);
   const [isAuthenticated,setIsAuthenticated]=useState(false);
-  const [adminEnabled,setAdminEnabled]=useState(true);
-  const [authRole,setAuthRole]=useState("user");
   const [authBusy,setAuthBusy]=useState(false);
   const [authError,setAuthError]=useState("");
-  const [bootUnavailable,setBootUnavailable]=useState(false);
-  const [unlockPin,setUnlockPin]=useState("");
-  const [unlockShow,setUnlockShow]=useState(false);
-  const [pinDigits,setPinDigits]=useState(4);
-  const [pinValue,setPinValue]=useState("");
-  const [pinConfirm,setPinConfirm]=useState("");
-  const [pinShow,setPinShow]=useState(false);
-  const [pinFocus,setPinFocus]=useState({create:false,confirm:false,unlock:false});
   const [oName,setOName]=useState("");
   const [oCellar,setOCellar]=useState("");
   const snapshotTimerRef=useRef(null);
-  const idleTimerRef=useRef(null);
   const latestStateRef=useRef({wines:[],notes:[],profile:DEFAULT_PROFILE,audits:[]});
-  const relockToPin = useCallback(async(reason="Session expired after 15 minutes of inactivity.")=>{
-    try{await authApi.logout();}catch{}
-    setIsAuthenticated(false);
-    setAuthRole("user");
-    setUnlockPin("");
-    setUnlockShow(false);
-    setAuthBusy(false);
-    setAuthError(reason);
-    setSplashPhase(hasPinConfigured(profile)?"unlock":"setupPin");
-  },[profile]);
   const persistLocalStateNow = useCallback((reason="state-change",overrides={})=>{
     if(snapshotTimerRef.current){
       clearTimeout(snapshotTimerRef.current);
@@ -7886,9 +7753,6 @@ export default function App(){
     return()=>window.removeEventListener("resize",h);
   },[]);
   useEffect(()=>{
-    setPinFocus({create:false,confirm:false,unlock:false});
-  },[splashPhase,authRole]);
-  useEffect(()=>{
     if(!isAuthenticated) return;
     const flush=()=>{db.flushOutbox();};
     flush();
@@ -7923,27 +7787,6 @@ export default function App(){
     };
   },[persistLocalStateNow]);
   useEffect(()=>{
-    if(!isAuthenticated) return;
-    const resetIdleTimer=()=>{
-      if(idleTimerRef.current) clearTimeout(idleTimerRef.current);
-      idleTimerRef.current=setTimeout(()=>{
-        relockToPin();
-      },INACTIVITY_TIMEOUT_MS);
-    };
-    const activityEvents=["pointerdown","pointermove","keydown","scroll","touchstart"];
-    activityEvents.forEach(evt=>window.addEventListener(evt,resetIdleTimer,{passive:true}));
-    document.addEventListener("visibilitychange",resetIdleTimer);
-    resetIdleTimer();
-    return()=>{
-      if(idleTimerRef.current){
-        clearTimeout(idleTimerRef.current);
-        idleTimerRef.current=null;
-      }
-      activityEvents.forEach(evt=>window.removeEventListener(evt,resetIdleTimer));
-      document.removeEventListener("visibilitychange",resetIdleTimer);
-    };
-  },[isAuthenticated,relockToPin]);
-  useEffect(()=>{
     async function load(){
       const normalizeLegacyWineRows=rows=>(rows||[]).map(w=>{
         if(!w || !w.wishlist) return w;
@@ -7959,7 +7802,6 @@ export default function App(){
           setProfileState(prev=>({...prev,...cachedProfile}));
           setOName(cachedProfile.name||"");
           setOCellar(cachedProfile.cellarName||"");
-          setPinDigits([4,6].includes(Number(cachedProfile?.pinDigits))?Number(cachedProfile.pinDigits):4);
         }
         setWines(cachedWines);
         setNotes(cachedNotes);
@@ -7976,19 +7818,14 @@ export default function App(){
       try{
         const boot=await authApi.bootstrap();
         if(!boot.ok){
-          setBootUnavailable(true);
-          setAdminEnabled(true);
-          setAuthRole("user");
           setIsAuthenticated(false);
           hydrateCachedState("Live winery data is temporarily unavailable. Retry in a moment.");
           setReady(true);
           return;
         }
-        setBootUnavailable(false);
         const preview=boot.ok?(boot.data?.profile||null):null;
         const remotePreviewName=(preview?.name||"").trim();
         const remotePreviewCellar=(preview?.cellarName||"").trim();
-        const remotePreviewHasPin=!!preview?.pinEnabled;
         const previewAccent=detectAccentFromProfileBg(preview?.profileBg||"")||DEFAULT_PROFILE.accent;
         const previewProfile={
           ...DEFAULT_PROFILE,
@@ -8002,16 +7839,11 @@ export default function App(){
           profileBg:preview?.profileBg||"",
           accent:previewAccent,
           aiMemory:normalizeAiMemoryList(cachedProfile?.aiMemory||readSommelierMemory()),
-          pinEnabled:remotePreviewHasPin || !!cachedProfile?.pinEnabled,
-          pinDigits:[4,6].includes(Number(preview?.pinDigits))?Number(preview.pinDigits):([4,6].includes(Number(cachedProfile?.pinDigits))?Number(cachedProfile.pinDigits):null),
         };
         setProfileState(prev=>({...prev,...previewProfile}));
         setOName(previewProfile.name||"");
         setOCellar(previewProfile.cellarName||"");
-        setPinDigits([4,6].includes(Number(previewProfile?.pinDigits))?Number(previewProfile.pinDigits):4);
-        setIsNewUser(!(remotePreviewName || remotePreviewCellar || remotePreviewHasPin || cachedProfileLooksConfigured(cachedProfile) || cachedWines.length));
-        setAdminEnabled(!!(boot.ok&&boot.data?.adminEnabled));
-        setAuthRole(boot.ok&&boot.data?.authenticated?(boot.data?.role==="admin"?"admin":"user"):"user");
+        setIsNewUser(!(remotePreviewName || remotePreviewCellar || cachedProfileLooksConfigured(cachedProfile) || cachedWines.length));
         setIsAuthenticated(!!(boot.ok&&boot.data?.authenticated));
         if(!(boot.ok&&boot.data?.authenticated)){
           setWines(cachedWines);
@@ -8040,19 +7872,15 @@ export default function App(){
               profileBg:prof.profileBg||"",
               accent:bgAccent||cachedProfile?.accent||DEFAULT_PROFILE.accent,
               aiMemory:normalizeAiMemoryList((prof.aiMemory||[]).length?prof.aiMemory:((cachedProfile?.aiMemory||[]).length?cachedProfile.aiMemory:readSommelierMemory())),
-              pinEnabled:!!prof.pinEnabled,
-              pinDigits:[4,6].includes(Number(prof.pinDigits))?Number(prof.pinDigits):null,
             };
             setProfileState(remoteProfile);
             setOName(prof.name||"");
             setOCellar(prof.cellarName||"");
-            setPinDigits([4,6].includes(Number(prof.pinDigits))?Number(prof.pinDigits):4);
-            setIsNewUser(!prof.name && !prof.cellarName && !prof.pinEnabled && !cachedWines.length);
+            setIsNewUser(!prof.name && !prof.cellarName && !cachedWines.length);
           }else if(cachedProfile){
             setProfileState(prev=>({...prev,...cachedProfile}));
             setOName(cachedProfile.name||"");
             setOCellar(cachedProfile.cellarName||"");
-            setPinDigits([4,6].includes(Number(cachedProfile.pinDigits))?Number(cachedProfile.pinDigits):4);
             setIsNewUser(!cachedProfileLooksConfigured(cachedProfile) && !cachedWines.length);
           }
           setWines(cachedWines);
@@ -8077,7 +7905,7 @@ export default function App(){
         if(wineRows.length===0){
           setWines([]);
           setNotes(noteRows.length?noteRows.map(fromDb.note):[]);
-          setIsNewUser(!(prof?.name || prof?.cellarName || prof?.pinEnabled));
+          setIsNewUser(!(prof?.name || prof?.cellarName));
         }else{
           let all=normalizeLegacyWineRows(wineRows.map(fromDb.wine));
           if(ENABLE_RUNTIME_DATA_REPAIRS){
@@ -8287,22 +8115,18 @@ export default function App(){
               profileBg:prof.profileBg||"",
               accent:bgAccent||cache?.profile?.accent||DEFAULT_PROFILE.accent,
               aiMemory:normalizeAiMemoryList((prof.aiMemory||[]).length?prof.aiMemory:((cache?.profile?.aiMemory||[]).length?cache.profile.aiMemory:readSommelierMemory())),
-              pinEnabled:!!prof.pinEnabled,
-              pinDigits:[4,6].includes(Number(prof.pinDigits))?Number(prof.pinDigits):null,
             };
             setProfileState(remoteProfile);
             setOName(prof.name||"");
             setOCellar(prof.cellarName||"");
-            setPinDigits([4,6].includes(Number(prof.pinDigits))?Number(prof.pinDigits):4);
             // New user = profile name still matches the seed default or is empty
             setIsNewUser(!prof.name||(prof.name===DEFAULT_PROFILE.name&&!prof.cellarName));
           }else if(cache?.profile && wineRows.length===0){
             // Offline-only fallback.
-            const cachedProfile={...DEFAULT_PROFILE,...cache.profile,pinEnabled:!!cache.profile?.pinEnabled,pinDigits:[4,6].includes(Number(cache.profile?.pinDigits))?Number(cache.profile.pinDigits):null};
+            const cachedProfile={...DEFAULT_PROFILE,...cache.profile};
             setProfileState(cachedProfile);
             setOName(cachedProfile?.name||"");
             setOCellar(cachedProfile?.cellarName||"");
-            setPinDigits([4,6].includes(Number(cachedProfile?.pinDigits))?Number(cachedProfile.pinDigits):4);
             setIsNewUser(!(cachedProfile?.name));
           }else{
             setIsNewUser(false);
@@ -8314,7 +8138,6 @@ export default function App(){
         if(authGranted && (cachedWines.length || cachedNotes.length || cachedProfile)){
           hydrateCachedState(reason);
         }else{
-          setBootUnavailable(true);
           setWines([]);
           setNotes([]);
           setAuthError("Live winery data could not be loaded. Retry in a moment.");
@@ -8329,25 +8152,11 @@ export default function App(){
   useEffect(()=>{
     if(!ready) return;
     const timer=setTimeout(()=>{
-      if(isAuthenticated){
-        setSplashPhase("done");
-        return;
-      }
-      setAuthRole("user");
-      setUnlockPin("");
-      setUnlockShow(false);
-      setPinValue("");
-      setPinConfirm("");
-      setPinShow(false);
-      setPinDigits([4,6].includes(Number(profile?.pinDigits))?Number(profile.pinDigits):4);
-      if(bootUnavailable){
-        setSplashPhase("unlock");
-        return;
-      }
-      setSplashPhase(isNewUser ? "setup" : (hasPinConfigured(profile) ? "unlock" : "setupPin"));
+      const enteredThisTab=(()=>{try{return sessionStorage.getItem(ENTRY_SESSION_KEY)==="1";}catch{return false;}})();
+      setSplashPhase(isAuthenticated&&enteredThisTab?"done":"access");
     },780);
     return()=>clearTimeout(timer);
-  },[ready,isAuthenticated,isNewUser,profile?.pinDigits,profile?.pinEnabled,bootUnavailable]);
+  },[ready,isAuthenticated]);
 
   const dark=themeMode==="dark"||(themeMode==="system"&&sysDark);
   const th=T(dark);
@@ -8595,8 +8404,6 @@ export default function App(){
       ...p,
       accent:syncedAccent,
       aiMemory:normalizeAiMemoryList(p.aiMemory||[]),
-      pinEnabled:!!p.pinEnabled,
-      pinDigits:[4,6].includes(Number(p.pinDigits))?Number(p.pinDigits):null,
     };
     setProfileState(next);
     try{localStorage.setItem(SOMMELIER_MEMORY_KEY,JSON.stringify(next.aiMemory||[]));}catch{}
@@ -8629,116 +8436,21 @@ export default function App(){
     setSplashPhase("entering");
     window.setTimeout(()=>window.location.reload(),420);
   };
-  const finishProfileSetup=async()=>{
-    const owner=(oName||"").trim();
-    const cellar=(oCellar||"").trim();
-    const digits=normalizePinDigits(pinDigits);
-    const nextPin=normalizePinInput(pinValue,digits);
-    const confirmPin=normalizePinInput(pinConfirm,digits);
-    if(!owner){
-      setAuthError("Enter the winery owner name.");
-      return;
-    }
-    if(nextPin.length!==digits){
-      setAuthError(`Enter a ${digits}-digit winery PIN.`);
-      return;
-    }
-    if(nextPin!==confirmPin){
-      setAuthError("The PIN entries do not match.");
-      return;
-    }
+  const enterCellar=async()=>{
     setAuthBusy(true);
     setAuthError("");
     try{
-      const res=await authApi.setupPin({ownerName:owner,cellarName:cellar||`${owner}'s Winery`,nextPin,digits});
+      const res=await authApi.enter();
       if(!res.ok){
-        setAuthError(res.error||"The winery profile could not be secured.");
+        setAuthError(res.error||"The cellar could not be opened. Please try again.");
         return;
       }
-      setIsNewUser(false);
-      setIsAuthenticated(true);
-      setAuthRole("user");
-      reloadAfterAuth();
-    }finally{
-      setAuthBusy(false);
-    }
-  };
-  const finishPinSetup=async()=>{
-    const digits=normalizePinDigits(pinDigits);
-    const nextPin=normalizePinInput(pinValue,digits);
-    const confirmPin=normalizePinInput(pinConfirm,digits);
-    if(nextPin.length!==digits){
-      setAuthError(`Enter a ${digits}-digit winery PIN.`);
-      return;
-    }
-    if(nextPin!==confirmPin){
-      setAuthError("The PIN entries do not match.");
-      return;
-    }
-    setAuthBusy(true);
-    setAuthError("");
-    try{
-      const res=await authApi.setupPin({ownerName:profile.name,cellarName:profile.cellarName,nextPin,digits});
-      if(!res.ok){
-        setAuthError(res.error||"The winery PIN could not be saved.");
-        return;
-      }
-      setIsAuthenticated(true);
-      setAuthRole("user");
-      reloadAfterAuth();
-    }finally{
-      setAuthBusy(false);
-    }
-  };
-  const unlockApp=async()=>{
-    const isAdmin=authRole==="admin";
-    const digits=isAdmin?ADMIN_PIN_DIGITS:normalizePinDigits(profile?.pinDigits);
-    const entered=normalizePinInput(unlockPin,digits);
-    if(entered.length!==digits){
-      setAuthError(`Enter the ${digits}-digit ${isAdmin?"admin":"winery"} PIN.`);
-      return;
-    }
-    setAuthBusy(true);
-    setAuthError("");
-    try{
-      const res=await authApi.login({role:authRole,pin:entered});
-      if(!res.ok){
-        setAuthError(res.error||(isAdmin?"Admin PIN did not match.":"PIN did not match this winery."));
-        return;
-      }
+      try{sessionStorage.setItem(ENTRY_SESSION_KEY,"1");}catch{}
       setIsAuthenticated(true);
       reloadAfterAuth();
     }finally{
       setAuthBusy(false);
     }
-  };
-  const openAdminAccess=()=>{
-    setAuthRole("admin");
-    setSplashPhase("unlock");
-    setAuthError("");
-    setUnlockPin("");
-    setUnlockShow(false);
-  };
-  const returnToWineryAccess=()=>{
-    setAuthRole("user");
-    setUnlockPin("");
-    setUnlockShow(false);
-    setAuthError("");
-    setSplashPhase(isNewUser?"setup":(hasPinConfigured(profile)?"unlock":"setupPin"));
-  };
-  const updateWineryPin=async ({currentPin="",nextPin="",digits=4})=>{
-    const targetDigits=normalizePinDigits(digits);
-    const nextClean=normalizePinInput(nextPin,targetDigits);
-    if(nextClean.length!==targetDigits){
-      return {ok:false,error:`Enter a ${targetDigits}-digit PIN.`};
-    }
-    const res=await authApi.changePin({currentPin,nextPin:nextClean,digits:targetDigits});
-    if(!res.ok){
-      return {ok:false,error:res.error||"The winery PIN could not be saved."};
-    }
-    setProfileState(prev=>({...prev,...(res.data?.profile||{}),pinEnabled:true,pinDigits:targetDigits}));
-    recordSemanticEvent("activity","profile_updated","1",{name:"Winery PIN"});
-    return {ok:true};
   };
 
   const splashCollection=(wines||[]).filter(w=>!w?.wishlist);
@@ -8763,7 +8475,6 @@ export default function App(){
     || (isNewUser && !(oName||"").trim()
       ? "Your Winery"
       : (((oName||profile.name||"Vinology").trim()?`${(oName||profile.name||"Vinology").trim()}'s Winery`:"Your Winery")));
-  const splashDigits=authRole==="admin" ? ADMIN_PIN_DIGITS : normalizePinDigits(splashPhase==="unlock" ? profile?.pinDigits : pinDigits);
 
   const SPLASH_BG={background:"radial-gradient(circle at 18% 0%,rgba(var(--accentRgb),0.24),transparent 34%), linear-gradient(155deg,#100405 0%,#170809 42%,#0B0203 100%)",minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",position:"relative",overflow:"hidden"};
   const Bubbles=()=>(
@@ -8808,44 +8519,12 @@ export default function App(){
     borderRadius:18,
     padding:"16px 16px 14px",
   };
-  const translucentInput={
-    background:"rgba(255,255,255,0.04)",
-    border:"1.5px solid rgba(255,255,255,0.1)",
-    color:"#F6EEE9",
-    boxShadow:"0 10px 22px rgba(0,0,0,0.18)",
-  };
-  const smallLabel={fontSize:11,fontWeight:700,color:"rgba(246,238,233,0.58)",letterSpacing:"1.4px",textTransform:"uppercase",marginBottom:8,fontFamily:"'Plus Jakarta Sans',sans-serif"};
   const pillStyle={display:"inline-flex",alignItems:"center",gap:8,padding:"8px 12px",borderRadius:999,border:"1px solid rgba(255,255,255,0.1)",background:"rgba(255,255,255,0.05)",fontSize:11,fontWeight:700,color:"rgba(246,238,233,0.78)",fontFamily:"'Plus Jakarta Sans',sans-serif"};
   const primaryAction={width:"100%",padding:"15px 18px",borderRadius:18,border:"none",background:"linear-gradient(135deg,var(--accent) 0%,#7F1A2A 100%)",color:"#fff",fontSize:15,fontWeight:800,boxShadow:"0 18px 40px rgba(var(--accentRgb),0.38)"};
-  const pinFieldStyle={...translucentInput,fontSize:18,fontWeight:800,letterSpacing:pinShow||unlockShow?"0.14em":"0.26em",textAlign:"center",padding:"16px 18px"};
-  const renderPinChooser=()=>(
-    <div style={{marginBottom:18}}>
-      <div style={smallLabel}>PIN Length</div>
-      <SegmentedToggle
-        options={[{label:"4 Digits",value:4},{label:"6 Digits",value:6}]}
-        value={normalizePinDigits(pinDigits)}
-        onChange={value=>{
-          setPinDigits(value);
-          setPinValue(v=>normalizePinInput(v,value));
-          setPinConfirm(v=>normalizePinInput(v,value));
-        }}
-        minWidth={0}
-      />
-    </div>
-  );
   const renderEntryShell=(content)=>(
     <div style={SPLASH_BG}>
       <style>{CSS}</style>
       <Bubbles/>
-      {splashPhase!=="boot"&&(adminEnabled||authRole==="admin")&&(
-        <button
-          type="button"
-          onClick={authRole==="admin"?returnToWineryAccess:openAdminAccess}
-          style={{position:"absolute",top:isDesktop?26:18,right:isDesktop?28:18,zIndex:2,padding:"10px 14px",borderRadius:999,border:"1px solid rgba(255,255,255,0.12)",background:authRole==="admin"?"rgba(var(--accentRgb),0.18)":"rgba(255,255,255,0.05)",color:"#F6EEE9",fontSize:11,fontWeight:800,letterSpacing:"0.9px",textTransform:"uppercase",backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)"}}
-        >
-          {authRole==="admin"?"Back to Winery":"Admin"}
-        </button>
-      )}
       <div style={entryShell}>{content}</div>
     </div>
   );
@@ -8871,16 +8550,10 @@ export default function App(){
       </div>
       <div style={{fontSize:isDesktop?18:16,color:"rgba(246,238,233,0.7)",fontWeight:600,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{splashGreetingLine}</div>
       <div style={{fontSize:isDesktop?44:36,fontWeight:900,color:"#fff",lineHeight:1.02,letterSpacing:"-1.8px",fontFamily:"'Plus Jakarta Sans',sans-serif",marginTop:10,maxWidth:580}}>
-        {authRole==="admin" ? "Admin access to the live winery." : splashWineryName}
+        {splashWineryName}
       </div>
       <div style={{fontSize:14,color:"rgba(246,238,233,0.62)",lineHeight:1.6,maxWidth:600,marginTop:14,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
-        {authRole==="admin"
-          ? "Admin recovery access for the live winery."
-          : isNewUser
-            ? "Set up the winery once and secure it with a PIN."
-            : hasPinConfigured(profile)
-              ? "Enter the winery PIN to continue."
-              : "Create the winery PIN to continue."}
+        Your cellar, journal and audits are ready.
       </div>
       {splashMetricsVisible && (
         <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:18}}>
@@ -8948,103 +8621,22 @@ export default function App(){
           ))}
         </div>
         <div style={{fontSize:12.5,color:"rgba(246,238,233,0.5)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
-          {ready?"Ready to unlock":"Loading the cellar"}
+          {ready?"Ready to enter":"Loading the cellar"}
         </div>
       </div>
     </div>
   );
-  const renderSetupCard=()=>(
-    <div style={{...actionCard,animation:isDesktop?"floatUp 0.9s 0.06s ease both":"fadeUp 0.55s ease both"}}>
-      <div style={{fontSize:12,color:"rgba(246,238,233,0.56)",letterSpacing:"1.6px",textTransform:"uppercase",fontWeight:700,marginBottom:10,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Winery Setup</div>
-      <div style={{fontSize:28,fontWeight:900,color:"#fff",lineHeight:1.05,letterSpacing:"-1.2px",fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:8}}>Create the winery and lock it in.</div>
-      <div style={{fontSize:13,color:"rgba(246,238,233,0.62)",lineHeight:1.6,fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:22}}>This setup runs once. After that, the winery opens behind the saved PIN.</div>
-      <div style={{marginBottom:14}}>
-        <div style={smallLabel}>Owner Name</div>
-        <input value={oName} onChange={e=>setOName(e.target.value)} placeholder="e.g. Neale" autoFocus style={translucentInput}/>
+  const renderAccessCard=()=>(
+    <div style={{...actionCard,animation:isDesktop?"floatUp 0.9s 0.06s ease both":"fadeUp 0.55s ease both",display:"flex",flexDirection:"column",justifyContent:"center",minHeight:isDesktop?360:260}}>
+      <div style={{width:48,height:48,borderRadius:16,display:"grid",placeItems:"center",background:"rgba(var(--accentRgb),0.16)",border:"1px solid rgba(var(--accentRgb),0.3)",marginBottom:20,boxShadow:"0 14px 30px rgba(var(--accentRgb),0.16)"}}>
+        <Icon n="wine" size={22} color="#F6EEE9"/>
       </div>
-      <div style={{marginBottom:18}}>
-        <div style={smallLabel}>Winery Name</div>
-        <input value={oCellar} onChange={e=>setOCellar(e.target.value)} placeholder="e.g. Neale's Winery" style={translucentInput}/>
-      </div>
-      {renderPinChooser()}
-      <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:10,alignItems:"end",marginBottom:12}}>
-        <div>
-          <div style={smallLabel}>Create PIN</div>
-          <input type={pinShow?"text":"password"} inputMode="numeric" value={pinValue} onChange={e=>setPinValue(normalizePinInput(e.target.value,pinDigits))} onFocus={()=>setPinFocus(p=>({...p,create:true}))} onBlur={()=>setPinFocus(p=>({...p,create:false}))} placeholder={pinFocus.create||pinValue?"":"•".repeat(normalizePinDigits(pinDigits))} style={pinFieldStyle}/>
-        </div>
-        <button type="button" onClick={()=>setPinShow(v=>!v)} style={{height:52,padding:"0 16px",borderRadius:14,border:"1px solid rgba(255,255,255,0.12)",background:"rgba(255,255,255,0.05)",color:"#F6EEE9",fontSize:12,fontWeight:800}}>
-          {pinShow?"Hide":"Show"}
-        </button>
-      </div>
-      <div style={{marginBottom:16}}>
-        <div style={smallLabel}>Confirm PIN</div>
-        <input type={pinShow?"text":"password"} inputMode="numeric" value={pinConfirm} onChange={e=>setPinConfirm(normalizePinInput(e.target.value,pinDigits))} onFocus={()=>setPinFocus(p=>({...p,confirm:true}))} onBlur={()=>setPinFocus(p=>({...p,confirm:false}))} placeholder={pinFocus.confirm||pinConfirm?"":"•".repeat(normalizePinDigits(pinDigits))} style={pinFieldStyle}/>
-      </div>
+      <div style={{fontSize:12,color:"rgba(246,238,233,0.56)",letterSpacing:"1.6px",textTransform:"uppercase",fontWeight:700,marginBottom:10,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Your Collection</div>
+      <div style={{fontSize:30,fontWeight:900,color:"#fff",lineHeight:1.05,letterSpacing:"-1.2px",fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:10}}>Enter the cellar.</div>
+      <div style={{fontSize:13,color:"rgba(246,238,233,0.62)",lineHeight:1.6,fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:24}}>Open your live wine library.</div>
       {authError&&<div style={{marginBottom:14,padding:"12px 14px",borderRadius:14,background:"rgba(180,52,52,0.14)",border:"1px solid rgba(220,90,90,0.24)",color:"#FFD7D7",fontSize:12,fontWeight:700,lineHeight:1.5}}>{authError}</div>}
-      <button type="button" onClick={finishProfileSetup} disabled={authBusy} style={{...primaryAction,opacity:authBusy?0.68:1}}>
-        {authBusy?"Securing Winery…":"Save Winery & Enter"}
-      </button>
-    </div>
-  );
-  const renderPinSetupCard=()=>(
-    <div style={{...actionCard,animation:isDesktop?"floatUp 0.9s 0.06s ease both":"fadeUp 0.55s ease both"}}>
-      <div style={{fontSize:12,color:"rgba(246,238,233,0.56)",letterSpacing:"1.6px",textTransform:"uppercase",fontWeight:700,marginBottom:10,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Secure Access</div>
-      <div style={{fontSize:28,fontWeight:900,color:"#fff",lineHeight:1.05,letterSpacing:"-1.2px",fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:8}}>Add the winery PIN.</div>
-      <div style={{fontSize:13,color:"rgba(246,238,233,0.62)",lineHeight:1.6,fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:22}}>This protects the winery screen and keeps the setup from appearing again.</div>
-      {renderPinChooser()}
-      <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:10,alignItems:"end",marginBottom:12}}>
-        <div>
-          <div style={smallLabel}>Create PIN</div>
-          <input type={pinShow?"text":"password"} inputMode="numeric" value={pinValue} onChange={e=>setPinValue(normalizePinInput(e.target.value,pinDigits))} onFocus={()=>setPinFocus(p=>({...p,create:true}))} onBlur={()=>setPinFocus(p=>({...p,create:false}))} placeholder={pinFocus.create||pinValue?"":"•".repeat(normalizePinDigits(pinDigits))} style={pinFieldStyle}/>
-        </div>
-        <button type="button" onClick={()=>setPinShow(v=>!v)} style={{height:52,padding:"0 16px",borderRadius:14,border:"1px solid rgba(255,255,255,0.12)",background:"rgba(255,255,255,0.05)",color:"#F6EEE9",fontSize:12,fontWeight:800}}>
-          {pinShow?"Hide":"Show"}
-        </button>
-      </div>
-      <div style={{marginBottom:16}}>
-        <div style={smallLabel}>Confirm PIN</div>
-        <input type={pinShow?"text":"password"} inputMode="numeric" value={pinConfirm} onChange={e=>setPinConfirm(normalizePinInput(e.target.value,pinDigits))} onFocus={()=>setPinFocus(p=>({...p,confirm:true}))} onBlur={()=>setPinFocus(p=>({...p,confirm:false}))} placeholder={pinFocus.confirm||pinConfirm?"":"•".repeat(normalizePinDigits(pinDigits))} style={pinFieldStyle}/>
-      </div>
-      {authError&&<div style={{marginBottom:14,padding:"12px 14px",borderRadius:14,background:"rgba(180,52,52,0.14)",border:"1px solid rgba(220,90,90,0.24)",color:"#FFD7D7",fontSize:12,fontWeight:700,lineHeight:1.5}}>{authError}</div>}
-      <button type="button" onClick={finishPinSetup} disabled={authBusy} style={{...primaryAction,opacity:authBusy?0.68:1}}>
-        {authBusy?"Saving PIN…":"Save PIN & Enter"}
-      </button>
-    </div>
-  );
-  const renderUnlockCard=()=>(
-    <div style={{...actionCard,animation:isDesktop?"floatUp 0.9s 0.06s ease both":"fadeUp 0.55s ease both"}}>
-      <div style={{fontSize:12,color:"rgba(246,238,233,0.56)",letterSpacing:"1.6px",textTransform:"uppercase",fontWeight:700,marginBottom:10,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{authRole==="admin"?"Admin Access":"Unlock Winery"}</div>
-      <div style={{fontSize:28,fontWeight:900,color:"#fff",lineHeight:1.05,letterSpacing:"-1.2px",fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:8}}>
-        {authRole==="admin"?"Enter the admin recovery PIN.":"Enter the winery PIN."}
-      </div>
-      <div style={{fontSize:13,color:"rgba(246,238,233,0.62)",lineHeight:1.6,fontFamily:"'Plus Jakarta Sans',sans-serif",marginBottom:22}}>
-        {authRole==="admin"
-          ? "This opens the same live cellar and settings with elevated recovery access."
-          : `This winery is protected with a ${splashDigits}-digit PIN.`}
-      </div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:10,alignItems:"end",marginBottom:16}}>
-        <div>
-          <div style={smallLabel}>{authRole==="admin"?"Admin PIN":"PIN"}</div>
-          <input
-            type={unlockShow?"text":"password"}
-            inputMode="numeric"
-            value={unlockPin}
-            onChange={e=>setUnlockPin(normalizePinInput(e.target.value,splashDigits))}
-            onKeyDown={e=>e.key==="Enter"&&unlockApp()}
-            onFocus={()=>setPinFocus(p=>({...p,unlock:true}))}
-            onBlur={()=>setPinFocus(p=>({...p,unlock:false}))}
-            placeholder={pinFocus.unlock||unlockPin?"":"•".repeat(splashDigits)}
-            autoFocus
-            style={{...pinFieldStyle,letterSpacing:unlockShow?"0.14em":"0.26em"}}
-          />
-        </div>
-        <button type="button" onClick={()=>setUnlockShow(v=>!v)} style={{height:52,padding:"0 16px",borderRadius:14,border:"1px solid rgba(255,255,255,0.12)",background:"rgba(255,255,255,0.05)",color:"#F6EEE9",fontSize:12,fontWeight:800}}>
-          {unlockShow?"Hide":"Show"}
-        </button>
-      </div>
-      {authError&&<div style={{marginBottom:14,padding:"12px 14px",borderRadius:14,background:"rgba(180,52,52,0.14)",border:"1px solid rgba(220,90,90,0.24)",color:"#FFD7D7",fontSize:12,fontWeight:700,lineHeight:1.5}}>{authError}</div>}
-      <button type="button" onClick={unlockApp} disabled={authBusy} style={{...primaryAction,opacity:authBusy?0.68:1}}>
-        {authBusy?"Checking PIN…":"Enter Winery"}
+      <button type="button" onClick={enterCellar} disabled={authBusy} style={{...primaryAction,opacity:authBusy?0.68:1,cursor:authBusy?"wait":"pointer",transition:"transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease"}}>
+        {authBusy?"Opening Cellar…":"Enter Cellar"}
       </button>
     </div>
   );
@@ -9056,7 +8648,7 @@ export default function App(){
           {renderHero(
             <div style={{marginTop:22,display:"flex",alignItems:"center",gap:10}}>
               {[0,1,2].map(i=><div key={i} style={{width:8,height:8,borderRadius:"50%",background:"rgba(var(--accentRgb),0.82)",animation:`blink 1.2s ${i*0.18}s ease infinite`}}/>)}
-              <span style={{fontSize:12,color:"rgba(246,238,233,0.5)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>PIN accepted. Entering the cellar…</span>
+              <span style={{fontSize:12,color:"rgba(246,238,233,0.5)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Opening the cellar…</span>
             </div>
           )}
           <div style={{...actionCard,display:"flex",flexDirection:"column",justifyContent:"center",alignItems:"center",minHeight:isDesktop?360:280,animation:isDesktop?"floatUp 0.55s ease both":"fadeUp 0.4s ease both",textAlign:"center"}}>
@@ -9077,7 +8669,7 @@ export default function App(){
     return renderEntryShell(
       <>
         {renderHero()}
-        {splashPhase==="setup" ? renderSetupCard() : splashPhase==="setupPin" ? renderPinSetupCard() : renderUnlockCard()}
+        {renderAccessCard()}
       </>
     );
   }
@@ -9088,7 +8680,7 @@ export default function App(){
       {tab==="audit"&&<AuditScreen wines={wines} desktop={isDesktop} onSetWineBottles={setWineBottleCount} onRemoveWine={delWine} onRevokeAudit={revokeAuditSnapshot} onAuditStateChange={handleAuditStateChange}/>}
       {tab==="ai"&&<AIScreen wines={wines} profile={profile} setProfile={setProfile}/>}
       {tab==="notes"&&<JournalScreen wines={wines} onUpdate={updWine} desktop={isDesktop}/>}
-      {tab==="profile"&&<ProfileScreen wines={wines} notes={notes} theme={themeMode} setTheme={setThemeMode} profile={profile} setProfile={setProfile} onNavigateTab={setTab} authRole={authRole} onSavePin={updateWineryPin}/>}
+      {tab==="profile"&&<ProfileScreen wines={wines} notes={notes} theme={themeMode} setTheme={setThemeMode} profile={profile} setProfile={setProfile} onNavigateTab={setTab}/>}
     </>
   );
 

@@ -6,7 +6,6 @@ const {
   profileWritePayload,
   saveProfilePayload,
 } = require("./_lib/supabase");
-const { getUserPinPreview, hasExternalPinStoreConfig } = require("./_lib/pin-store");
 
 const UPSERT_TABLES = new Set(["wines", "tasting_notes", "audits", "grape_aliases", "cellar_events", "cellar_snapshots"]);
 const DELETE_TABLES = new Set(["wines", "tasting_notes", "audits"]);
@@ -20,12 +19,10 @@ const CONFLICT_KEY = {
 };
 const withPinPreview = async profile => {
   if (!profile) return null;
-  if (!hasExternalPinStoreConfig()) return profile;
-  const preview = await getUserPinPreview();
   return {
     ...profile,
-    pinEnabled: !!preview.pinEnabled,
-    pinDigits: preview.pinDigits || null,
+    pinEnabled: false,
+    pinDigits: null,
   };
 };
 

@@ -25,16 +25,8 @@ const request = async (url, { method = "GET", body, headers } = {}) => {
 export const authApi = {
   bootstrap: () => request("/api/auth-bootstrap"),
   session: () => request("/api/auth-session"),
-  login: ({ role, pin }) => request("/api/auth-login", { method: "POST", body: { role, pin } }),
+  enter: () => request("/api/auth-login", { method: "POST", body: { action: "enter" } }),
   logout: () => request("/api/auth-logout", { method: "POST", body: {} }),
-  setupPin: ({ ownerName, cellarName, nextPin, digits }) => request("/api/auth-pin", {
-    method: "POST",
-    body: { action: "setup", ownerName, cellarName, nextPin, digits },
-  }),
-  changePin: ({ currentPin, nextPin, digits }) => request("/api/auth-pin", {
-    method: "POST",
-    body: { action: "change", currentPin, nextPin, digits },
-  }),
 };
 
 export const dbApi = {

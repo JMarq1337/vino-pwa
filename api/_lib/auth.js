@@ -14,6 +14,7 @@ const {
 const COOKIE_NAME = "vinology_session";
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 12;
 const ADMIN_PIN_DIGITS = Number(process.env.ADMIN_PIN_DIGITS) || 8;
+const PUBLIC_SESSION_FINGERPRINT = "vinology-public-access-v1";
 
 const trim = v => (v == null ? "" : String(v).trim());
 const normalizeUserPinDigits = value => (Number(value) === 6 ? 6 : 4);
@@ -192,36 +193,16 @@ const readSession = req => {
 const resolveSession = async req => {
   const parsed = readSession(req);
   if (!parsed) return { authenticated: false, role: "user", profile: null };
-  if (parsed.role === "admin") {
-    if (!safeEqualText(parsed.fingerprint || "", sessionFingerprintForAdmin())) {
-      return { authenticated: false, role: "user", profile: null };
-    }
+  if (parsed.access === "public" && safeEqualText(parsed.fingerprint || "", PUBLIC_SESSION_FINGERPRINT)) {
     const profileRow = await getProfileRow().catch(() => null);
     return {
       authenticated: true,
-      role: "admin",
-      profile: profileRow ? sanitizeProfile(profileRow) : null,
+      role: "user",
+      profile: profileRow ? { ...sanitizeProfile(profileRow), pinEnabled: false, pinDigits: null } : null,
       profileRow,
     };
   }
-  const profileRow = await getProfileRow().catch(() => null);
-  if (!profileRow) return { authenticated: false, role: "user", profile: null };
-  const pinState = await resolveUserPinState(profileRow).catch(() => null);
-  const activePinRecord = pinState?.record || null;
-  if (!activePinRecord) return { authenticated: false, role: "user", profile: null };
-  if (!safeEqualText(parsed.fingerprint || "", sessionFingerprintForProfile(activePinRecord))) {
-    return { authenticated: false, role: "user", profile: null };
-  }
-  return {
-    authenticated: true,
-    role: "user",
-    profile: {
-      ...sanitizeProfile(profileRow),
-      pinEnabled: true,
-      pinDigits: activePinRecord.pin_digits,
-    },
-    profileRow,
-  };
+  return { authenticated: false, role: "user", profile: null };
 };
 
 const requireSession = async (req, res) => {
@@ -237,23 +218,34 @@ const requireSession = async (req, res) => {
 const bootstrapPayload = async req => {
   const profileRow = await getProfileRow().catch(() => null);
   const session = await resolveSession(req);
-  const pinState = await resolveUserPinState(profileRow).catch(() => null);
   return {
     profile: profileRow ? {
       ...sanitizeProfilePreview(profileRow),
-      pinEnabled: !!pinState?.record,
-      pinDigits: pinState?.record?.pin_digits || null,
+      pinEnabled: false,
+      pinDigits: null,
     } : {
       name: "",
       description: "",
       cellarName: "",
       profileBg: "",
-      pinEnabled: !!pinState?.record,
-      pinDigits: pinState?.record?.pin_digits || null,
+      pinEnabled: false,
+      pinDigits: null,
     },
     authenticated: session.authenticated,
     role: session.authenticated ? session.role : "user",
-    adminEnabled: !!(adminConfig().plain || (adminConfig().hash && adminConfig().salt)),
+    adminEnabled: false,
+    accessMode: "public",
+  };
+};
+
+const enterWithoutPin = async () => {
+  const profileRow = await getProfileRow().catch(() => null);
+  return {
+    ok: true,
+    role: "user",
+    access: "public",
+    profile: profileRow ? { ...sanitizeProfile(profileRow), pinEnabled: false, pinDigits: null } : null,
+    fingerprint: PUBLIC_SESSION_FINGERPRINT,
   };
 };
 
@@ -356,6 +348,7 @@ module.exports = {
   resolveSession,
   requireSession,
   bootstrapPayload,
+  enterWithoutPin,
   loginWithPin,
   setupOrChangeUserPin,
 };
